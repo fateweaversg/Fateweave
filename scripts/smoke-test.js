@@ -208,7 +208,7 @@ async function main() {
     const appJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
     const previewOk = appJs.includes('function previewSystemsHTML') && appJs.includes('function promptBirthDate')
       && ['sys-bazi', 'sys-ziwei', 'sys-horo', 'sys-yijing', 'sys-tarot', 'sys-num'].every((id) => appJs.includes(`id="${id}"`) || appJs.includes(`id="sys-`))
-      && appJs.includes("if (!src) { box.innerHTML = previewSystemsHTML(); bindPreviewEvents(); return; }")
+      && appJs.includes('let ph = previewSystemsHTML()') && appJs.includes('bindPreviewEvents(); return;')
       && !appJs.includes("if (!src) { box.innerHTML = ''; return; }");
     check('frontend renders six-system preview with no teaser', previewOk, 'preview path missing or empty-preview early return still present');
     const castOk = appJs.includes('yijingLinesOf()') && appJs.includes('hexagramDiagramHTML') && appJs.includes('castingLine')
@@ -334,6 +334,95 @@ async function main() {
     delete process.env.EMAIL_FAIL_MODE;
     res = await fetch(`${BASE}/api/resend-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14' }) });
     check('resend-report works again once the failure is cleared', res.ok, `got ${res.status}`);
+
+
+    // 20. Dedicated system pages (7 Nov 2026): each route serves the hub
+    // shell with its system + theme on <body>, and NO reading text — the
+    // hero and content still come from /api/hook and /api/report.
+    for (const [route, theme] of [['bazi', 'theme-bazi'], ['ziwei', 'theme-ziwei'], ['horoscope', 'theme-horoscope'], ['yijing', 'theme-yijing'], ['tarot', 'theme-tarot'], ['numerology', 'theme-numerology'], ['portrait', 'theme-portrait'], ['master', 'theme-master']]) {
+      res = await fetch(`${BASE}/${route}`);
+      const pageText = await res.text();
+      check(`/${route} page returns 200 with theme + hero shell`, res.ok && pageText.includes(`data-system="${route}"`) && pageText.includes(theme) && pageText.includes('id="sys-hero"') && pageText.includes('id="systems"'), `got ${res.status}`);
+      check(`/${route} page leaks NO computed reading`, !pageText.includes('Geng Metal') && !pageText.includes('1990-05-14') && !pageText.includes('Life Path 8') && !pageText.includes('Cancer Sun'), 'reading text in page shell');
+    }
+    res = await fetch(`${BASE}/api/config`);
+    data = await res.json();
+    check('config exposes master-chat upgrade price ($3)', res.ok && data.masterChatUpgrade?.amountCents === 300 && data.masterChatUpgrade?.currency === 'usd', JSON.stringify(data.masterChatUpgrade));
+    check('frontend has per-system hero + nav + hub links', appJs.includes('function pageHeroHTML') && appJs.includes('function pageNavHTML') && appJs.includes('function extractSection') && appJs.includes('function addHubLinks') && appJs.includes('SYS_META') && css.includes('.sys-hero') && css.includes('.theme-tarot') && css.includes('.theme-bazi'), 'page-mode code missing');
+    check('frontend hero shows the buyer key result large', appJs.includes('heroResultHTML') && appJs.includes('hero-num') && appJs.includes('hero-glyph') && css.includes('.hero-num'), 'hero result missing');
+
+    // 21. Unlimited Master Chat upgrade (7 Nov 2026, $3).
+    res = await fetch(`${BASE}/api/checkout-upgrade`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    check('checkout-upgrade 403 without token', res.status === 403, `got ${res.status}`);
+    res = await fetch(`${BASE}/api/checkout-upgrade`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: 'nope', email: 'buyer@example.com', birthDate: '1990-05-14' }) });
+    check('checkout-upgrade 403 with invalid token', res.status === 403, `got ${res.status}`);
+    res = await fetch(`${BASE}/api/checkout-upgrade`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14' }) });
+    check('checkout-upgrade 503 without Stripe keys', res.status === 503, `got ${res.status}`);
+    // Simulate a paid upgrade (as the webhook / checkout-session exchange
+    // would): insert the chat_upgrades row, then the limit must lift.
+    const upSession = 'smoke-mc-upgrade';
+    db.prepare("INSERT INTO chat_upgrades (email, birth_date, order_id, expires_at) VALUES (?, ?, ?, datetime('now', '+90 days'))").run('buyer@example.com', '1990-05-14', order.lastInsertRowid);
+    res = await fetch(`${BASE}/api/master-chat?token=${token}&email=buyer@example.com&birthDate=1990-05-14&sessionId=${upSession}`);
+    data = await res.json();
+    check('master-chat GET reports unlimited after upgrade', res.ok && data.unlimited === true && data.questionsRemaining === null, JSON.stringify(data).slice(0, 120));
+    let upOk = true;
+    for (let i = 1; i <= 7; i++) {
+      res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14', sessionId: upSession, message: `Follow-up ${i} about work?`, lang: 'en' }) });
+      data = await res.json();
+      if (!res.ok || data.questionsRemaining !== null) { upOk = false; break; }
+    }
+    check('master-chat unlimited: 7 follow-ups all succeed, no limit', upOk, 'upgrade did not lift the limit');
+    // Expired upgrade + another buyer without one: the limit still applies.
+    const order2 = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('other@example.com', '1985-03-02', 'Other');
+    const { token: token2 } = issueAccessToken('other@example.com', '1985-03-02', order2.lastInsertRowid);
+    db.prepare("INSERT INTO chat_upgrades (email, birth_date, order_id, expires_at) VALUES (?, ?, ?, datetime('now', '-1 day'))").run('other@example.com', '1985-03-02', order2.lastInsertRowid);
+    const expSession = 'smoke-mc-expired';
+    for (let i = 1; i <= 5; i++) {
+      await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token2, email: 'other@example.com', birthDate: '1985-03-02', sessionId: expSession, message: `Question ${i}?`, lang: 'en' }) });
+    }
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token2, email: 'other@example.com', birthDate: '1985-03-02', sessionId: expSession, message: 'Question 6?', lang: 'en' }) });
+    check('master-chat expired upgrade still hits 429 on 6th', res.status === 429, `got ${res.status}`);
+    // Non-upgraded users still hit the limit (fresh session, buyer 2, no upgrade row for a new birth date).
+    const order3 = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('third@example.com', '1992-07-07', 'Third');
+    const { token: token3 } = issueAccessToken('third@example.com', '1992-07-07', order3.lastInsertRowid);
+    const limSession = 'smoke-mc-limit';
+    for (let i = 1; i <= 5; i++) {
+      await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token3, email: 'third@example.com', birthDate: '1992-07-07', sessionId: limSession, message: `Question ${i}?`, lang: 'en' }) });
+    }
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token3, email: 'third@example.com', birthDate: '1992-07-07', sessionId: limSession, message: 'Question 6?', lang: 'en' }) });
+    data = await res.json();
+    check('master-chat non-upgraded still 429 on 6th, with upgrade price', res.status === 429 && data.upgradePriceCents === 300, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
+    check('frontend explains the 5 limit + shows the upgrade offer', html.includes('id="mc-upgrade-btn"') && html.includes('id="mc-upgrade-offer"') && appJs.includes('buyMasterUpgrade') && appJs.includes('/api/checkout-upgrade') && appJs.includes('masterChatExplainer') && appJs.includes('upgradeOffer'), 'upgrade UI missing');
+
+    // 22. Real tarot pictures (7 Nov 2026): Rider-Waite, local files only.
+    const tarotDir = path.join(pub, 'tarot');
+    const mapping = JSON.parse(fs.readFileSync(path.join(tarotDir, 'mapping.json'), 'utf8'));
+    const D2 = require('../src/original-data.js');
+    let tarotBad = [];
+    for (let i = 0; i < 22; i++) {
+      const f = mapping[String(i)];
+      if (!f) { tarotBad.push(`idx ${i}: no mapping`); continue; }
+      const fp = path.join(tarotDir, f);
+      if (!fs.existsSync(fp)) { tarotBad.push(`idx ${i}: ${f} missing`); continue; }
+      const buf = fs.readFileSync(fp);
+      if (buf.length < 10000 || buf[0] !== 0xFF || buf[1] !== 0xD8) tarotBad.push(`idx ${i}: ${f} not a valid JPEG`);
+    }
+    check('tarot: all 22 major arcana images exist locally as valid JPEGs', tarotBad.length === 0, tarotBad.slice(0, 5).join('; '));
+    check('tarot mapping covers all 22, matching TAROT order', Object.keys(mapping).length === 22 && mapping['12'] === '12-hanged-man.jpg' && mapping['0'] === '00-fool.jpg', JSON.stringify(Object.keys(mapping).length));
+    const imgReading = buildFullReading({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' });
+    check('tarot cards carry local image paths', imgReading.tarot.cardsDetailed.every((c) => c.image && c.image.startsWith('/tarot/') && fs.existsSync(path.join(pub, c.image))), JSON.stringify(imgReading.tarot.cardsDetailed.map((c) => c.image)));
+    const tz3 = buildTeaser({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' });
+    check('teaser tarot cards carry image paths too', tz3.tarot.cards.every((c) => c.image && c.image.startsWith('/tarot/')), JSON.stringify(tz3.tarot.cards.map((c) => c.image)));
+    res = await fetch(`${BASE}/tarot/12-hanged-man.jpg`);
+    check('tarot image is served by the app (200, jpeg)', res.ok && (res.headers.get('content-type') || '').includes('image/jpeg'), `got ${res.status} ${res.headers.get('content-type')}`);
+    check('frontend renders real card pictures + enlarge', appJs.includes('tarotFrontArt') && appJs.includes('class="card-img') && appJs.includes("classList.toggle('enlarged')") && css.includes('.tarot-front .card-img') && css.includes('.tarot-card.enlarged') && css.includes('body.theme-tarot .tarot-card'), 'real-card frontend missing');
+    // "the The Hanged Man" regression: no doubled article anywhere.
+    let theTheBad = [];
+    for (const bd of ['1990-05-14', '1983-05-21', '2000-06-15', '1975-12-31']) {
+      const r = buildFullReading({ birthDate: bd, birthTime: '08:30', name: 'Test' });
+      if (JSON.stringify(r).includes('the The ')) theTheBad.push(bd);
+    }
+    check('tarot text has no "the The " doubled article', theTheBad.length === 0, theTheBad.join(', '));
 
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
