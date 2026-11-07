@@ -117,12 +117,9 @@ const config = {
     outputPricePerMillionUsd: 9.00,
     // Extended Master Chat total (7 Nov 2026 20:04 SGT — replaces the
     // old 20/day fair-use cap): max Master chats per upgrade purchase,
-    // counted as QUESTIONS the buyer asked (src/server.js
-    // masterChatCount — AI and rule-based replies alike), not as
-    // ai_usage ledger rows. The ledger is the AI cost record only, so
-    // the counter moves on every question even while the AI is down
-    // (7 Nov 2026 fix: the ledger-only counter stuck at 30/30 for a
-    // whole evening of rule-based replies).
+    // counted by masterChatCount in src/server.js: only AI-sourced
+    // replies consume the allowance. Rule-based fallback replies while
+    // the AI is unavailable do not consume a chat.
     // The included 5 follow-ups from the base unlock are part of that
     // 30 — after upgrading, the buyer has 30 Master chats in total
     // for the 90-day unlock window, counting any of the 5 already
