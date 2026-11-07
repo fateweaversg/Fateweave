@@ -8,7 +8,7 @@
 </head>
 <body>
 <header class="topbar">
-  <h1>FateWeave <span class="zh">天機匯</span></h1>
+  <div class="brand"><img src="/brand.webp" alt="FateWeave 天機匯"><h1>FateWeave <span class="zh">天機匯</span></h1></div>
   <div class="lang-toggle">
     <button id="lang-en" class="active">EN</button>
     <button id="lang-zh">繁中</button>
@@ -17,20 +17,42 @@
 
 <main>
   <section class="hero">
+    <img class="hero-mark" src="/brand.webp" alt="FateWeave — gold woven threads, 天機">
     <p class="tagline" data-i18n="tagline">One birthday in. Six systems answer. Do they agree?</p>
     <p class="sub">Bazi · Zi Wei · Horoscope · Yi-Jing · Tarot · Numerology — one birth profile, six readings, one portrait.</p>
+    <p class="master-line" data-i18n="masterLine">“I don't tell fortunes. I lay six systems side by side — and we see where they agree.” — The Master</p>
   </section>
+
+  <div id="unlocked-banner" class="banner hidden"></div>
 
   <section class="card" id="hook-card">
     <h2 data-i18n="hookTitle">Your free glimpse</h2>
-    <p>Enter your birth date for a free teaser — a little detail from each system. Full details unlock after payment.</p>
+    <p class="lede" data-i18n="hookLede">Enter your birth date, then tap each card to reveal a little detail from every system. The full reading unlocks after payment.</p>
     <form id="hook-form">
-      <label>Birth date <input type="date" id="birthDate" required></label>
-      <label>Birth time (optional) <input type="time" id="birthTime"></label>
-      <label>Name (optional) <input type="text" id="name" placeholder="How should we address you?"></label>
+      <label><span data-i18n="birthDate">Birth date</span> <input type="date" id="birthDate" required></label>
+      <label><span data-i18n="birthTime">Birth time (optional)</span> <input type="time" id="birthTime"></label>
+      <label><span data-i18n="name">Name (optional)</span> <input type="text" id="name" placeholder="How should we address you?"></label>
       <button type="submit" data-i18n="hookCta">See my free glimpse</button>
     </form>
-    <div id="teaser" class="teaser hidden"></div>
+    <div id="teaser-status" class="small"></div>
+  </section>
+
+  <!-- Interactive systems — rendered by app.js from teaser (free) or report (paid) -->
+  <div id="systems"></div>
+
+  <section class="card" id="quiz-card">
+    <h2><span class="sys-icon">🧭</span><span data-i18n="quizTitle">Know yourself — two quizzes</span></h2>
+    <p class="lede" data-i18n="quizLede">Take them free — they are part of the hook. You will see your type and one line right away; the full breakdown unlocks with your reading.</p>
+    <div id="quiz-list"></div>
+    <div id="quiz-area"></div>
+  </section>
+
+  <section class="card hidden" id="unlocked-card">
+    <h2 data-i18n="unlockedTitle">Your reading is unlocked</h2>
+    <p id="unlocked-sub"></p>
+    <button type="button" id="view-report-btn" data-i18n="viewReport">View my full reading</button>
+    <button type="button" class="ghost" id="resend-btn" data-i18n="resendReport">Resend report email</button>
+    <p id="resend-status" class="small"></p>
   </section>
 
   <section class="card" id="unlock-card">
@@ -38,26 +60,26 @@
     <p id="price-line">Loading price…</p>
     <p data-i18n="unlockBody">Pay first, then the full details open — for every system, plus Live Reader (3 questions) and your detailed report by email.</p>
     <form id="checkout-form">
-      <label>Email (for your report + daily encouragement) <input type="email" id="email" required></label>
+      <label><span data-i18n="emailLabel">Email (for your report + daily encouragement)</span> <input type="email" id="email" required></label>
       <button type="submit" id="pay-btn">Pay &amp; unlock</button>
     </form>
-    <p class="small">Use the same birth date as your free glimpse, and the same email to come back later.</p>
+    <p class="small" data-i18n="sameDateNote">Use the same birth date as your free glimpse, and the same email to come back later.</p>
   </section>
 
   <section class="card hidden" id="report-card">
-    <h2>Your full reading</h2>
+    <h2 data-i18n="fullReadingTitle">Your full reading</h2>
     <div id="report"></div>
     <div id="live-reader">
       <h3 data-i18n="liveReaderTitle">Live Reader</h3>
       <p data-i18n="liveReaderBody">Ask up to 3 questions, by voice or typing. Answers are grounded in your reading only.</p>
-      <p>Questions used: <span id="lr-used">0</span> / 3</p>
+      <p><span data-i18n="questionsUsed">Questions used</span>: <span id="lr-used">0</span> / 3</p>
       <div class="lr-row">
-        <input type="text" id="lr-question" placeholder="Ask a question…">
+        <input type="text" id="lr-question" data-i18n-ph="askPh" placeholder="Ask a question…">
         <button id="lr-voice" type="button" title="Voice input">🎤</button>
-        <button id="lr-ask" type="button">Ask</button>
+        <button id="lr-ask" type="button" data-i18n="ask">Ask</button>
       </div>
-      <label><input type="checkbox" id="lr-speak"> Speak the answer aloud</label>
-      <button id="lr-stop" type="button" class="hidden">Stop speaking</button>
+      <label><input type="checkbox" id="lr-speak"> <span data-i18n="speakAnswer">Speak the answer aloud</span></label>
+      <button id="lr-stop" type="button" class="hidden" data-i18n="stopSpeaking">Stop speaking</button>
       <div id="lr-answers"></div>
     </div>
   </section>
@@ -70,9 +92,9 @@
   <section class="card limits">
     <h2 data-i18n="limitsTitle">Honest limits</h2>
     <ul>
-      <li>Bazi is a simplified demo engine — no true solar-time correction yet.</li>
-      <li>Zi Wei content in the paid reading is illustrative sample content, not a fully computed chart.</li>
-      <li>For self-reflection and entertainment only — not medical, financial or legal advice.</li>
+      <li data-i18n="limit1">Bazi is a simplified demo engine — no true solar-time correction yet.</li>
+      <li data-i18n="limit2">Zi Wei content in the paid reading is illustrative sample content, not a fully computed chart.</li>
+      <li data-i18n="limit3">For self-reflection and entertainment only — not medical, financial or legal advice.</li>
     </ul>
   </section>
 </main>
