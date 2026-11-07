@@ -25,7 +25,12 @@
       // to this date after peeking at another one restores the paid reading.
       localStorage.setItem('fateweave_tokenBirthDate', data.birthDate);
       heading.textContent = '✓ Payment confirmed — your reading is unlocked';
-      status.textContent = 'Your full reading is open and your detailed report has been emailed to ' + data.email + '. Taking you there now…';
+      // Do NOT promise the report email here: with the Resend sandbox
+      // sender it only delivers to the Resend account owner's own email,
+      // so a buyer on another address may never get it. The reading is
+      // open below regardless, and Download my report on the unlocked
+      // page always works.
+      status.textContent = 'Your full reading is open. Your detailed report was emailed to ' + data.email + ' — if it never arrives, use Download my report on the unlocked page. Taking you there now…';
       goHome(2200);
     } else if (localStorage.getItem('fateweave_token')) {
       // Server could not issue a new token, but this device already holds one.
