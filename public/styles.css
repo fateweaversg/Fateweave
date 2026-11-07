@@ -192,6 +192,9 @@ ul.clean.plist { padding-left: 0; }
 #mc-thread p { border-radius: 10px; padding: 10px 12px; white-space: pre-line; }
 #mc-thread p.mc-user { background: rgba(212,175,55,.14); border: 1px solid var(--gold-dim); margin-left: 24px; }
 #mc-thread p.mc-master { background: var(--card-2); margin-right: 24px; }
+/* "Thinking…" line while a Master / Live Reader answer is in flight —
+   the chat must never sit silent while waiting (7 Nov 2026 fix). */
+#mc-thread p.mc-thinking, #lr-answers p.lr-thinking { background: transparent; font-style: italic; color: var(--gold-dim); }
 .mc-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
 .mc-chips .chip-btn { margin-top: 0; padding: 8px 14px; min-height: 0; font-size: .9rem; }
 footer { text-align: center; color: var(--muted); padding: 24px; }
