@@ -70,6 +70,7 @@ app.get('/api/config', (req, res) => {
     stripePublishableKey: config.stripePublishableKey || null,
     liveReaderMax: config.liveReaderMaxPerSession,
     masterChatMax: config.masterChatMaxPerSession,
+    masterChatUpgrade: { amountCents: config.masterChatUpgradePriceCents, currency: config.currency },
   });
 });
 
@@ -125,6 +126,72 @@ app.post('/api/checkout', async (req, res) => {
   }
 });
 
+// --- Checkout: Unlimited Master Chat upgrade ($3, paid token only) ----------
+// Same $1/$8 unlock is untouched. The upgrade is a separate Stripe
+// Checkout session created with inline price_data (no dashboard price ID,
+// exactly like /api/checkout). Only a buyer with a VALID paid token can
+// buy it; the token's email + birth date are the buyer, never the body.
+// Success returns to /success.html?upgrade=1, which verifies via
+// /api/checkout-session/:id — that endpoint (and the webhook) grants the
+// unlimited flag. Price: config.masterChatUpgradePriceCents ($3 default).
+app.post('/api/checkout-upgrade', async (req, res) => {
+  const { token, email, birthDate } = req.body || {};
+  const access = verifyAccessToken(token, email, birthDate);
+  if (!access) return res.status(403).json({ error: 'A valid paid access token is required to buy the Unlimited Master Chat upgrade.' });
+  if (!stripe) return res.status(503).json({ error: 'Payments are not configured yet (STRIPE_SECRET_KEY missing).' });
+  const buyerEmail = access.email;
+  const buyerBirthDate = access.birth_date;
+  const already = isChatUnlimited(buyerEmail, buyerBirthDate);
+  if (already) return res.json({ alreadyUnlimited: true, chatUnlimitedUntil: already.expires_at });
+  const priceCents = config.masterChatUpgradePriceCents;
+  const order = db.prepare(
+    'INSERT INTO orders (email, birth_date, birth_time, name, amount_cents, currency, price_label, provider, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(buyerEmail, buyerBirthDate, null, null, priceCents, config.currency, 'master-chat-upgrade', 'stripe', 'pending');
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      customer_email: buyerEmail,
+      line_items: [{
+        price_data: {
+          currency: config.currency,
+          product_data: { name: 'FateWeave — Unlimited Master Chat' },
+          unit_amount: priceCents,
+        },
+        quantity: 1,
+      }],
+      metadata: { orderId: String(order.lastInsertRowid), email: buyerEmail, birthDate: buyerBirthDate, upgrade: '1' },
+      success_url: `${config.baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}&upgrade=1`,
+      cancel_url: `${config.baseUrl}/?upgrade_cancelled=1`,
+    });
+    db.prepare('UPDATE orders SET provider_session_id = ? WHERE id = ?').run(session.id, order.lastInsertRowid);
+    return res.json({ checkoutUrl: session.url, orderId: order.lastInsertRowid, price: { amountCents: priceCents, currency: config.currency } });
+  } catch (e) {
+    console.error('Stripe upgrade checkout error:', e.message);
+    return res.status(502).json({ error: 'Could not create a checkout session. Check Stripe keys.' });
+  }
+});
+
+// --- Unlimited Master Chat upgrade (7 Nov 2026) --------------------------
+// A paid $3 upgrade lifts the 5-follow-up limit for the same 90-day window
+// as the unlock. Stored per buyer (email + birth_date) in chat_upgrades,
+// never per token. The upgrade never outlives the reading: expires_at is
+// the buyer's current unlock expiry (or now + 90 days if none is found).
+function isChatUnlimited(email, birthDate) {
+  if (!email || !birthDate) return false;
+  const row = db.prepare('SELECT * FROM chat_upgrades WHERE email = ? AND birth_date = ?').get(String(email).toLowerCase(), birthDate);
+  if (!row) return false;
+  return new Date(row.expires_at) > new Date() ? row : false;
+}
+function grantChatUnlimited(email, birthDate, orderId) {
+  const tokenRow = db.prepare('SELECT expires_at FROM access_tokens WHERE email = ? AND birth_date = ? AND revoked = 0 ORDER BY id DESC').get(String(email).toLowerCase(), birthDate);
+  const expiresAt = tokenRow ? tokenRow.expires_at : new Date(Date.now() + config.accessTokenDays * 24 * 60 * 60 * 1000).toISOString();
+  db.prepare(`INSERT INTO chat_upgrades (email, birth_date, order_id, expires_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(email, birth_date) DO UPDATE SET order_id = excluded.order_id, expires_at = excluded.expires_at`)
+    .run(String(email).toLowerCase(), birthDate, orderId || null, expiresAt);
+  return expiresAt;
+}
+
 // --- Exchange a paid Checkout Session for an access token (server-verified) -
 app.get('/api/checkout-session/:sessionId', async (req, res) => {
   if (!stripe) return res.status(503).json({ error: 'Payments are not configured yet.' });
@@ -134,6 +201,13 @@ app.get('/api/checkout-session/:sessionId', async (req, res) => {
     const orderId = Number(session.metadata?.orderId || 0);
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
     if (!order) return res.status(404).json({ error: 'Order not found.' });
+    // Upgrade order: no new access token — the buyer already holds one.
+    // Mark it paid and grant unlimited Master Chat for the unlock window.
+    if (order.price_label === 'master-chat-upgrade' || session.metadata?.upgrade === '1') {
+      db.prepare("UPDATE orders SET status = 'paid', paid_at = datetime('now') WHERE id = ?").run(orderId);
+      const until = grantChatUnlimited(order.email, order.birth_date, orderId);
+      return res.json({ paid: true, upgrade: true, email: order.email, birthDate: order.birth_date, chatUnlimitedUntil: until });
+    }
     // Reuse an existing token for this order if one was already issued.
     // The stored token is only a hash, so it cannot be recovered — issue a
     // FRESH token for the same verified-paid order instead, so the success
@@ -179,6 +253,13 @@ app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), async
       db.prepare("UPDATE orders SET status = 'paid', paid_at = datetime('now'), provider_payment_id = ? WHERE id = ?")
         .run(session.payment_intent || null, orderId);
       console.log(`Order ${orderId} marked paid via webhook.`);
+      if (session.metadata?.upgrade === '1') {
+        const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+        if (order) {
+          const until = grantChatUnlimited(order.email, order.birth_date, orderId);
+          console.log(`Order ${orderId}: Unlimited Master Chat granted until ${until}.`);
+        }
+      }
     }
   }
   return res.json({ received: true });
@@ -297,11 +378,13 @@ app.get('/api/master-chat', (req, res) => {
   if (!access) return res.status(403).json({ error: 'A valid paid access token is required for Ask the Master.' });
   if (!sessionId) return res.status(400).json({ error: 'sessionId is required.' });
   const used = masterChatCount(token, sessionId);
+  const unlimited = !!isChatUnlimited(access.email, access.birth_date);
   return res.json({
     messages: masterChatHistory(token, sessionId),
     questionsUsed: used,
-    questionsRemaining: Math.max(0, config.masterChatMaxPerSession - used),
+    questionsRemaining: unlimited ? null : Math.max(0, config.masterChatMaxPerSession - used),
     max: config.masterChatMaxPerSession,
+    unlimited,
   });
 });
 app.post('/api/master-chat', masterChatLimiter, (req, res) => {
@@ -312,8 +395,9 @@ app.post('/api/master-chat', masterChatLimiter, (req, res) => {
     return res.status(400).json({ error: 'sessionId and a message (2–500 characters) are required.' });
   }
   const used = masterChatCount(token, sessionId);
-  if (used >= config.masterChatMaxPerSession) {
-    return res.status(429).json({ error: 'Ask the Master allows ' + config.masterChatMaxPerSession + ' follow-up messages per session.', questionsUsed: used, questionsRemaining: 0 });
+  const unlimited = !!isChatUnlimited(access.email, access.birth_date);
+  if (!unlimited && used >= config.masterChatMaxPerSession) {
+    return res.status(429).json({ error: 'Ask the Master allows ' + config.masterChatMaxPerSession + ' follow-up messages per session.', questionsUsed: used, questionsRemaining: 0, upgradePriceCents: config.masterChatUpgradePriceCents });
   }
   const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
   const personality = loadPersonality(access.email, access.birth_date);
@@ -326,7 +410,7 @@ app.post('/api/master-chat', masterChatLimiter, (req, res) => {
     db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, lang, source) VALUES (?, ?, 'master', ?, ?, 'master')")
       .run(hashToken(token), sessionId, answer, lang === 'zh' ? 'zh' : 'en');
   } catch (e) { console.error('Master chat history store failed:', e.message); }
-  return res.json({ answer, questionsUsed: used + 1, questionsRemaining: config.masterChatMaxPerSession - used - 1, messages: masterChatHistory(token, sessionId) });
+  return res.json({ answer, questionsUsed: used + 1, questionsRemaining: unlimited ? null : config.masterChatMaxPerSession - used - 1, unlimited, messages: masterChatHistory(token, sessionId) });
 });
 
 /* Live Reader (rewritten 7 Nov 2026, item E) — the old version picked ONE
@@ -713,6 +797,25 @@ app.get('/api/unsubscribe', (req, res) => {
     db.prepare('UPDATE email_subscribers SET unsubscribed = 1 WHERE email = ?').run(String(req.query.email).toLowerCase());
   }
   res.send('<p>You have been unsubscribed from FateWeave daily encouragement. You can resubscribe by unlocking a new reading.</p>');
+});
+
+// --- Dedicated page per system (7 Nov 2026) --------------------------------
+// Each system gets its own route — /bazi, /ziwei, /horoscope, /yijing,
+// /tarot, /numerology, /portrait — plus /master for Live Reader + Ask the
+// Master. The route serves the same index.html shell with the system and
+// its theme class on <body>; public/app.js then renders ONLY that system
+// (hero + its own interactions) and hides the rest. No reading text is in
+// the shell: heroes and content still come from /api/hook (teaser) and
+// /api/report (valid paid token), so the paywall is unchanged.
+const SYSTEM_PAGES = {
+  bazi: 'theme-bazi', ziwei: 'theme-ziwei', horoscope: 'theme-horoscope',
+  yijing: 'theme-yijing', tarot: 'theme-tarot', numerology: 'theme-numerology',
+  portrait: 'theme-portrait', master: 'theme-master',
+};
+const INDEX_HTML = require('fs').readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+app.get(Object.keys(SYSTEM_PAGES).map((k) => '/' + k), (req, res) => {
+  const key = req.path.slice(1);
+  res.type('html').send(INDEX_HTML.replace('<body>', `<body data-system="${key}" class="${SYSTEM_PAGES[key]}">`));
 });
 
 // --- Static frontend ----------------------------------------------------------
