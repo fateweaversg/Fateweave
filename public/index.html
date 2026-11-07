@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FateWeave 天機匯 — One birthday in. Six systems answer.</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>FateWeave <span class="zh">天機匯</span></h1>
+  <div class="lang-toggle">
+    <button id="lang-en" class="active">EN</button>
+    <button id="lang-zh">繁中</button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <p class="tagline" data-i18n="tagline">One birthday in. Six systems answer. Do they agree?</p>
+    <p class="sub">Bazi · Zi Wei · Horoscope · Yi-Jing · Tarot · Numerology — one birth profile, six readings, one portrait.</p>
+  </section>
+
+  <section class="card" id="hook-card">
+    <h2 data-i18n="hookTitle">Your free glimpse</h2>
+    <p>Enter your birth date for a free teaser — a little detail from each system. Full details unlock after payment.</p>
+    <form id="hook-form">
+      <label>Birth date <input type="date" id="birthDate" required></label>
+      <label>Birth time (optional) <input type="time" id="birthTime"></label>
+      <label>Name (optional) <input type="text" id="name" placeholder="How should we address you?"></label>
+      <button type="submit" data-i18n="hookCta">See my free glimpse</button>
+    </form>
+    <div id="teaser" class="teaser hidden"></div>
+  </section>
+
+  <section class="card" id="unlock-card">
+    <h2 data-i18n="unlockTitle">Unlock the full reading</h2>
+    <p id="price-line">Loading price…</p>
+    <p data-i18n="unlockBody">Pay first, then the full details open — for every system, plus Live Reader (3 questions) and your detailed report by email.</p>
+    <form id="checkout-form">
+      <label>Email (for your report + daily encouragement) <input type="email" id="email" required></label>
+      <button type="submit" id="pay-btn">Pay &amp; unlock</button>
+    </form>
+    <p class="small">Use the same birth date as your free glimpse, and the same email to come back later.</p>
+  </section>
+
+  <section class="card hidden" id="report-card">
+    <h2>Your full reading</h2>
+    <div id="report"></div>
+    <div id="live-reader">
+      <h3 data-i18n="liveReaderTitle">Live Reader</h3>
+      <p data-i18n="liveReaderBody">Ask up to 3 questions, by voice or typing. Answers are grounded in your reading only.</p>
+      <p>Questions used: <span id="lr-used">0</span> / 3</p>
+      <div class="lr-row">
+        <input type="text" id="lr-question" placeholder="Ask a question…">
+        <button id="lr-voice" type="button" title="Voice input">🎤</button>
+        <button id="lr-ask" type="button">Ask</button>
+      </div>
+      <label><input type="checkbox" id="lr-speak"> Speak the answer aloud</label>
+      <button id="lr-stop" type="button" class="hidden">Stop speaking</button>
+      <div id="lr-answers"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="dailyTitle">Free daily encouragement</h2>
+    <p data-i18n="dailyBody">One short email at 7:00am SGT — a word of encouragement, a tarot card, and a line for your day. Free with your unlock. Unsubscribe anytime.</p>
+  </section>
+
+  <section class="card limits">
+    <h2 data-i18n="limitsTitle">Honest limits</h2>
+    <ul>
+      <li>Bazi is a simplified demo engine — no true solar-time correction yet.</li>
+      <li>Zi Wei content in the paid reading is illustrative sample content, not a fully computed chart.</li>
+      <li>For self-reflection and entertainment only — not medical, financial or legal advice.</li>
+    </ul>
+  </section>
+</main>
+
+<footer><p>FateWeave 天機匯 — for self-reflection and entertainment.</p></footer>
+<script src="/app.js"></script>
+</body>
+</html>
