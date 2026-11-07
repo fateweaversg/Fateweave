@@ -49,6 +49,10 @@ const config = {
   accessTokenDays: intEnv('ACCESS_TOKEN_DAYS', 90),
   liveReaderMaxPerSession: 3,
   masterChatMaxPerSession: 5, // Ask the Master follow-ups per paid session (separate from Live Reader's 3)
+  // Unlimited Master Chat upgrade (7 Nov 2026): one-line price change.
+  // Change MASTER_CHAT_UPGRADE_PRICE_CENTS (env) or this default to change
+  // the upgrade price everywhere — checkout, config and the UI read it.
+  masterChatUpgradePriceCents: intEnv('MASTER_CHAT_UPGRADE_PRICE_CENTS', 300),
 };
 
 /** Price in force right now, decided server-side by date (SGT). */
