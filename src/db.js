@@ -113,11 +113,11 @@ db.exec(`
   -- birth_date), not by one token, because a buyer can hold several
   -- tokens (fresh token per checkout-session exchange). expires_at is
   -- the unlock's expiry; the upgrade never outlives the reading it
-  -- belongs to. The 30-chat count itself is the number of Master
-  -- questions the buyer asked (src/server.js masterChatCount), not the
-  -- ai_usage ledger — the ledger is the AI cost record only, so the
-  -- counter moves even on rule-based replies. Existing rows (e.g. the
-  -- owner's own $3 test purchase) are treated as a 30-chat grant.
+  -- belongs to. The 30-chat count itself is the number of AI replies
+  -- the buyer received (src/server.js masterChatCount counts stored
+  -- master rows with source = 'ai') — a rule-based reply given while
+  -- the AI is resting/down never consumes a chat. Existing rows (e.g.
+  -- the owner's own $3 test purchase) are treated as a 30-chat grant.
   CREATE TABLE IF NOT EXISTS chat_upgrades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL,
@@ -195,6 +195,42 @@ db.exec(`
     }
   } catch (e) {
     console.error('Buyer-keying migration failed (history/counts may be incomplete):', e.message);
+  }
+})();
+
+// --- Repair (7 Nov 2026): Live Reader usage counts only questions asked
+// under the buyer-keyed rule ----------------------------------------------
+// The buyer-keying migration above summed the OLD per-session Live
+// Reader counts into live_reader_usage_by_buyer — but under the old
+// rule a refresh granted 3 fresh questions, so the sum retroactively
+// exhausted buyers (the owner hit "Live Reader allows 3 questions"
+// with the screen still showing 0/3 used). Live Reader usage is now
+// recomputed on every start from the stored Live Reader questions
+// asked AFTER the buyer-keyed rule took effect — the d7eb7336 deploy,
+// 2026-11-07 22:19:31 SGT = 14:19:31 UTC (master_chat_messages
+// created_at is UTC, datetime('now')). Pre-cutoff questions do not
+// count; the thread history itself is untouched. Idempotent and
+// self-healing: a later question increments the table (POST handler)
+// and the recompute derives the same number from its stored row.
+const LR_BUYER_RULE_SINCE = '2026-11-07 14:19:31';
+(function repairLiveReaderUsage() {
+  try {
+    const fresh = db.prepare(`SELECT email, birth_date, COUNT(*) AS c, MAX(created_at) AS last_asked_at
+      FROM master_chat_messages
+      WHERE source = 'live-reader' AND role = 'user' AND email IS NOT NULL AND birth_date IS NOT NULL AND created_at >= ?
+      GROUP BY email, birth_date`).all(LR_BUYER_RULE_SINCE);
+    const current = db.prepare('SELECT email, birth_date, question_count FROM live_reader_usage_by_buyer').all();
+    const same = current.length === fresh.length && current.every((r) => {
+      const f = fresh.find((x) => x.email === r.email && x.birth_date === r.birth_date);
+      return f && f.c === r.question_count;
+    });
+    if (same) return;
+    db.prepare('DELETE FROM live_reader_usage_by_buyer').run();
+    const ins = db.prepare('INSERT INTO live_reader_usage_by_buyer (email, birth_date, question_count, last_asked_at) VALUES (?, ?, ?, ?)');
+    for (const r of fresh) ins.run(r.email, r.birth_date, r.c, r.last_asked_at);
+    console.log(`Live Reader usage repaired from questions since ${LR_BUYER_RULE_SINCE} UTC: ${fresh.length} buyer(s), ${current.length} row(s) replaced`);
+  } catch (e) {
+    console.error('Live Reader usage repair failed:', e.message);
   }
 })();
 
