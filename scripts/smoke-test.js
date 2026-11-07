@@ -394,7 +394,7 @@ async function main() {
     check('master-chat non-upgraded still 429 on 6th, with upgrade price', res.status === 429 && data.upgradePriceCents === 300, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
     check('frontend explains the 5 limit + shows the upgrade offer', html.includes('id="mc-upgrade-btn"') && html.includes('id="mc-upgrade-offer"') && appJs.includes('buyMasterUpgrade') && appJs.includes('/api/checkout-upgrade') && appJs.includes('masterChatExplainer') && appJs.includes('upgradeOffer'), 'upgrade UI missing');
     const successHtml = fs.readFileSync(path.join(pub, 'success.html'), 'utf8');
-    check('success page keeps ?upgraded=1 on the upgrade redirect', successHtml.includes('data.upgrade') && successHtml.includes("/?upgraded=1&session_id="), 'upgrade return params dropped');
+    check('upgrade return lands DIRECTLY on /master (not the hub)', successHtml.includes('data.upgrade') && successHtml.includes('/master?upgraded=1&session_id=') && !successHtml.includes("/?upgraded=1&session_id=") && successHtml.includes('Ask the Master →'), 'upgrade redirect still points at the hub');
 
     // 22. Real tarot pictures (7 Nov 2026): Rider-Waite, local files only.
     const tarotDir = path.join(pub, 'tarot');
@@ -497,6 +497,24 @@ async function main() {
       { role: 'master', content: evLrZh, source: 'live-reader' },
     ], null);
     check('master p2: zh explain is distinct and names the term (木 / 最旺)', isDistinct(evExplainZh, evLrZh) && /木|最旺/.test(evExplainZh), evExplainZh.slice(0, 160));
+
+    // 25. Upgrade return lands DIRECTLY on /master (7 Nov 2026 fix).
+    // Owner report: after paying $3 the hub landing forced the whole
+    // guided flow — Portrait quizzes included — just to reach the chat.
+    const srvJs = fs.readFileSync(path.join(__dirname, '..', 'src', 'server.js'), 'utf8');
+    check('upgrade return: checkout-upgrade success_url lands on /master?upgraded=1', srvJs.includes("success_url: `${config.baseUrl}/master?upgraded=1&session_id={CHECKOUT_SESSION_ID}`"), 'upgrade success_url still points elsewhere');
+    check('upgrade return: checkout-upgrade cancel_url returns to /master too', srvJs.includes("cancel_url: `${config.baseUrl}/master?upgrade_cancelled=1`"), 'upgrade cancel_url still points at the hub');
+    check('upgrade return: base $1/$8 unlock still lands on the hub (unchanged)', srvJs.includes("success_url: `${config.baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`"), 'base unlock success_url changed');
+    check('upgrade return: success.html upgrade branch goes to /master + Ask-the-Master button', successHtml.includes('/master?upgraded=1&session_id=') && successHtml.includes('Taking you straight to Ask the Master'), 'success.html upgrade branch still points at the hub');
+    check('upgrade return: checkUpgradeReturn verifies the session + shows Unlimited + pending fallback', appJs.includes('function checkUpgradeReturn()') && appJs.includes("params.get('upgraded') !== '1'") && appJs.includes("t('upgradeDone')") && appJs.includes("t('upgradePending')") && appJs.includes('loadMasterChat()'), 'checkUpgradeReturn missing or incomplete');
+    check('upgrade return: /master restores from the stored token at init', appJs.includes('loadReport().then(() => checkUpgradeReturn())') && appJs.includes("localStorage.getItem('fateweave_token')") && appJs.includes("show('quiz-card', onPortrait)"), '/master restore path missing');
+    check('upgrade return: hub shows Skip-to-Master shortcut for unlocked users', appJs.includes('function hubNextHTML()') && appJs.includes("t('skipToMaster')") && appJs.includes('href="/master"') && appJs.includes('hub-master-btn') && css.includes('.hub-master-btn'), 'hub Master shortcut missing');
+    check('upgrade return: skipToMaster + upgradePending strings exist in EN + Simplified Chinese', appJs.includes("skipToMaster: 'Skip to Master →'") && appJs.includes('upgradePending:'), 'upgrade-return strings missing');
+    // Quizzes are optional Portrait content only — no step navigation or
+    // master restore path ever requires them.
+    const stepNavSrc = appJs.slice(appJs.indexOf('function stepNavHTML()'), appJs.indexOf('function hubNextHTML()'));
+    const upgradeRetSrc = appJs.slice(appJs.indexOf('async function checkUpgradeReturn()'), appJs.indexOf('prefillForm();'));
+    check('upgrade return: no step nav or master return path requires a quiz', !/quiz/i.test(stepNavSrc) && !/quiz/i.test(upgradeRetSrc), 'a quiz gate crept into step nav or the upgrade return');
 
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
