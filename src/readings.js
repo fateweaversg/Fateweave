@@ -322,13 +322,37 @@ function ziweiSections(lang) {
 }
 
 /* --- Full reading (paid only — NEVER returned by /api/hook) ---------------- */
+// Canonical birth time for the tarot / Yi-Jing seed (8 Nov 2026 fix 4):
+// the seed used to take the RAW birthTime string, so '09:15', '09:15 AM'
+// and '9:15 AM' seeded three DIFFERENT hexagrams and tarot draws for the
+// same buyer — the Live Reader answer and the Yi-Jing page could disagree
+// about the changing lines (live 8 Nov: LR said 1 changing line, the
+// page listed 3). Canonicalise to 24-hour HH:MM ('' when absent/invalid)
+// and trim the name, so every call site seeds identically. Well-formed
+// 24h inputs, null and '' are unchanged, so existing readings keep
+// their cast.
+function canonicalBirthTime(birthTime) {
+  if (birthTime == null) return '';
+  const m = String(birthTime).trim().match(/^(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*([AaPp][Mm])?$/);
+  if (!m) return '';
+  const h12 = parseInt(m[1], 10);
+  const min = m[2] ? parseInt(m[2], 10) : 0;
+  const ap = (m[4] || '').toLowerCase();
+  if (ap && (h12 < 1 || h12 > 12)) return '';
+  if (!ap && (h12 < 0 || h12 > 23)) return '';
+  if (min < 0 || min > 59) return '';
+  let h = h12;
+  if (ap === 'pm' && h < 12) h += 12;
+  if (ap === 'am' && h === 12) h = 0;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
 function buildFullReading(profile, personality) {
   const { birthDate, birthTime, name, focus, question } = profile;
   const { year, month, day, date } = parseBirth(birthDate, birthTime);
   const b = calcBazi(date, birthTime);
   const a = calcAstro(date, birthTime);
   const n = calcNumbers(date, name);
-  const seed = `${birthDate}|${birthTime || ''}|${name || ''}`;
+  const seed = `${birthDate}|${canonicalBirthTime(birthTime)}|${String(name || '').trim()}`;
   const dmTxt = D.DAYMASTER_TXT[b.dayMaster];
   const counts = b.counts;
   const dom = Object.keys(counts).reduce((x, y) => (counts[x] >= counts[y] ? x : y));
