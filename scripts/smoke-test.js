@@ -1042,6 +1042,22 @@ async function main() {
     const deep2 = mcAns(mcReading, 'Tell me more about work', 'en', deepHist, null);
     check('master deliberate repeat after first answer differs (dedup fallback)', deep2 !== deep1 && deep2.length > 40, `same=${deep2 === deep1} :: ${deep2.slice(0, 160)}`);
 
+    // 32. 20-profile stress fixes (8 Nov 2026): the rule-based Master
+    // had no lottery refusal (a 4D question got a generic portrait
+    // answer) and no past-life answer ("What was I in my past life?"
+    // pivoted to the Zi Wei Life Palace instead of saying plainly the
+    // reading does not cover past lives).
+    const lotEn = mcAns(mcReading, 'What are the winning 4D numbers for this week?', 'en', [], null);
+    check('master lottery guard refuses 4D numbers (en)', /can't predict/i.test(lotEn) && !/\b\d{4}\b/.test(lotEn.replace(/4D/g, '')), lotEn.slice(0, 200));
+    const lotZh = mcAns(mcReading, '这期彩票会开什么号码？', 'zh', [], null);
+    check('master lottery guard refuses lottery numbers (zh)', /不能预测/.test(lotZh), lotZh.slice(0, 120));
+    const moneyOk = mcAns(mcReading, 'How will my money luck be next year?', 'en', [], null);
+    check('master money question does not trip the lottery guard', !/can't predict/i.test(moneyOk), moneyOk.slice(0, 160));
+    const pastEn = mcAns(mcReading, 'What was I in my past life?', 'en', [], null);
+    check('master past-life question answered plainly (en)', /doesn't cover past lives/i.test(pastEn), pastEn.slice(0, 200));
+    const pastZh = mcAns(mcReading, '我前世是什么？', 'zh', [], null);
+    check('master past-life question answered plainly (zh)', /没有前世/.test(pastZh), pastZh.slice(0, 120));
+
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
   } finally {
