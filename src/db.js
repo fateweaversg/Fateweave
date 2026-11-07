@@ -101,7 +101,10 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_master_chat_session ON master_chat_messages(token_hash, session_id, id);
-  CREATE INDEX IF NOT EXISTS idx_master_chat_buyer ON master_chat_messages(email, birth_date, id);
+  -- NOTE: idx_master_chat_buyer (email, birth_date) is created by the
+  -- migration below, AFTER the ALTER TABLE adds those columns — it
+  -- must NOT live in this block, or startup crashes on a pre-fix DB
+  -- where the columns do not exist yet.
 
   -- Extended Master Chat upgrade (7 Nov 2026 20:04 SGT): a paid $3
   -- upgrade gives the buyer 30 Master chats in total for the same
