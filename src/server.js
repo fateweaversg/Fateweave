@@ -356,7 +356,24 @@ app.post('/api/resend-report', async (req, res) => {
 // the old per-session count reset to 0 on every reload, so a refresh
 // gave 3 fresh questions. A fresh sessionId never resets the count —
 // the client still sends one (kept for backward compatibility), but it
-// is not the key. 3 per buyer per unlock.
+// is not the key. 3 per buyer per unlock. The count is the table the
+// POST enforces — the page loads it on init (GET below) instead of
+// assuming 0, so the screen can never say 0/3 when the server will
+// reject (7 Nov 2026: the screen said 0/3 while the server refused).
+app.get('/api/live-reader', (req, res) => {
+  const { token, email, birthDate, sessionId } = req.query;
+  const access = verifyAccessToken(token, email, birthDate);
+  if (!access) return res.status(403).json({ error: 'A valid paid access token is required for Live Reader.' });
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required.' });
+  const usage = db.prepare('SELECT * FROM live_reader_usage_by_buyer WHERE email = ? AND birth_date = ?')
+    .get(access.email, access.birth_date);
+  const used = usage ? usage.question_count : 0;
+  return res.json({
+    questionsUsed: used,
+    questionsRemaining: Math.max(0, config.liveReaderMaxPerSession - used),
+    max: config.liveReaderMaxPerSession,
+  });
+});
 app.post('/api/live-reader', (req, res) => {
   const { token, email, birthDate, sessionId, question, lang } = req.body || {};
   const access = verifyAccessToken(token, email, birthDate);
@@ -369,6 +386,20 @@ app.post('/api/live-reader', (req, res) => {
   const count = usage ? usage.question_count : 0;
   if (count >= config.liveReaderMaxPerSession) {
     return res.status(429).json({ error: `Live Reader allows ${config.liveReaderMaxPerSession} questions.`, questionsUsed: count, questionsRemaining: 0 });
+  }
+  // Duplicate guard (7 Nov 2026): a double-tap can submit the same
+  // question twice in a second and burn 2 of the 3. An identical
+  // question from this buyer within the last 5 seconds that was
+  // already answered returns the stored answer — no new row, no
+  // count consumed.
+  const lastLrUser = db.prepare(`SELECT id FROM master_chat_messages WHERE email = ? AND birth_date = ? AND role = 'user' AND source = 'live-reader' AND content = ? AND created_at >= datetime('now', '-5 seconds') ORDER BY id DESC LIMIT 1`)
+    .get(access.email, access.birth_date, String(question));
+  if (lastLrUser) {
+    const lastLrMaster = db.prepare("SELECT content FROM master_chat_messages WHERE email = ? AND birth_date = ? AND role = 'master' AND source = 'live-reader' AND id > ? ORDER BY id ASC LIMIT 1")
+      .get(access.email, access.birth_date, lastLrUser.id);
+    if (lastLrMaster) {
+      return res.json({ answer: lastLrMaster.content, questionsUsed: count, questionsRemaining: config.liveReaderMaxPerSession - count, duplicate: true });
+    }
   }
   const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
   const personality = loadPersonality(access.email, access.birth_date);
@@ -388,14 +419,14 @@ app.post('/api/live-reader', (req, res) => {
 });
 
 // --- Ask the Master: follow-up chat on the buyer's own reading -------------
-// Paid-only, 5 follow-up messages per BUYER (server-enforced, separate
-// from Live Reader's 3 questions); Extended upgrade ($3): 30 Master
-// chats in total per buyer. The counter counts QUESTIONS the buyer
-// actually asked — AI and rule-based replies alike — so it drops on
-// every question even while the AI is down (the old counter counted
-// only successful AI calls from the ai_usage ledger, so it stuck at
-// 30/30 for a whole evening of rule-based replies). The ai_usage
-// ledger stays the AI cost record only.
+// Paid-only, 5 AI chats per BUYER (server-enforced, separate from Live
+// Reader's 3 questions); Extended upgrade ($3): 30 AI chats in total
+// per buyer. The counter counts AI REPLIES the buyer received — the
+// stored Master rows carry source 'ai' / 'rule-based', and only the
+// 'ai' ones consume the allowance (7 Nov 2026 fix 3: a rule-based
+// reply given while the AI is resting/down never consumes a chat, so
+// the counter only moves on a real AI answer). The ai_usage ledger
+// stays the AI cost record only.
 // History and counts are keyed by the BUYER (email + birth_date), not
 // by sessionId: the browser makes a fresh random sessionId on every
 // page load, and the old keying showed an empty thread after a reload
@@ -410,7 +441,12 @@ function masterChatHistory(email, birthDate) {
     .all(String(email).toLowerCase(), birthDate);
 }
 function masterChatCount(email, birthDate) {
-  const row = db.prepare("SELECT COUNT(*) AS c FROM master_chat_messages WHERE email = ? AND birth_date = ? AND role = 'user' AND source = 'master'").get(String(email).toLowerCase(), birthDate);
+  // AI replies received, not questions asked (7 Nov 2026 fix 3):
+  // role 'master' rows store the reply's source — 'ai' or
+  // 'rule-based' — so this counts only real AI answers. A rule-based
+  // reply given while the AI is resting/down never consumes the 5
+  // included or the 30 Extended chats.
+  const row = db.prepare("SELECT COUNT(*) AS c FROM master_chat_messages WHERE email = ? AND birth_date = ? AND role = 'master' AND source = 'ai'").get(String(email).toLowerCase(), birthDate);
   return row ? row.c : 0;
 }
 app.get('/api/master-chat', (req, res) => {
@@ -435,6 +471,14 @@ app.get('/api/master-chat', (req, res) => {
     aiResting: aiCooldownState().active,
   });
 });
+// Concurrent identical Master requests, keyed by buyer + exact
+// question text. A double-tap / Enter+click can submit the same
+// question 2–3 times in the same second (7 Nov 2026 live logs: 3
+// identical Gemini calls in one second) — the second caller awaits
+// the first caller's result instead of calling Gemini again. The
+// client also disables the Ask button while a request is in flight,
+// but two tabs can still race, so the server collapses them too.
+const inflightMaster = new Map();
 app.post('/api/master-chat', masterChatLimiter, async (req, res) => {
   const { token, email, birthDate, sessionId, message, lang } = req.body || {};
   const access = verifyAccessToken(token, email, birthDate);
@@ -446,47 +490,83 @@ app.post('/api/master-chat', masterChatLimiter, async (req, res) => {
   if (!valid.ok) return res.status(400).json({ error: valid.error });
   const used = masterChatCount(access.email, access.birth_date);
   const extended = !!isChatExtended(access.email, access.birth_date);
-  if (!extended && used >= config.masterChatMaxPerSession) {
-    return res.status(429).json({ error: 'Ask the Master allows ' + config.masterChatMaxPerSession + ' follow-up messages.', questionsUsed: used, questionsRemaining: 0, upgradePriceCents: config.masterChatUpgradePriceCents });
-  }
-  const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
-  const personality = loadPersonality(access.email, access.birth_date);
-  const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
-  const history = masterChatHistory(access.email, access.birth_date);
-  // AI Master first (Gemini, when GEMINI_API_KEY is set and the caps
-  // allow); rule-based reply otherwise — never a dead chat. The stored
-  // message is labelled with its source ('ai' or 'rule-based') so the
-  // UI can show a small "summary from your reading" note on rule-based
-  // replies, and the owner usage view can count fallbacks. questionsAsked
-  // is passed in so the Extended 30-chat cap counts every question the
-  // buyer asked, not only successful AI calls.
-  const ai = await resolveAiMaster({
-    email: access.email, birthDate: access.birth_date, extended,
-    reading, message: valid.text, lang: lang === 'zh' ? 'zh' : 'en', history, personality,
-    questionsAsked: used,
-  });
-  let answer, source;
-  if (ai.status === 'ai') {
-    answer = ai.answer;
-    source = 'ai';
-  } else {
-    answer = masterChatAnswer(reading, valid.text, lang === 'zh' ? 'zh' : 'en', history, personality);
-    source = 'rule-based';
-    const note = fallbackNote(ai.reason, lang === 'zh' ? 'zh' : 'en');
-    if (note) answer = answer + '\n\n' + note;
-  }
-  try {
-    db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'user', ?, ?, 'master')")
-      .run(hashToken(token), sessionId, access.email, access.birth_date, valid.text, lang === 'zh' ? 'zh' : 'en');
-    db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'master', ?, ?, ?)")
-      .run(hashToken(token), sessionId, access.email, access.birth_date, answer, lang === 'zh' ? 'zh' : 'en', source);
-  } catch (e) { console.error('Master chat history store failed:', e.message); }
-  // Counter: questions the buyer has actually asked (AI and rule-based
-  // alike) out of 5 included, or 30 with Extended. Recomputed after the
-  // insert, so it drops on every question even while the AI is down.
   const max = extended ? config.ai.extendedChatTotalMax : config.masterChatMaxPerSession;
-  const asked = masterChatCount(access.email, access.birth_date);
-  return res.json({ answer, questionsUsed: asked, questionsRemaining: Math.max(0, max - asked), max, extended, extendedTotal: config.ai.extendedChatTotalMax, messages: masterChatHistory(access.email, access.birth_date), ai: source === 'ai', source, aiResting: aiCooldownState().active });
+  // Duplicate guard (7 Nov 2026): an identical question from this
+  // buyer within the last 5 seconds that was already answered returns
+  // the stored answer — no new Gemini call, no new row, no chat
+  // consumed. (Deliberate repeats after 5 s still get a fresh,
+  // history-aware answer, so the "give me an example" rotation is
+  // unaffected.)
+  const lastUser = db.prepare(`SELECT id FROM master_chat_messages WHERE email = ? AND birth_date = ? AND role = 'user' AND source = 'master' AND content = ? AND created_at >= datetime('now', '-5 seconds') ORDER BY id DESC LIMIT 1`)
+    .get(access.email, access.birth_date, valid.text);
+  if (lastUser) {
+    const lastMaster = db.prepare("SELECT content, source FROM master_chat_messages WHERE email = ? AND birth_date = ? AND role = 'master' AND id > ? ORDER BY id ASC LIMIT 1")
+      .get(access.email, access.birth_date, lastUser.id);
+    if (lastMaster) {
+      return res.json({ answer: lastMaster.content, questionsUsed: used, questionsRemaining: Math.max(0, max - used), max, extended, extendedTotal: config.ai.extendedChatTotalMax, messages: masterChatHistory(access.email, access.birth_date), ai: lastMaster.source === 'ai', source: lastMaster.source, aiResting: aiCooldownState().active, duplicate: true });
+    }
+  }
+  if (!extended && used >= config.masterChatMaxPerSession) {
+    // code lets the client tell this apart from a rate-limiter 429:
+    // only the allowance being used up zeroes the counter.
+    return res.status(429).json({ error: 'Ask the Master allows ' + config.masterChatMaxPerSession + ' follow-up messages.', code: 'master_limit_reached', questionsUsed: used, questionsRemaining: 0, upgradePriceCents: config.masterChatUpgradePriceCents });
+  }
+  const dupKey = `${access.email.toLowerCase()}|${access.birth_date}|${valid.text}`;
+  const prior = inflightMaster.get(dupKey);
+  if (prior) {
+    try {
+      const body = await prior;
+      return res.json({ ...body, duplicate: true });
+    } catch {
+      // The first call failed — fall through and try ourselves.
+    }
+  }
+  const work = (async () => {
+    const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
+    const personality = loadPersonality(access.email, access.birth_date);
+    const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
+    const history = masterChatHistory(access.email, access.birth_date);
+    // AI Master first (Gemini, when GEMINI_API_KEY is set and the caps
+    // allow); rule-based reply otherwise — never a dead chat. The stored
+    // message is labelled with its source ('ai' or 'rule-based') so the
+    // UI can show a small "summary from your reading" note on rule-based
+    // replies, and the owner usage view can count fallbacks. questionsAsked
+    // is the AI-reply count, so the Extended 30-chat cap counts AI
+    // replies received, not questions asked.
+    const ai = await resolveAiMaster({
+      email: access.email, birthDate: access.birth_date, extended,
+      reading, message: valid.text, lang: lang === 'zh' ? 'zh' : 'en', history, personality,
+      questionsAsked: used,
+    });
+    let answer, source;
+    if (ai.status === 'ai') {
+      answer = ai.answer;
+      source = 'ai';
+    } else {
+      answer = masterChatAnswer(reading, valid.text, lang === 'zh' ? 'zh' : 'en', history, personality);
+      source = 'rule-based';
+      const note = fallbackNote(ai.reason, lang === 'zh' ? 'zh' : 'en');
+      if (note) answer = answer + '\n\n' + note;
+    }
+    try {
+      db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'user', ?, ?, 'master')")
+        .run(hashToken(token), sessionId, access.email, access.birth_date, valid.text, lang === 'zh' ? 'zh' : 'en');
+      db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'master', ?, ?, ?)")
+        .run(hashToken(token), sessionId, access.email, access.birth_date, answer, lang === 'zh' ? 'zh' : 'en', source);
+    } catch (e) { console.error('Master chat history store failed:', e.message); }
+    // Counter: AI replies received out of 5 included, or 30 with
+    // Extended. Recomputed after the insert, so it drops only on a
+    // real AI answer — a rule-based reply while the AI is resting
+    // never consumes a chat.
+    const asked = masterChatCount(access.email, access.birth_date);
+    return { answer, questionsUsed: asked, questionsRemaining: Math.max(0, max - asked), max, extended, extendedTotal: config.ai.extendedChatTotalMax, messages: masterChatHistory(access.email, access.birth_date), ai: source === 'ai', source, aiResting: aiCooldownState().active };
+  })();
+  inflightMaster.set(dupKey, work);
+  try {
+    return res.json(await work);
+  } finally {
+    if (inflightMaster.get(dupKey) === work) inflightMaster.delete(dupKey);
+  }
 });
 
 /* Live Reader (rewritten 7 Nov 2026, item E) — the old version picked ONE
