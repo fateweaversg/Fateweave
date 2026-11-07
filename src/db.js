@@ -96,12 +96,17 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_master_chat_session ON master_chat_messages(token_hash, session_id, id);
 
-  -- Unlimited Master Chat upgrade (7 Nov 2026): a paid $3 upgrade lifts
-  -- the 5-follow-up limit for the same 90-day window as the unlock.
-  -- Keyed by buyer (email + birth_date), not by one token, because a
-  -- buyer can hold several tokens (fresh token per checkout-session
-  -- exchange). expires_at is the unlock's expiry; the upgrade never
-  -- outlives the reading it belongs to.
+  -- Extended Master Chat upgrade (7 Nov 2026 20:04 SGT): a paid $3
+  -- upgrade gives the buyer 30 Master chats in total for the same
+  -- 90-day window as the unlock (the 5
+  -- included follow-ups are part of that 30). Keyed by buyer (email +
+  -- birth_date), not by one token, because a buyer can hold several
+  -- tokens (fresh token per checkout-session exchange). expires_at is
+  -- the unlock's expiry; the upgrade never outlives the reading it
+  -- belongs to. The 30-chat count itself lives in the ai_usage ledger
+  -- (src/ai-master.js buyerAiCallsTotal), not here — this table only
+  -- records that the upgrade was bought. Existing rows (e.g. the
+  -- owner's own $3 test purchase) are treated as a 30-chat grant.
   CREATE TABLE IF NOT EXISTS chat_upgrades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL,
@@ -112,6 +117,25 @@ db.exec(`
     UNIQUE(email, birth_date)
   );
   CREATE INDEX IF NOT EXISTS idx_chat_upgrades_buyer ON chat_upgrades(email, birth_date);
+
+  -- AI Master usage ledger (7 Nov 2026): one row per buyer per SGT day.
+  -- calls / input_tokens / output_tokens / est_cost_usd count AI (Gemini)
+  -- replies only; fallback_count counts Master questions that fell back
+  -- to the rule-based reply (no key, quota, caps, cooldown). The owner
+  -- usage endpoint reads this table — no message text is ever stored here.
+  CREATE TABLE IF NOT EXISTS ai_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    birth_date TEXT NOT NULL,
+    day_sgt TEXT NOT NULL,
+    calls INTEGER NOT NULL DEFAULT 0,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    est_cost_usd REAL NOT NULL DEFAULT 0,
+    fallback_count INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(email, birth_date, day_sgt)
+  );
+  CREATE INDEX IF NOT EXISTS idx_ai_usage_day ON ai_usage(day_sgt);
 
   -- so the full report / portrait lens survives a refresh. Free (pre-payment)
   -- quiz attempts are never stored server-side.
