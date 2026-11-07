@@ -183,6 +183,12 @@ ul.clean.plist { padding-left: 0; }
 /* --- Ask the Master (follow-up chat, 7 Nov 2026) --- */
 #master-chat { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 6px; }
 #mc-thread { max-height: 320px; overflow-y: auto; margin: 12px 0; }
+/* AI Master badge (7 Nov 2026): shown only when the AI Master is live
+   (GEMINI_API_KEY set server-side). Hidden in rule-based mode. */
+.ai-badge { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .04em; color: #1a1405; background: var(--gold); border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; }
+/* Small tag on Master replies that came from the rule-based summary
+   instead of the AI (no key, quota, caps, cooldown). */
+.mc-rb-tag { display: block; margin-top: 6px; font-size: .78rem; color: var(--gold-dim); font-style: italic; }
 #mc-thread p { border-radius: 10px; padding: 10px 12px; white-space: pre-line; }
 #mc-thread p.mc-user { background: rgba(212,175,55,.14); border: 1px solid var(--gold-dim); margin-left: 24px; }
 #mc-thread p.mc-master { background: var(--card-2); margin-right: 24px; }
