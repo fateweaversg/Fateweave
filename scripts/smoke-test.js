@@ -766,6 +766,47 @@ async function main() {
     // is wired into loadMasterChat / sendMasterChat.
     check('frontend shows an honest AI-resting note when the AI is cooling down', appJs.includes('function renderAiRestNote') && appJs.includes("t('aiRestingNote')") && appJs.includes('aiRestingNote:') && /aiRestingNote: 'AI \\u638c\\u95e8/.test(appJs) && html.includes('id="mc-ai-rest"'), 'ai-resting note missing from the frontend');
 
+    // 28. Migration (7 Nov 2026 fix): a pre-fix DB — master_chat_messages
+    // with NO email/birth_date columns, old live_reader_usage table —
+    // must start up cleanly and backfill buyer keys from access_tokens.
+    // (The buyer index must be created AFTER the ALTER TABLE adds the
+    // columns; an earlier draft created it in the main schema block and
+    // crashed startup on an old DB with "no such column: email".)
+    const { DatabaseSync } = require('node:sqlite');
+    const { hashToken } = require('../src/auth');
+    const migPath = path.join(tmpDir, 'mig-old.db');
+    {
+      const odb = new DatabaseSync(migPath);
+      odb.exec(`CREATE TABLE access_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT NOT NULL UNIQUE, email TEXT NOT NULL, birth_date TEXT NOT NULL, order_id INTEGER, expires_at TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+      CREATE TABLE live_reader_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT NOT NULL, session_id TEXT NOT NULL, question_count INTEGER NOT NULL DEFAULT 0, last_asked_at TEXT, UNIQUE(token_hash, session_id));
+      CREATE TABLE master_chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT NOT NULL, session_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, lang TEXT NOT NULL DEFAULT 'en', source TEXT NOT NULL DEFAULT 'master', created_at TEXT NOT NULL DEFAULT (datetime('now')));`);
+      const mth = hashToken('mig-token-1');
+      odb.prepare('INSERT INTO access_tokens (token_hash, email, birth_date, expires_at) VALUES (?, ?, ?, ?)').run(mth, 'mig@example.com', '1973-07-20', '2027-02-05T00:00:00.000Z');
+      odb.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, source) VALUES (?, 'old-sess-1', 'user', 'What does that mean?', 'master')").run(mth);
+      odb.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, source) VALUES (?, 'old-sess-2', 'master', 'Summary reply.', 'master')").run(mth);
+      odb.prepare('INSERT INTO live_reader_usage (token_hash, session_id, question_count) VALUES (?, ?, ?)').run(mth, 'old-sess-1', 2);
+      odb.prepare('INSERT INTO live_reader_usage (token_hash, session_id, question_count) VALUES (?, ?, ?)').run(mth, 'old-sess-2', 1);
+      odb.close();
+    }
+    process.env.DATABASE_PATH = migPath;
+    delete require.cache[require.resolve('../src/config')];
+    delete require.cache[require.resolve('../src/db')];
+    try {
+      const migDb = require('../src/db').db;
+      const backfilled = migDb.prepare("SELECT COUNT(*) c FROM master_chat_messages WHERE email = 'mig@example.com' AND birth_date = '1973-07-20'").get().c;
+      const lrMig = migDb.prepare("SELECT question_count FROM live_reader_usage_by_buyer WHERE email = 'mig@example.com'").get();
+      const oldGone = !migDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='live_reader_usage'").get();
+      check('migration: old-schema DB starts cleanly and backfills buyer keys (2 chat rows, LR 2+1=3)', backfilled === 2 && lrMig?.question_count === 3 && oldGone, `backfilled=${backfilled} lr=${lrMig?.question_count} oldGone=${oldGone}`);
+      // Second load: idempotent, no double-counting.
+      delete require.cache[require.resolve('../src/config')];
+      delete require.cache[require.resolve('../src/db')];
+      const migDb2 = require('../src/db').db;
+      const lrMig2 = migDb2.prepare("SELECT question_count FROM live_reader_usage_by_buyer WHERE email = 'mig@example.com'").get();
+      check('migration: second load is idempotent (LR count still 3, chat rows still 2)', lrMig2?.question_count === 3 && migDb2.prepare('SELECT COUNT(*) c FROM master_chat_messages').get().c === 2, `lr=${lrMig2?.question_count}`);
+    } catch (e) {
+      check('migration: old-schema DB starts cleanly and backfills buyer keys (2 chat rows, LR 2+1=3)', false, e.message);
+    }
+
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
   } finally {
