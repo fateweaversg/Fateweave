@@ -283,6 +283,8 @@ body.theme-master { --card: #1d1233; --card-2: #2a1a4a; --navy-2: #170e2b; --gol
 #hub-next { text-align: center; margin: 0 0 18px; }
 #hub-next:empty { display: none; }
 .hub-next-btn { display: inline-block; background: linear-gradient(180deg, var(--gold-soft), var(--gold)); color: #171204; border-radius: 12px; padding: 16px 28px; font-size: 1.15rem; font-weight: 800; }
+/* Unlocked-only shortcut beside it: straight to Ask the Master, no step flow, no quizzes. */
+.hub-master-btn { display: inline-block; background: transparent; border: 1px solid var(--gold-dim); color: var(--gold-soft); border-radius: 12px; padding: 16px 22px; font-size: 1.05rem; font-weight: 700; margin-left: 12px; }
 .sys-open { margin: 14px 0 0; text-align: right; }
 .sys-open a { color: var(--gold-soft); font-weight: 600; }
 
