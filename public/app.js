@@ -12,6 +12,7 @@ const state = {
   yijingLines: [], yijingCasting: false,
   quiz: { kind: null, questions: null, idx: 0, answers: [], result: null },
   quizCache: null,
+  mcMessages: [], mcLeft: 5,
 };
 
 const STR = {
@@ -29,6 +30,18 @@ const STR = {
     emailLabel: 'Email (for your report + daily encouragement)', sameDateNote: 'Use the same birth date as your free glimpse, and the same email to come back later.',
     fullReadingTitle: 'Your full reading', liveReaderTitle: 'Live Reader',
     liveReaderBody: 'Ask up to 3 questions, by voice or typing. Answers are grounded in your reading only.',
+    masterChatTitle: 'Ask the Master',
+    masterChatBody: 'Still wondering about something in your reading? Ask a follow-up — the Master answers from your own report, and remembers what you asked before.',
+    followupsLeft: 'Follow-ups left',
+    chipExplain: 'What does that mean?', chipExample: 'Give me an example', chipDeeper: 'Tell me more about work',
+    mcAskPh: 'Ask a follow-up…',
+    masterChatNote: 'Follow-ups are answered from your own reading only — no predictions, and no medical, financial or legal advice.',
+    downloadReport: 'Download my report',
+    downloadNote: 'If the report email never arrives, download it here instead — no email needed.',
+    downloadFail: 'Could not download the report — open your full reading first, then try again.',
+    resendSandbox: 'Email could not be sent to this address yet — the sender is still in test mode and can only email the account owner. Use Download my report below to get your report now.',
+    mcLimit: 'You have used all 5 follow-ups for this session.',
+    mcYou: 'You', mcMaster: 'The Master',
     questionsUsed: 'Questions used', ask: 'Ask', askPh: 'Ask a question\u2026', speakAnswer: 'Speak the answer aloud', stopSpeaking: 'Stop speaking',
     dailyTitle: 'Free daily encouragement', dailyBody: 'One short email at 7:00am SGT \u2014 a word of encouragement, a tarot card, and a line for your day. Free with your unlock. Unsubscribe anytime.',
     limitsTitle: 'Honest limits',
@@ -87,6 +100,18 @@ const STR = {
     emailLabel: '\u7535\u90ae\uff08\u63a5\u6536\u62a5\u544a\u4e0e\u6bcf\u65e5\u9f13\u52b1\uff09', sameDateNote: '\u8bf7\u7528\u4e0e\u514d\u8d39\u4e00\u77a5\u76f8\u540c\u7684\u51fa\u751f\u65e5\u671f\uff0c\u4ee5\u53ca\u76f8\u540c\u7684\u7535\u90ae\uff0c\u4ee5\u4fbf\u65e5\u540e\u56de\u6765\u67e5\u770b\u3002',
     fullReadingTitle: '\u4f60\u7684\u5b8c\u6574\u62a5\u544a', liveReaderTitle: 'Live Reader',
     liveReaderBody: '\u6700\u591a\u95ee 3 \u4e2a\u95ee\u9898\uff0c\u53ef\u7528\u8bed\u97f3\u6216\u6253\u5b57\u3002\u56de\u7b54\u53ea\u6839\u636e\u4f60\u7684\u62a5\u544a\u5185\u5bb9\u3002',
+    masterChatTitle: '\u95ee\u638c\u95e8',
+    masterChatBody: '\u62a5\u544a\u91cc\u8fd8\u6709\u4e0d\u660e\u767d\u7684\u5730\u65b9\uff1f\u63a5\u7740\u95ee\u2014\u2014\u638c\u95e8\u53ea\u6839\u636e\u4f60\u81ea\u5df1\u7684\u62a5\u544a\u56de\u7b54\uff0c\u4e5f\u8bb0\u5f97\u4f60\u4e4b\u524d\u95ee\u8fc7\u4ec0\u4e48\u3002',
+    followupsLeft: '\u5269\u4f59\u8ffd\u95ee\u6b21\u6570',
+    chipExplain: '\u8fd9\u662f\u4ec0\u4e48\u610f\u601d\uff1f', chipExample: '\u4e3e\u4e2a\u4f8b\u5b50', chipDeeper: '\u591a\u8bf4\u4e00\u70b9\u5de5\u4f5c',
+    mcAskPh: '\u95ee\u4e00\u4e2a\u8ffd\u95ee\u2026\u2026',
+    masterChatNote: '\u8ffd\u95ee\u53ea\u6839\u636e\u4f60\u81ea\u5df1\u7684\u62a5\u544a\u56de\u7b54\u2014\u2014\u6ca1\u6709\u9884\u6d4b\uff0c\u4e5f\u4e0d\u7ed9\u533b\u7597\u3001\u8d22\u52a1\u6216\u6cd5\u5f8b\u5efa\u8bae\u3002',
+    downloadReport: '\u4e0b\u8f7d\u6211\u7684\u62a5\u544a',
+    downloadNote: '\u5982\u679c\u62a5\u544a\u90ae\u4ef6\u4e00\u76f4\u6536\u4e0d\u5230\uff0c\u5c31\u5728\u8fd9\u91cc\u4e0b\u8f7d\u2014\u2014\u4e0d\u7528\u7b49\u90ae\u4ef6\u3002',
+    downloadFail: '\u4e0b\u8f7d\u5931\u8d25\u2014\u2014\u8bf7\u5148\u6253\u5f00\u5b8c\u6574\u62a5\u544a\uff0c\u518d\u8bd5\u4e00\u6b21\u3002',
+    resendSandbox: '\u8fd9\u4e2a\u90ae\u7bb1\u6682\u65f6\u6536\u4e0d\u5230\u62a5\u544a\u2014\u2014\u53d1\u4ef6\u4eba\u4ecd\u5728\u6d4b\u8bd5\u6a21\u5f0f\uff0c\u53ea\u80fd\u53d1\u7ed9\u8d26\u53f7\u672c\u4eba\u7684\u90ae\u7bb1\u3002\u8bf7\u7528\u4e0b\u9762\u7684\u201c\u4e0b\u8f7d\u6211\u7684\u62a5\u544a\u201d\u76f4\u63a5\u83b7\u53d6\u62a5\u544a\u3002',
+    mcLimit: '\u672c\u6b21\u7684 5 \u6b21\u8ffd\u95ee\u5df2\u7ecf\u7528\u5b8c\u3002',
+    mcYou: '\u4f60', mcMaster: '\u638c\u95e8',
     questionsUsed: '\u5df2\u7528\u95ee\u9898', ask: '\u63d0\u95ee', askPh: '\u95ee\u4e00\u4e2a\u95ee\u9898\u2026\u2026', speakAnswer: '\u5927\u58f0\u8bfb\u51fa\u7b54\u6848', stopSpeaking: '\u505c\u6b62\u6717\u8bfb',
     dailyTitle: '\u514d\u8d39\u6bcf\u65e5\u9f13\u52b1', dailyBody: '\u6bcf\u5929\u65e9\u4e0a 7:00\uff08\u65b0\u52a0\u5761\u65f6\u95f4\uff09\u4e00\u5c01\u77ed\u4fe1\u2014\u2014\u4e00\u53e5\u9f13\u52b1\u3001\u4e00\u5f20\u5854\u7f57\u724c\u3001\u4e00\u53e5\u4eca\u65e5\u63d0\u9192\u3002\u89e3\u9501\u540e\u514d\u8d39\uff0c\u968f\u65f6\u53ef\u4ee5\u53d6\u6d88\u8ba2\u9605\u3002',
     limitsTitle: '\u8bda\u5b9e\u8bf4\u660e',
@@ -157,7 +182,7 @@ function setLang(lang) {
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { if (STR[lang][el.dataset.i18nPh]) el.placeholder = STR[lang][el.dataset.i18nPh]; });
   $('lang-en').classList.toggle('active', lang === 'en');
   $('lang-zh').classList.toggle('active', lang === 'zh');
-  renderSystems(); renderQuizList(); renderReportCard();
+  renderSystems(); renderQuizList(); renderReportCard(); renderMcThread();
 }
 $('lang-en').onclick = () => setLang('en');
 $('lang-zh').onclick = () => setLang('zh');
@@ -541,6 +566,8 @@ function resetProfileView() {
   state.yijingLines = [];
   state.yijingCasting = false;
   state.quiz = { kind: null, questions: null, idx: 0, answers: [], result: null };
+  state.mcMessages = []; state.mcLeft = 5;
+  renderMcThread();
   $('unlocked-banner').classList.add('hidden');
   $('unlocked-banner').innerHTML = '';
   $('unlocked-card').classList.add('hidden');
@@ -771,6 +798,7 @@ async function loadReport(quiet) {
     $('report-card').classList.remove('hidden');
     renderSystems();
     renderReportCard();
+    loadMasterChat(); // restore the Ask the Master thread + follow-up counter
     if (!quiet) unlockStoredQuizzes();
     return true;
   } catch { return false; }
@@ -814,8 +842,55 @@ $('resend-btn').addEventListener('click', async () => {
   status.textContent = t('readingGlimpse');
   try {
     const res = await fetch('/api/resend-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(authParams()) });
-    status.textContent = res.ok ? t('resendOk') : t('resendFail');
+    // The server returns a code on failure: resend_sandbox_recipient means
+    // the sender is still Resend test mode (only the account owner's own
+    // email can receive it) — say so plainly and point at Download report.
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) status.textContent = t('resendOk');
+    else if (data.code === 'resend_sandbox_recipient') status.textContent = t('resendSandbox');
+    else status.textContent = data.error || t('resendFail');
   } catch { status.textContent = t('resendFail'); }
+});
+
+/* --- Download my report (fallback when email fails) ------------------------
+   Uses the full report already unlocked in this browser (/api/report with
+   a valid token) — no new email needed. The buyer always gets their
+   report even when Resend rejects the recipient (sandbox sender). */
+function dlSecs(sections) {
+  if (!sections) return '';
+  const label = { overview: 'overview', strengths: 'strengthsSec', challenges: 'challengesSec', career: 'careerSec', relationships: 'relationshipsSec', health: 'healthSec', timing: 'timingSec' };
+  return ['overview', 'strengths', 'challenges', 'career', 'relationships', 'health', 'timing']
+    .filter((k) => sections[k]).map((k) => `<h3>${esc(t(label[k]))}</h3><p>${esc(L(sections[k]))}</p>`).join('');
+}
+function reportDownloadHTML(r) {
+  const sec = (title, inner) => `<h2>${esc(title)}</h2>${inner}`;
+  let h = `<!doctype html><html lang="${state.lang === 'zh' ? 'zh-CN' : 'en'}"><head><meta charset="utf-8"><title>FateWeave — ${esc(r.profile.birthDate || '')}</title></head><body style="font-family:sans-serif;line-height:1.6;max-width:680px;margin:auto;padding:24px">`;
+  h += `<h1>FateWeave 天机汇 — ${esc(t('fullReadingTitle'))}</h1><p>${esc(r.profile.birthDate || '')}${r.profile.name ? ' · ' + esc(r.profile.name) : ''}</p>`;
+  h += `<p><em>${esc(L(r.portrait.essenceLine))}</em></p><p>${esc(L(r.portrait.character))}</p>`;
+  h += sec('Bazi 八字 — ' + L(r.bazi.dayMaster), `<p>${esc(L(r.bazi.dayMasterText))}</p>` + dlSecs(r.bazi.sections));
+  h += sec('Zi Wei 紫微 — ' + r.ziwei.lifePalace, `<p><em>${esc(t('sampleNote'))}</em></p>` + dlSecs(r.ziwei.sections));
+  h += sec('Horoscope 星座 — ' + L(r.horoscope.sun), `<p>Sun ${esc(L(r.horoscope.sun))} · Moon ${esc(L(r.horoscope.moon))} · Rising ${esc(L(r.horoscope.rising))}</p>` + dlSecs(r.horoscope.sections));
+  h += sec('Numerology 生命灵数 — Life Path ' + r.numerology.lifePath, dlSecs(r.numerology.sections));
+  h += sec('Yi-Jing 易经 — ' + r.yijing.hexagram, `<p>${esc(L(r.yijing.theme))}</p>` + dlSecs(r.yijing.sections));
+  h += sec('Tarot 塔罗', r.tarot.cardsDetailed.map((c) => `<p><strong>${esc(L(c.position))} — ${esc(L(c.name))}${c.reversed ? ' (' + esc(t('reversed')) + ')' : ''}:</strong> ${esc(L(c.meaning))}</p>`).join('') + `<p>${esc(L(r.tarot.story))}</p>` + dlSecs(r.tarot.sections));
+  if (r.personality) {
+    h += `<h2>${esc(t('portraitTitle'))}</h2>`;
+    if (r.personality.enneagram) h += `<p>Enneagram ${r.personality.enneagram.core}w${r.personality.enneagram.wing} · ${esc(L({ en: r.personality.enneagram.nameEn, zh: r.personality.enneagram.nameZh }))}</p>`;
+    if (r.personality.mbti) h += `<p>MBTI ${r.personality.mbti.type} · ${esc(L({ en: r.personality.mbti.nickEn, zh: r.personality.mbti.nickZh }))}</p>`;
+  }
+  h += `<h2>${esc(t('synthesisTitle'))}</h2><p>${esc(L(r.synthesis.agree))}</p><p>${esc(L(r.synthesis.tension))}</p><p><em>${esc(L(r.synthesis.full))}</em></p>`;
+  h += `<hr><p><small>${[t('limit1'), t('limit2'), t('limit3'), t('limit4')].map(esc).join(' ')}</small></p></body></html>`;
+  return h;
+}
+$('download-report-btn').addEventListener('click', () => {
+  const r = state.report;
+  if (!r) { $('resend-status').textContent = t('downloadFail'); return; }
+  const blob = new Blob([reportDownloadHTML(r)], { type: 'text/html;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `FateWeave-report-${r.profile.birthDate || 'reading'}.html`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 });
 
 /* --- Live Reader — voice in + voice out, typed fallback --- */
@@ -848,6 +923,83 @@ $('lr-voice').addEventListener('click', () => {
   rec.start();
 });
 $('lr-stop').addEventListener('click', () => { speechSynthesis.cancel(); $('lr-stop').classList.add('hidden'); });
+
+/* --- Ask the Master — follow-up chat on the buyer's own reading -----------
+   Paid-only (the section lives inside #report-card, hidden until unlocked).
+   5 follow-ups per paid session, server-enforced, separate from Live
+   Reader's 3 questions. History loads from the server on unlock, so a
+   reload restores the thread. Voice in reuses the Live Reader pattern
+   (zh-CN/en-US); voice out reuses the Live Reader speak checkbox. */
+function renderMcThread() {
+  const box = $('mc-thread');
+  if (!box) return;
+  box.innerHTML = (state.mcMessages || []).map((m) => `<p class="${m.role === 'user' ? 'mc-user' : 'mc-master'}"><strong>${esc(m.role === 'user' ? t('mcYou') : t('mcMaster'))}:</strong> ${esc(m.content)}</p>`).join('');
+  box.scrollTop = box.scrollHeight;
+}
+async function loadMasterChat() {
+  if (!state.unlocked) return;
+  try {
+    const p = authParams();
+    const res = await fetch(`/api/master-chat?token=${encodeURIComponent(p.token)}&email=${encodeURIComponent(p.email)}&birthDate=${encodeURIComponent(p.birthDate)}&sessionId=${state.sessionId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    state.mcMessages = data.messages || [];
+    state.mcLeft = data.questionsRemaining;
+    $('mc-left').textContent = data.questionsRemaining;
+    renderMcThread();
+  } catch {}
+}
+function mcSpeak(text) {
+  if (!$('lr-speak').checked || !('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = state.lang === 'zh' ? 'zh-CN' : 'en-US';
+  speechSynthesis.speak(u);
+}
+async function sendMasterChat(text) {
+  const q = (text || $('mc-question').value || '').trim();
+  if (!q) return;
+  if (state.mcLeft <= 0) {
+    state.mcMessages = [...state.mcMessages, { role: 'master', content: t('mcLimit'), lang: state.lang, source: 'master' }];
+    renderMcThread();
+    return;
+  }
+  try {
+    const res = await fetch('/api/master-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...authParams(), sessionId: state.sessionId, message: q, lang: state.lang }) });
+    const data = await res.json();
+    if (!res.ok) {
+      state.mcMessages = [...state.mcMessages, { role: 'user', content: q, lang: state.lang, source: 'master' }, { role: 'master', content: data.error || t('couldNotRead'), lang: state.lang, source: 'master' }];
+      if (res.status === 429 && typeof data.questionsRemaining === 'number') { state.mcLeft = data.questionsRemaining; $('mc-left').textContent = data.questionsRemaining; }
+      renderMcThread();
+      return;
+    }
+    state.mcMessages = data.messages || state.mcMessages;
+    state.mcLeft = data.questionsRemaining;
+    $('mc-left').textContent = data.questionsRemaining;
+    $('mc-question').value = '';
+    renderMcThread();
+    mcSpeak(data.answer);
+  } catch (err) {
+    state.mcMessages = [...state.mcMessages, { role: 'master', content: t('networkError') + err.message, lang: state.lang, source: 'master' }];
+    renderMcThread();
+  }
+}
+$('mc-ask').addEventListener('click', () => sendMasterChat());
+$('mc-question').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMasterChat(); } });
+document.querySelectorAll('[data-chip]').forEach((b) => {
+  b.onclick = () => {
+    const kind = b.dataset.chip;
+    sendMasterChat(kind === 'explain' ? t('chipExplain') : kind === 'example' ? t('chipExample') : t('chipDeeper'));
+  };
+});
+$('mc-voice').addEventListener('click', () => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert(t('voiceUnsupported')); return; }
+  const rec = new SR();
+  rec.lang = state.lang === 'zh' ? 'zh-CN' : 'en-US';
+  rec.onresult = (e) => { $('mc-question').value = e.results[0][0].transcript; };
+  rec.start();
+});
 
 prefillForm(); // birth date, time, name, email survive a reload (bug 3)
 loadPrice();
