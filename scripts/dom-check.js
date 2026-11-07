@@ -60,13 +60,19 @@ async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
   const body = new El('body');
   body.dataset.system = page || '';
   const docEl = new El('html');
-  const fetchCalls = { masterPost: 0, lrPost: 0 };
+  const fetchCalls = { masterPost: 0, lrPost: 0, report: 0 };
   const fetchStub = async (url, opts) => {
     const u = String(url);
     const isMasterPost = u.startsWith('/api/master-chat') && opts && opts.method === 'POST';
     const isLrPost = u.startsWith('/api/live-reader') && opts && opts.method === 'POST';
     if (isMasterPost) fetchCalls.masterPost++;
     if (isLrPost) fetchCalls.lrPost++;
+    if (u.startsWith('/api/report')) fetchCalls.report++;
+    // fetchMode 'reportFailsOnce' (8 Nov 2026 fix 4): the first
+    // /api/report restore throws (transient network failure, Railway
+    // incident) — loadReport must retry once and unlock, not leave
+    // /master showing "locked" until a reload.
+    if (fetchMode === 'reportFailsOnce' && u.startsWith('/api/report') && fetchCalls.report === 1) throw new Error('transient network failure');
     // fetchMode 'throw': the master-chat POST throws (offline / Railway
     // incident). fetchMode 'nonJson': it returns a non-JSON error page
     // (Safari: res.json() throws "The string did not match the expected
@@ -247,6 +253,12 @@ function check(name, ok, detail) {
   els['lr-ask']._handlers.click[0]();
   await new Promise((r) => setTimeout(r, 50));
   check('live-reader hang: second click while sending fires no second request (in-flight guard)', els._fetchCalls.lrPost === 1, `lrPost=${els._fetchCalls.lrPost}`);
+
+  // Fix 4 (8 Nov 2026): one transient /api/report failure at boot must
+  // not leave /master locked — loadReport retries once after 1.5 s.
+  els = await runCase({ page: 'master', unlocked: true, fetchMode: 'reportFailsOnce' });
+  await new Promise((r) => setTimeout(r, 2300));
+  check('master loadReport retry: first /api/report throws, retry unlocks (report visible, locked prompt hidden)', !els['report-card'].hidden && els['master-locked-card'].hidden && els._fetchCalls.report === 2, `reportCalls=${els._fetchCalls.report} reportHidden=${els['report-card'].hidden} lockedHidden=${els['master-locked-card'].hidden}`);
 
   console.log(`\nDOM check: ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);
