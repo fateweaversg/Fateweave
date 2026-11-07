@@ -5,8 +5,23 @@
    Hook rule: free users see a card name + 1-2 lines per system, and blurred
    skeleton blocks for the rest. Full text only ever arrives via /api/report
    with a valid paid token — it is never in this file. */
+// Dedicated system pages (7 Nov 2026): /bazi, /ziwei, /horoscope, /yijing,
+// /tarot, /numerology, /portrait, /master. The server serves the same
+// index.html shell with data-system + a theme class on <body>; app.js then
+// renders ONLY that system (hero + its own interactions). null = hub.
+const pageSystem = document.body.dataset.system || null;
+const SYSTEMS = [
+  { key: 'bazi', route: '/bazi', section: 'sys-bazi', name: 'Bazi 八字' },
+  { key: 'ziwei', route: '/ziwei', section: 'sys-ziwei', name: 'Zi Wei 紫微' },
+  { key: 'horoscope', route: '/horoscope', section: 'sys-horo', name: 'Horoscope 星座' },
+  { key: 'yijing', route: '/yijing', section: 'sys-yijing', name: 'Yi-Jing 易经' },
+  { key: 'tarot', route: '/tarot', section: 'sys-tarot', name: 'Tarot 塔罗' },
+  { key: 'numerology', route: '/numerology', section: 'sys-num', name: 'Numerology 生命灵数' },
+  { key: 'portrait', route: '/portrait', section: 'sys-portrait', name: 'Complete Portrait' },
+];
 const state = {
   lang: 'en', teaser: null, report: null, unlocked: false, price: null,
+  mcUnlimited: false,
   sessionId: crypto.randomUUID(),
   revealed: {}, tarotFlipped: [false, false, false], ziweiCast: false, yijingCast: false,
   yijingLines: [], yijingCasting: false,
@@ -36,6 +51,19 @@ const STR = {
     chipExplain: 'What does that mean?', chipExample: 'Give me an example', chipDeeper: 'Tell me more about work',
     mcAskPh: 'Ask a follow-up…',
     masterChatNote: 'Follow-ups are answered from your own reading only — no predictions, and no medical, financial or legal advice.',
+    masterChatExplainer: 'Ask the Master — 5 follow-up questions included with your unlock. Ask what a reply means, for an example, or to go deeper.',
+    upgradeTitle: 'Want more than 5 follow-ups?',
+    upgradeBody: 'Upgrade to Unlimited Master Chat for $3 — ask as many follow-ups as you like, for the same 90 days as your reading.',
+    upgradeBtn: 'Upgrade to Unlimited Master Chat — $3',
+    upgradeUnlimited: 'Unlimited Master Chat',
+    upgradeOffer: 'You have used all 5 follow-ups. Upgrade to Unlimited Master Chat for $3 and keep asking.',
+    upgradeDone: 'Unlimited Master Chat unlocked — ask as many follow-ups as you like.',
+    upgradeFail: 'Could not start the upgrade checkout. Please try again.',
+    sysOpen: 'Open the full page',
+    backToHub: '← All six systems',
+    nextSystem: 'Next',
+    tapEnlarge: 'Tap a flipped card again to enlarge it',
+    heroLocked: 'Unlock the full reading to see your result here.',
     downloadReport: 'Download my report',
     downloadNote: 'If the report email never arrives, download it here instead — no email needed.',
     downloadFail: 'Could not download the report — open your full reading first, then try again.',
@@ -106,6 +134,19 @@ const STR = {
     chipExplain: '\u8fd9\u662f\u4ec0\u4e48\u610f\u601d\uff1f', chipExample: '\u4e3e\u4e2a\u4f8b\u5b50', chipDeeper: '\u591a\u8bf4\u4e00\u70b9\u5de5\u4f5c',
     mcAskPh: '\u95ee\u4e00\u4e2a\u8ffd\u95ee\u2026\u2026',
     masterChatNote: '\u8ffd\u95ee\u53ea\u6839\u636e\u4f60\u81ea\u5df1\u7684\u62a5\u544a\u56de\u7b54\u2014\u2014\u6ca1\u6709\u9884\u6d4b\uff0c\u4e5f\u4e0d\u7ed9\u533b\u7597\u3001\u8d22\u52a1\u6216\u6cd5\u5f8b\u5efa\u8bae\u3002',
+    masterChatExplainer: '\u95ee\u638c\u95e8\u2014\u2014\u89e3\u9501\u5305\u542b 5 \u6b21\u8ffd\u95ee\u3002\u95ee\u95ee\u67d0\u4e2a\u56de\u7b54\u662f\u4ec0\u4e48\u610f\u601d\u3001\u8981\u4e00\u4e2a\u4f8b\u5b50\uff0c\u6216\u8005\u5f80\u6df1\u91cc\u804a\u3002',
+    upgradeTitle: '\u60f3\u8981\u8d85\u8fc7 5 \u6b21\u8ffd\u95ee\uff1f',
+    upgradeBody: '\u82b1 $3 \u5347\u7ea7\u4e3a\u65e0\u9650\u8ffd\u95ee\u638c\u95e8\u2014\u2014\u5728\u62a5\u544a\u6709\u6548\u7684 90 \u5929\u5185\uff0c\u60f3\u95ee\u591a\u5c11\u5c31\u95ee\u591a\u5c11\u3002',
+    upgradeBtn: '\u5347\u7ea7\u4e3a\u65e0\u9650\u8ffd\u95ee\u638c\u95e8 \u2014 $3',
+    upgradeUnlimited: '\u65e0\u9650\u8ffd\u95ee\u638c\u95e8',
+    upgradeOffer: '5 \u6b21\u8ffd\u95ee\u5df2\u7ecf\u7528\u5b8c\u3002\u82b1 $3 \u5347\u7ea7\u4e3a\u65e0\u9650\u8ffd\u95ee\u638c\u95e8\uff0c\u7ee7\u7eed\u95ee\u4e0b\u53bb\u3002',
+    upgradeDone: '\u65e0\u9650\u8ffd\u95ee\u638c\u95e8\u5df2\u89e3\u9501\u2014\u2014\u60f3\u95ee\u591a\u5c11\u5c31\u95ee\u591a\u5c11\u3002',
+    upgradeFail: '\u65e0\u6cd5\u5f00\u59cb\u5347\u7ea7\u7ed3\u8d26\uff0c\u8bf7\u518d\u8bd5\u4e00\u6b21\u3002',
+    sysOpen: '\u6253\u5f00\u5b8c\u6574\u9875\u9762',
+    backToHub: '\u2190 \u56de\u5230\u516d\u4e2a\u7cfb\u7edf',
+    nextSystem: '\u4e0b\u4e00\u4e2a',
+    tapEnlarge: '\u518d\u70b9\u4e00\u4e0b\u5df2\u7ffb\u5f00\u7684\u724c\uff0c\u53ef\u4ee5\u653e\u5927\u67e5\u770b',
+    heroLocked: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a\uff0c\u5373\u53ef\u5728\u8fd9\u91cc\u770b\u5230\u4f60\u7684\u7ed3\u679c\u3002',
     downloadReport: '\u4e0b\u8f7d\u6211\u7684\u62a5\u544a',
     downloadNote: '\u5982\u679c\u62a5\u544a\u90ae\u4ef6\u4e00\u76f4\u6536\u4e0d\u5230\uff0c\u5c31\u5728\u8fd9\u91cc\u4e0b\u8f7d\u2014\u2014\u4e0d\u7528\u7b49\u90ae\u4ef6\u3002',
     downloadFail: '\u4e0b\u8f7d\u5931\u8d25\u2014\u2014\u8bf7\u5148\u6253\u5f00\u5b8c\u6574\u62a5\u544a\uff0c\u518d\u8bd5\u4e00\u6b21\u3002',
@@ -165,6 +206,14 @@ const EL_NAMES = {
   zh: { wood: '\u6728', fire: '\u706b', earth: '\u571f', metal: '\u91d1', water: '\u6c34' },
 };
 // Tarot keywords in the page language (the server now sends keywordsZh).
+// Real tarot pictures (Task 3, 7 Nov 2026): the front of a flipped card
+// shows the actual Rider-Waite picture (local file, /tarot/xx-name.jpg),
+// rotated 180° when reversed. If the image field is ever missing for a
+// card, fall back to the drawn symbol medallion for that card only.
+function tarotFrontArt(c) {
+  if (c.image) return `<img class="card-img${c.reversed ? ' rev' : ''}" src="${esc(c.image)}" alt="${esc(L(c.name))}" loading="lazy">`;
+  return `<div class="card-art"><span class="card-emoji">${esc(c.emoji)}</span></div>`;
+}
 function tarotKeywords(c) {
   if (!c) return '';
   return c.keywordsZh ? L({ en: c.keywords, zh: c.keywordsZh }) : (c.keywords || '');
@@ -292,11 +341,102 @@ function yijingCoinsHTML(sum) {
   return `<div class="coins">${out}</div>`;
 }
 
+/* --- Dedicated system pages: hero, nav, section filtering ----------------
+   The hero is the big title + the buyer's own key result, large, with its
+   graphic — e.g. Horoscope: big "Cancer" + ♋; Numerology: the Life Path
+   number huge; Bazi: the Day Master large. Before any glimpse (no teaser)
+   the hero shows the system name + a locked line only — no computed
+   result leaks, because the result only ever comes from /api/hook (teaser)
+   or /api/report (paid token), exactly as on the hub. */
+const SYS_META = {
+  bazi: { title: 'Bazi 八字', descKey: 'sysDescBazi' },
+  ziwei: { title: 'Zi Wei 紫微', descKey: 'sysDescZiwei' },
+  horoscope: { title: 'Horoscope 星座', descKey: 'sysDescHoro' },
+  yijing: { title: 'Yi-Jing 易经', descKey: 'sysDescYijing' },
+  tarot: { title: 'Tarot 塔罗', descKey: 'sysDescTarot' },
+  numerology: { title: 'Numerology 生命灵数', descKey: 'sysDescNum' },
+  portrait: { title: 'Complete Portrait', descKey: 'sysDescPortrait' },
+  master: { title: 'Ask the Master', descKey: 'masterChatExplainer' },
+};
+function heroResultHTML(key) {
+  const src = state.unlocked && state.report ? state.report : state.teaser;
+  if (!src) return `<p class="hero-sub">${esc(t('heroLocked'))}</p>`;
+  const r = state.report;
+  const unlocked = state.unlocked && !!r;
+  switch (key) {
+    case 'bazi': {
+      const dm = unlocked ? r.bazi.dayMaster : { en: src.bazi.dayMaster, zh: src.bazi.dayMasterZh };
+      return `<div class="hero-result">${esc(L(dm))}</div><p class="hero-sub">${esc(L(unlocked ? r.bazi.dayMasterText : src.bazi.hook))}</p>`;
+    }
+    case 'ziwei': {
+      const pal = unlocked ? r.ziwei.palaces[0] : null;
+      return `<div class="hero-result">★ ${esc(unlocked ? L(pal.star) : L({ en: 'Tian Ji', zh: '天机' }))}</div><p class="hero-sub">${esc(L({ en: 'Tian Ji Palace', zh: '天机宫' }))} · ${esc(L(unlocked ? pal.text : src.ziwei.hook))}</p>`;
+    }
+    case 'horoscope': {
+      const sun = unlocked ? r.horoscope.sun : { en: src.horoscope.sunSign, zh: src.horoscope.sunSignZh, symbol: '☉' };
+      return `<div class="hero-result"><span class="hero-glyph">${esc(sun.symbol || '☉')}</span> ${esc(L(sun))}</div><p class="hero-sub">${esc(L(unlocked ? r.horoscope.sun.trait : src.horoscope.hook))}</p>${unlocked ? `<p class="hero-sub">${esc(r.horoscope.moon.symbol)} ${esc(t('moon'))}: ${esc(L(r.horoscope.moon))} &nbsp;·&nbsp; ${esc(r.horoscope.rising.symbol)} ${esc(t('rising'))}: ${esc(L(r.horoscope.rising))}</p>` : ''}`;
+    }
+    case 'yijing': {
+      const hex = unlocked ? r.yijing.hexagram : src.yijing.hexagram;
+      return `<div class="hero-result">${esc(hex)}</div><p class="hero-sub">${esc(L(unlocked ? r.yijing.theme : src.yijing.hook))}</p>`;
+    }
+    case 'tarot': {
+      const cards = unlocked ? r.tarot.cardsDetailed : src.tarot.cards;
+      return `<div class="hero-result">${esc(cards.map((c) => L(c.name)).join(' · '))}</div><p class="hero-sub">${esc(t('tapFlip'))} · ${esc(t('tapEnlarge'))}</p>`;
+    }
+    case 'numerology': {
+      const lp = unlocked ? r.numerology.lifePath : src.numerology.lifePath;
+      return `<div class="hero-num">${lp}</div><div class="hero-result">${esc(t('lifePath'))}</div><p class="hero-sub">${esc(L(unlocked ? r.numerology.lifePathText : src.numerology.hook))}</p>`;
+    }
+    case 'portrait':
+      return `<p class="hero-sub essence">${esc(L(src.portrait.essenceLine))}</p>`;
+    case 'master':
+      return `<p class="hero-sub">${esc(t('masterChatExplainer'))}</p>`;
+    default:
+      return '';
+  }
+}
+function pageHeroHTML() {
+  if (!pageSystem) return '';
+  const meta = SYS_META[pageSystem];
+  if (!meta) return '';
+  return `<div class="sys-hero"><h1 class="sys-hero-title">${esc(meta.title)}</h1><p class="lede">${esc(t(meta.descKey))}</p>${heroResultHTML(pageSystem)}</div>`;
+}
+function pageNavHTML() {
+  if (!pageSystem) return '';
+  const idx = SYSTEMS.findIndex((s) => s.key === pageSystem);
+  const next = idx >= 0 ? SYSTEMS[(idx + 1) % SYSTEMS.length] : null;
+  return `<nav class="sys-nav"><a href="/">${esc(t('backToHub'))}</a>${next ? `<a href="${next.route}">${esc(t('nextSystem'))}: ${esc(next.name)} →</a>` : ''}${pageSystem !== 'master' ? `<a href="/master">${esc(t('masterChatTitle'))} →</a>` : ''}</nav>`;
+}
+function extractSection(html, sectionId) {
+  const m = html.match(new RegExp(`<section class="card" id="${sectionId}">[\\s\\S]*?</section>`));
+  return m ? m[0] : '';
+}
+function addHubLinks(html) {
+  // Hub: each system card links out to its own dedicated page.
+  for (const s of SYSTEMS) {
+    const sec = extractSection(html, s.section);
+    if (!sec) continue;
+    const linked = sec.replace(/<\/section>$/, `<p class="sys-open"><a href="${s.route}">${esc(t('sysOpen'))} →</a></p></section>`);
+    html = html.replace(sec, linked);
+  }
+  return html;
+}
+
 /* --- Systems renderer: teaser (free) or report (paid) --- */
 function renderSystems() {
   const box = $('systems');
   const src = state.unlocked && state.report ? state.report : state.teaser;
-  if (!src) { box.innerHTML = previewSystemsHTML(); bindPreviewEvents(); return; }
+  if (!src) {
+    let ph = previewSystemsHTML();
+    if (pageSystem) {
+      const hero = $('sys-hero'); if (hero) hero.innerHTML = pageHeroHTML() + pageNavHTML();
+      if (pageSystem === 'master') { box.innerHTML = ''; bindPreviewEvents(); return; }
+      const sec = SYSTEMS.find((s) => s.key === pageSystem);
+      box.innerHTML = sec ? extractSection(ph, sec.section) : ph;
+    } else box.innerHTML = addHubLinks(ph);
+    bindPreviewEvents(); return;
+  }
   const unlocked = state.unlocked && !!state.report;
   const r = state.report;
   // Hook lines: from the teaser when present, else from the full reading
@@ -390,7 +530,7 @@ function renderSystems() {
     return `<div><div class="tarot-card ${flipped ? 'flipped' : ''}" data-tarot="${i}" role="button" tabindex="0" aria-label="${esc(t('tapFlip'))}">
       <div class="tarot-inner">
         <div class="tarot-face tarot-back"><div class="back-frame"><div class="star">\u2726</div><p class="back-brand">FateWeave</p><p>${esc(t('flipping'))}</p></div></div>
-        <div class="tarot-face tarot-front" style="--hue:${((c.idx ?? 0) * 47) % 360}"><div class="card-num">${esc(c.number ?? '')}</div><div class="card-art"><span class="card-emoji">${esc(c.emoji)}</span></div><div class="cname">${esc(L(c.name))}</div><div class="kw">${esc(tarotKeywords(c))}</div>${c.reversed ? `<div class="rev-banner">${esc(t('reversed'))}</div>` : ''}</div>
+        <div class="tarot-face tarot-front" style="--hue:${((c.idx ?? 0) * 47) % 360}"><div class="card-num">${esc(c.number ?? '')}</div>${tarotFrontArt(c)}<div class="cname">${esc(L(c.name))}</div><div class="kw">${esc(tarotKeywords(c))}</div>${c.reversed ? `<div class="rev-banner">${esc(t('reversed'))}</div>` : ''}</div>
       </div></div><p class="tarot-pos">${esc(t(posKeys[i]))}</p></div>`;
   }).join('')}</div>`;
   html += `<div id="tarot-detail">${cards.map((c, i) => {
@@ -443,7 +583,15 @@ function renderSystems() {
   } else html += lockBlock();
   html += `</section>`;
 
-  box.innerHTML = html;
+  if (pageSystem) {
+    const hero = $('sys-hero'); if (hero) hero.innerHTML = pageHeroHTML() + pageNavHTML();
+    if (pageSystem === 'master') { box.innerHTML = ''; bindSystemEvents(); return; }
+    const sec = SYSTEMS.find((s) => s.key === pageSystem);
+    box.innerHTML = sec ? extractSection(html, sec.section) : html;
+  } else {
+    const hero = $('sys-hero'); if (hero) hero.innerHTML = '';
+    box.innerHTML = addHubLinks(html);
+  }
   bindSystemEvents();
 }
 
@@ -502,7 +650,11 @@ function bindSystemEvents() {
     };
   });
   document.querySelectorAll('[data-tarot]').forEach((el) => {
-    const flip = () => { const i = Number(el.dataset.tarot); state.tarotFlipped[i] = !state.tarotFlipped[i]; renderSystems(); };
+    const flip = () => {
+      const i = Number(el.dataset.tarot);
+      if (state.tarotFlipped[i]) { el.classList.toggle('enlarged'); return; } // tap again = enlarge
+      state.tarotFlipped[i] = true; renderSystems();
+    };
     el.onclick = flip;
     el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } };
   });
@@ -795,7 +947,9 @@ async function loadReport(quiet) {
     $('unlocked-sub').textContent = `${esc(r.profile.birthDate)} \u00B7 ${email}`;
     $('unlocked-card').classList.remove('hidden');
     $('unlock-card').classList.add('hidden');
-    $('report-card').classList.remove('hidden');
+    // Live Reader + Ask the Master live on the hub and on /master only —
+    // a single-system page stays focused on that system.
+    if (!pageSystem || pageSystem === 'master') $('report-card').classList.remove('hidden');
     renderSystems();
     renderReportCard();
     loadMasterChat(); // restore the Ask the Master thread + follow-up counter
@@ -930,6 +1084,20 @@ $('lr-stop').addEventListener('click', () => { speechSynthesis.cancel(); $('lr-s
    Reader's 3 questions. History loads from the server on unlock, so a
    reload restores the thread. Voice in reuses the Live Reader pattern
    (zh-CN/en-US); voice out reuses the Live Reader speak checkbox. */
+function renderMcCounter() {
+  const left = $('mc-left'), suffix = $('mc-left-suffix'), btn = $('mc-upgrade-btn'), offer = $('mc-upgrade-offer');
+  if (!left) return;
+  if (state.mcUnlimited) {
+    left.textContent = t('upgradeUnlimited');
+    if (suffix) suffix.textContent = '';
+    if (btn) { btn.textContent = '✓ ' + t('upgradeUnlimited'); btn.disabled = true; }
+    if (offer) offer.classList.add('hidden');
+  } else {
+    left.textContent = state.mcLeft;
+    if (suffix) suffix.textContent = ' / 5';
+    if (btn) { btn.textContent = t('upgradeBtn'); btn.disabled = false; }
+  }
+}
 function renderMcThread() {
   const box = $('mc-thread');
   if (!box) return;
@@ -944,8 +1112,9 @@ async function loadMasterChat() {
     if (!res.ok) return;
     const data = await res.json();
     state.mcMessages = data.messages || [];
-    state.mcLeft = data.questionsRemaining;
-    $('mc-left').textContent = data.questionsRemaining;
+    state.mcUnlimited = !!data.unlimited;
+    state.mcLeft = data.questionsRemaining === null ? Infinity : data.questionsRemaining;
+    renderMcCounter();
     renderMcThread();
   } catch {}
 }
@@ -959,8 +1128,9 @@ function mcSpeak(text) {
 async function sendMasterChat(text) {
   const q = (text || $('mc-question').value || '').trim();
   if (!q) return;
-  if (state.mcLeft <= 0) {
-    state.mcMessages = [...state.mcMessages, { role: 'master', content: t('mcLimit'), lang: state.lang, source: 'master' }];
+  if (!state.mcUnlimited && state.mcLeft <= 0) {
+    state.mcMessages = [...state.mcMessages, { role: 'master', content: t('upgradeOffer'), lang: state.lang, source: 'master' }];
+    const offer = $('mc-upgrade-offer'); if (offer) offer.classList.remove('hidden');
     renderMcThread();
     return;
   }
@@ -969,13 +1139,17 @@ async function sendMasterChat(text) {
     const data = await res.json();
     if (!res.ok) {
       state.mcMessages = [...state.mcMessages, { role: 'user', content: q, lang: state.lang, source: 'master' }, { role: 'master', content: data.error || t('couldNotRead'), lang: state.lang, source: 'master' }];
-      if (res.status === 429 && typeof data.questionsRemaining === 'number') { state.mcLeft = data.questionsRemaining; $('mc-left').textContent = data.questionsRemaining; }
+      if (res.status === 429) {
+        state.mcLeft = 0; renderMcCounter();
+        const offer = $('mc-upgrade-offer'); if (offer) offer.classList.remove('hidden');
+      }
       renderMcThread();
       return;
     }
     state.mcMessages = data.messages || state.mcMessages;
-    state.mcLeft = data.questionsRemaining;
-    $('mc-left').textContent = data.questionsRemaining;
+    state.mcUnlimited = !!data.unlimited;
+    state.mcLeft = data.questionsRemaining === null ? Infinity : data.questionsRemaining;
+    renderMcCounter();
     $('mc-question').value = '';
     renderMcThread();
     mcSpeak(data.answer);
@@ -992,6 +1166,23 @@ document.querySelectorAll('[data-chip]').forEach((b) => {
     sendMasterChat(kind === 'explain' ? t('chipExplain') : kind === 'example' ? t('chipExample') : t('chipDeeper'));
   };
 });
+/* --- Unlimited Master Chat upgrade ($3) ------------------------------------
+   Paid token only (the server checks the token and the Stripe payment).
+   On success Stripe returns to /success.html?upgrade=1, which verifies the
+   session and sends the buyer back here — the counter then reads Unlimited. */
+async function buyMasterUpgrade() {
+  const btn = $('mc-upgrade-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch('/api/checkout-upgrade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(authParams()) });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || t('upgradeFail')); if (btn) btn.disabled = false; return; }
+    if (data.alreadyUnlimited) { state.mcUnlimited = true; renderMcCounter(); return; }
+    location.href = data.checkoutUrl;
+  } catch (e) { alert(t('upgradeFail')); if (btn) btn.disabled = false; }
+}
+$('mc-upgrade-btn').addEventListener('click', buyMasterUpgrade);
+$('mc-upgrade-offer-btn').addEventListener('click', buyMasterUpgrade);
 $('mc-voice').addEventListener('click', () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { alert(t('voiceUnsupported')); return; }
@@ -1001,8 +1192,29 @@ $('mc-voice').addEventListener('click', () => {
   rec.start();
 });
 
+/* --- Upgrade return: after Stripe, /success.html?upgrade=1 verifies the
+   session and sends the buyer back here with ?upgraded=1. Confirm the
+   upgrade on the server (the webhook may not have landed yet) and refresh
+   the Master counter so it reads Unlimited. */
+async function checkUpgradeReturn() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('upgraded') !== '1' || !params.get('session_id')) return;
+  try {
+    const res = await fetch('/api/checkout-session/' + encodeURIComponent(params.get('session_id')));
+    const data = await res.json();
+    if (res.ok && data.upgrade) {
+      state.mcUnlimited = true;
+      const banner = $('unlocked-banner');
+      banner.innerHTML = `${esc(t('upgradeDone'))}`;
+      banner.classList.remove('hidden');
+      await loadMasterChat();
+    }
+  } catch {}
+  history.replaceState(null, '', location.pathname);
+}
+
 prefillForm(); // birth date, time, name, email survive a reload (bug 3)
 loadPrice();
-loadReport();
+loadReport().then(() => checkUpgradeReturn());
 renderQuizList();
 renderSystems(); // pre-glimpse preview: all six systems visible before any birth date is entered
