@@ -26,7 +26,7 @@ const path = require('path');
 
 const { config, currentPrice } = require('./config');
 const { db } = require('./db');
-const { buildFullReading, buildTeaser, parseBirth, scoreEnneagramFromChoices, scoreMbti, getPersonalityQuestions, lockedPersonalitySummary, elName } = require('./readings');
+const { buildFullReading, buildTeaser, parseBirth, scoreEnneagramFromChoices, scoreMbti, getPersonalityQuestions, lockedPersonalitySummary, elName, elementMeaning } = require('./readings');
 const { strings } = require('./i18n');
 const { sendReportEmail } = require('./email');
 const { issueAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword, hashToken } = require('./auth');
@@ -46,6 +46,7 @@ app.use((req, res, next) => {
 });
 
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false });
+const masterChatLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 app.use('/api/', apiLimiter);
 
 // Stripe webhook needs the RAW body — see the skip above.
@@ -68,6 +69,7 @@ app.get('/api/config', (req, res) => {
     price: { amountCents: price.amountCents, currency: price.currency, isPromo: price.isPromo, promoStart: price.promoStart, promoEnd: price.promoEnd },
     stripePublishableKey: config.stripePublishableKey || null,
     liveReaderMax: config.liveReaderMaxPerSession,
+    masterChatMax: config.masterChatMaxPerSession,
   });
 });
 
@@ -150,7 +152,7 @@ app.get('/api/checkout-session/:sessionId', async (req, res) => {
     try {
       const reading = buildFullReading({ birthDate: order.birth_date, birthTime: order.birth_time, name: order.name });
       await sendReportEmail(order.email, reading, 'en');
-    } catch (e) { console.error('Report email failed:', e.message); }
+    } catch (e) { console.error('Report email failed (checkout, unlock unaffected):', { email: order.email, code: e.code || 'no-code', message: e.message }); }
     return res.json({ paid: true, email: order.email, birthDate: order.birth_date, token, expiresAt });
   } catch (e) {
     console.error('Checkout session lookup failed:', e.message);
@@ -214,6 +216,15 @@ app.get('/api/report', (req, res) => {
 });
 
 // --- Resend the detailed report email (paid token only) ----------------------
+// On failure the response carries a machine-readable code so the frontend
+// can say something useful instead of the generic "Could not resend":
+//   resend_sandbox_recipient — the sender is still Resend's sandbox
+//   (onboarding@resend.dev), which only delivers to the Resend account
+//   owner's own email. Any other recipient is rejected with 403. The fix
+//   is a verified sending domain (owner decision, not a code change);
+//   until then the buyer uses Download report on the unlocked page.
+//   resend_error — any other send failure (network, key, provider).
+// The real error is always logged server-side with the recipient.
 app.post('/api/resend-report', async (req, res) => {
   const { token, email, birthDate } = req.body || {};
   const access = verifyAccessToken(token, email, birthDate);
@@ -225,8 +236,12 @@ app.post('/api/resend-report', async (req, res) => {
     await sendReportEmail(access.email, reading, 'en');
     return res.json({ resent: true, email: access.email });
   } catch (e) {
-    console.error('Resend report email failed:', e.message);
-    return res.status(502).json({ error: 'Could not resend the report email.' });
+    const code = e.code || 'resend_error';
+    console.error('Resend report email failed:', { email: access.email, code, message: e.message });
+    const friendly = code === 'resend_sandbox_recipient'
+      ? 'This email address cannot receive the report yet — the sender is still in Resend test mode, which only delivers to the Resend account owner’s own email. Your reading is unlocked on this page: use Download report below to get it now, no email needed.'
+      : 'Could not resend the report email. Your reading is still unlocked on this page — use Download report below to get it now.';
+    return res.status(502).json({ error: friendly, code, detail: e.message });
   }
 });
 
@@ -248,11 +263,70 @@ app.post('/api/live-reader', (req, res) => {
   const personality = loadPersonality(access.email, access.birth_date);
   const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
   const answer = liveReaderAnswer(reading, String(question), lang === 'zh' ? 'zh' : 'en');
+  try {
+    db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, lang, source) VALUES (?, ?, 'user', ?, ?, 'live-reader')")
+      .run(hashToken(token), sessionId, String(question), lang === 'zh' ? 'zh' : 'en');
+    db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, lang, source) VALUES (?, ?, 'master', ?, ?, 'live-reader')")
+      .run(hashToken(token), sessionId, answer, lang === 'zh' ? 'zh' : 'en');
+  } catch (e) { console.error('Live Reader history store failed:', e.message); }
   db.prepare(`INSERT INTO live_reader_usage (token_hash, session_id, question_count, last_asked_at)
     VALUES (?, ?, 1, datetime('now'))
     ON CONFLICT(token_hash, session_id) DO UPDATE SET question_count = question_count + 1, last_asked_at = datetime('now')`)
     .run(hashToken(token), sessionId);
   return res.json({ answer, questionsUsed: count + 1, questionsRemaining: config.liveReaderMaxPerSession - count - 1 });
+});
+
+// --- Ask the Master: follow-up chat on the buyer's own reading -------------
+// Paid-only, 5 follow-up messages per paid session (server-enforced,
+// separate from Live Reader's 3 questions). Rule-based only — no LLM,
+// no external API, no new spending. Answers come only from this buyer's
+// own full reading + the conversation in this session (Live Reader Q&A
+// included, stored in master_chat_messages with source 'live-reader').
+// History: GET /api/master-chat returns the thread so a reload restores it.
+function masterChatHistory(token, sessionId) {
+  return db.prepare('SELECT role, content, lang, source FROM master_chat_messages WHERE token_hash = ? AND session_id = ? ORDER BY id ASC LIMIT 40')
+    .all(hashToken(token), sessionId);
+}
+function masterChatCount(token, sessionId) {
+  const row = db.prepare("SELECT COUNT(*) AS c FROM master_chat_messages WHERE token_hash = ? AND session_id = ? AND role = 'user' AND source = 'master'").get(hashToken(token), sessionId);
+  return row ? row.c : 0;
+}
+app.get('/api/master-chat', (req, res) => {
+  const { token, email, birthDate, sessionId } = req.query;
+  const access = verifyAccessToken(token, email, birthDate);
+  if (!access) return res.status(403).json({ error: 'A valid paid access token is required for Ask the Master.' });
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required.' });
+  const used = masterChatCount(token, sessionId);
+  return res.json({
+    messages: masterChatHistory(token, sessionId),
+    questionsUsed: used,
+    questionsRemaining: Math.max(0, config.masterChatMaxPerSession - used),
+    max: config.masterChatMaxPerSession,
+  });
+});
+app.post('/api/master-chat', masterChatLimiter, (req, res) => {
+  const { token, email, birthDate, sessionId, message, lang } = req.body || {};
+  const access = verifyAccessToken(token, email, birthDate);
+  if (!access) return res.status(403).json({ error: 'A valid paid access token is required for Ask the Master.' });
+  if (!sessionId || !message || String(message).trim().length < 2 || String(message).trim().length > 500) {
+    return res.status(400).json({ error: 'sessionId and a message (2–500 characters) are required.' });
+  }
+  const used = masterChatCount(token, sessionId);
+  if (used >= config.masterChatMaxPerSession) {
+    return res.status(429).json({ error: 'Ask the Master allows ' + config.masterChatMaxPerSession + ' follow-up messages per session.', questionsUsed: used, questionsRemaining: 0 });
+  }
+  const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
+  const personality = loadPersonality(access.email, access.birth_date);
+  const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
+  const history = masterChatHistory(token, sessionId);
+  const answer = masterChatAnswer(reading, String(message), lang === 'zh' ? 'zh' : 'en', history, personality);
+  try {
+    db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, lang, source) VALUES (?, ?, 'user', ?, ?, 'master')")
+      .run(hashToken(token), sessionId, String(message), lang === 'zh' ? 'zh' : 'en');
+    db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, lang, source) VALUES (?, ?, 'master', ?, ?, 'master')")
+      .run(hashToken(token), sessionId, answer, lang === 'zh' ? 'zh' : 'en');
+  } catch (e) { console.error('Master chat history store failed:', e.message); }
+  return res.json({ answer, questionsUsed: used + 1, questionsRemaining: config.masterChatMaxPerSession - used - 1, messages: masterChatHistory(token, sessionId) });
 });
 
 /* Live Reader (rewritten 7 Nov 2026, item E) — the old version picked ONE
@@ -289,16 +363,21 @@ function plainZH(s) {
     .replace(/用神/g, '你最需要补的五行')
     .replace(/大运/g, '十年阶段');
 }
-function liveReaderAnswer(reading, question, lang = 'en') {
+
+/* --- Shared topic helpers (Live Reader + Ask the Master) ------------------
+   Extracted verbatim from liveReaderAnswer so both answer from the same
+   sections of the same reading. topicPick(topic) returns the four
+   [system, section] pairs for a topic, in priority order; Live Reader
+   uses pairs 0-1, Ask the Master "deeper" / repeat-topic follow-ups use
+   pairs 2-3 so they never repeat the Live Reader answer verbatim. */
+function classifyTopic(question) {
   const q = String(question || '').toLowerCase();
   const has = (list) => list.some((w) => q.includes(w.toLowerCase()));
-  let topic = 'general';
-  for (const t of TOPICS) { if (has(t.en) || has(t.zh)) { topic = t.id; break; } }
-  const L = (o) => (o && typeof o === 'object' ? (lang === 'zh' ? o.zh || o.en : o.en || o.zh) : o);
-  const sent = (sec) => (lang === 'zh' ? plainZH(firstSentence(L(sec))) : plainEN(firstSentence(L(sec))));
-  const sysName = (name) => (lang === 'zh' ? { Bazi: '八字', Horoscope: '星座', Tarot: '塔罗', Numerology: '数字命理', 'Yi-Jing': '易经', 'Zi Wei': '紫微' }[name] || name : name);
-  // Matching sections of this buyer's actual reading, per topic.
-  const pick = {
+  for (const t of TOPICS) { if (has(t.en) || has(t.zh)) return t.id; }
+  return 'general';
+}
+function topicPick(reading, topic) {
+  return {
     career: [
       ['Bazi', reading.bazi.sections.career],
       ['Horoscope', reading.horoscope.sections.career],
@@ -336,8 +415,9 @@ function liveReaderAnswer(reading, question, lang = 'en') {
       ['Numerology', reading.numerology.sections.overview],
     ],
   }[topic];
-  // The system's core fact for this topic — from this buyer's computed values.
-  const core = {
+}
+function topicCore(reading, topic, lang) {
+  return {
     career: lang === 'zh'
       ? `你的核心：最旺的五行是${elName(reading.bazi.dominant, 'zh')}，太阳在${reading.horoscope.sun.zh}。`
       : `Your core: your strongest element is ${elName(reading.bazi.dominant, 'en')}, and your Sun is ${reading.horoscope.sun.en}.`,
@@ -357,7 +437,9 @@ function liveReaderAnswer(reading, question, lang = 'en') {
       ? `你的核心：命盘核心是${reading.bazi.dayMaster.zh}，生命灵数是 ${reading.numerology.lifePath}。`
       : `Your core: your chart's core is ${reading.bazi.dayMaster.en}, and your Life Path is ${reading.numerology.lifePath}.`,
   }[topic];
-  const action = {
+}
+function topicAction(topic, lang) {
+  return {
     career: lang === 'zh' ? '这周在工作中做一件能发挥你最强一面的事，事后写下一行结果。' : 'This week, do one thing at work that uses your strongest side — and write down how it went.',
     love: lang === 'zh' ? '这周对最亲近的人直接说出一个需要——说出来，不要只暗示。' : 'This week, say one plain need to the person closest to you — out loud, not as a hint.',
     money: lang === 'zh' ? '这周写下两个数字：进了多少，出了多少。不评判，只记数字。' : 'This week, write down two numbers: what came in and what went out. No judgement, just the numbers.',
@@ -365,6 +447,26 @@ function liveReaderAnswer(reading, question, lang = 'en') {
     timing: lang === 'zh' ? '这周先准备好一件事，等窗口打开时你就能直接行动。' : 'This week, prepare one thing, so you are ready when the window opens.',
     general: lang === 'zh' ? '这周做一件报告里提到的小事，然后留意有什么变化。' : 'This week, do one small thing the reading points to, then notice what changes.',
   }[topic];
+}
+function topicWord(topic, lang) {
+  const words = {
+    career: { en: 'work', zh: '工作' }, love: { en: 'love', zh: '感情' },
+    money: { en: 'money', zh: '财运' }, health: { en: 'health', zh: '健康' },
+    timing: { en: 'timing', zh: '时机' }, general: { en: 'your reading', zh: '你的报告' },
+  };
+  return (words[topic] || words.general)[lang === 'zh' ? 'zh' : 'en'];
+}
+
+function liveReaderAnswer(reading, question, lang = 'en') {
+  const topic = classifyTopic(question);
+  const L = (o) => (o && typeof o === 'object' ? (lang === 'zh' ? o.zh || o.en : o.en || o.zh) : o);
+  const sent = (sec) => (lang === 'zh' ? plainZH(firstSentence(L(sec))) : plainEN(firstSentence(L(sec))));
+  const sysName = (name) => (lang === 'zh' ? { Bazi: '八字', Horoscope: '星座', Tarot: '塔罗', Numerology: '数字命理', 'Yi-Jing': '易经', 'Zi Wei': '紫微' }[name] || name : name);
+  // Matching sections of this buyer's actual reading, per topic.
+  const pick = topicPick(reading, topic);
+  // The system's core fact for this topic — from this buyer's computed values.
+  const core = topicCore(reading, topic, lang);
+  const action = topicAction(topic, lang);
   const s1 = pick[0], s2 = pick[1];
   const sampleNote = (s1[0] === 'Zi Wei' || s2[0] === 'Zi Wei')
     ? (lang === 'zh' ? '（紫微为样本内容，仅供参考。）' : ' (Zi Wei is sample content, for reflection only.)')
@@ -372,6 +474,171 @@ function liveReaderAnswer(reading, question, lang = 'en') {
   return lang === 'zh'
     ? `${sysName(s1[0])}：${sent(s1[1])}\n\n${core} ${sysName(s2[0])}也这么说：${sent(s2[1])}${sampleNote}\n\n本周一件事：${action}`
     : `${sysName(s1[0])}: ${sent(s1[1])}\n\n${core} ${sysName(s2[0])} says the same: ${sent(s2[1])}${sampleNote}\n\nOne thing this week: ${action}`;
+}
+
+
+/* Ask the Master (7 Nov 2026) — rule-based follow-up chat, NO LLM.
+   The buyer already got 3 Live Reader answers; this answers what comes
+   next: "what does that mean?", "give me an example", "tell me more",
+   or a question on one area. Every answer comes ONLY from this buyer's
+   own full reading + this session's conversation (history rows, Live
+   Reader Q&A included). Plain language: no technical term without a
+   plain gloss, short sentences, one direct point + one small action.
+   Never invents a prediction, never claims the Zi Wei sample is
+   computed, never gives medical / financial / legal advice, never
+   touches another buyer's data (only this token's reading is loaded). */
+function masterChatAnswer(reading, message, lang, history, personality) {
+  const msg = String(message || '');
+  const q = msg.toLowerCase();
+  const zh = lang === 'zh';
+  const L = (o) => (o && typeof o === 'object' ? (zh ? o.zh || o.en : o.en || o.zh) : o);
+  const sent = (sec) => (zh ? plainZH(firstSentence(L(sec))) : plainEN(firstSentence(L(sec))));
+  const sysName = (name) => (zh ? { Bazi: '八字', Horoscope: '星座', Tarot: '塔罗', Numerology: '数字命理', 'Yi-Jing': '易经', 'Zi Wei': '紫微' }[name] || name : name);
+  const sampleNote = (sys) => (sys === 'Zi Wei' ? (zh ? '（紫微为样本内容，仅供参考。）' : ' (Zi Wei is sample content, for reflection only.)') : '');
+  const lastUser = [...(history || [])].reverse().find((m) => m.role === 'user');
+  const lastTopic = lastUser ? classifyTopic(lastUser.content) : 'general';
+  const topic = classifyTopic(msg);
+  const pick = topicPick(reading, topic === 'general' ? lastTopic : topic);
+  const smallStep = (t) => topicAction(t, lang);
+
+  // Safety guard: medical / financial / legal questions get a short
+  // refusal + a redirect to the reading — never advice on those topics.
+  const guard = [
+    { re: /diagnos|disease|medicine|medication|dosage|treatment|cure|cancer|doctor|hospital|symptom/i, zhRe: /诊断|吃药|用药|治疗|治病|癌症|看病|症状|医生/, kind: 'medical' },
+    { re: /invest|stock|crypto|shares|buy.*(?:fund|bond)|portfolio|should i buy/i, zhRe: /投资|股票|基金|买币|理财|买房|贷款/, kind: 'money' },
+    { re: /sue|lawsuit|lawyer|court|contract|legal/i, zhRe: /诉讼|律师|打官司|合同纠纷|法律/, kind: 'legal' },
+  ];
+  for (const g of guard) {
+    if (g.re.test(msg) || g.zhRe.test(msg)) {
+      if (zh) {
+        const what = g.kind === 'medical' ? '医疗' : g.kind === 'money' ? '财务' : '法律';
+        return '这个问题我不能回答——这是' + what + '问题，这份报告只供自我反思。如果你需要专业意见，请找相应的专业人士。你可以问我报告里的内容，比如：我的生命灵数是什么意思？';
+      }
+      const what = g.kind === 'medical' ? 'medical' : g.kind === 'money' ? 'financial' : 'legal';
+      return "I can't advise on that — it's a " + what + ' question, and this reading is for self-reflection only. For that, please talk to a professional. Ask me about your reading instead — for example, what does your Life Path mean?';
+    }
+  }
+
+  // --- Term lookup: a word from their own reading -------------------------
+  function findTerm() {
+    const has = (...ws) => ws.some((w) => q.includes(w.toLowerCase()));
+    if (has('day master', '日主', '命盘核心')) return { label: zh ? '命盘核心' : "Your chart's core", gloss: zh ? '命盘核心——你出生时在中心的那一个五行' : "your chart's core — the element you were born with at the centre", text: reading.bazi.dayMasterText };
+    if (has('life path', '生命灵数')) return { label: zh ? '生命灵数' : 'Life Path', gloss: zh ? '生命灵数——你的人生不断重复的那一课' : 'your Life Path number — the lesson your life keeps teaching you', text: reading.numerology.lifePathText };
+    if (has('personal year', '个人年')) return { label: zh ? '个人年' : 'Personal Year', gloss: zh ? '个人年——今年属于你的主题' : 'your Personal Year number — the theme of this year for you', text: reading.numerology.personalYearText };
+    if (has('destiny', '命运数')) return { label: zh ? '命运数' : 'Destiny number', gloss: zh ? '命运数——世界不断要求你练习的方向' : 'your Destiny number — the direction the world keeps asking you to practise', text: reading.numerology.destinyText };
+    if (has('hexagram', '卦', '易经')) return { label: zh ? '你的卦象' : 'Your hexagram', gloss: zh ? '你的卦象——你现在处境的一幅图，由六爻组成' : 'your hexagram — a picture of your situation right now, built from six lines', text: reading.yijing.theme };
+    if (has('sun', '太阳')) return { label: zh ? '太阳星座' : 'Sun sign', gloss: zh ? '你的太阳星座——你是谁、什么给你动力的核心' : 'your Sun sign — the core of who you are and what fuels you', text: reading.horoscope.sections.sun };
+    if (has('moon', '月亮')) return { label: zh ? '月亮星座' : 'Moon sign', gloss: zh ? '你的月亮星座——你私下需要什么，才感到安全、才能充电' : 'your Moon sign — what you privately need to feel safe and recharge', text: reading.horoscope.sections.moon };
+    if (has('rising', '上升')) return { label: zh ? '上升星座' : 'Rising sign', gloss: zh ? '你的上升星座——别人最先遇到的你的样子' : 'your Rising sign — the style people meet first', text: reading.horoscope.sections.rising };
+    if (has('enneagram', '九型')) {
+      const e = personality && personality.enneagram;
+      return { label: zh ? '九型人格' : 'Enneagram', gloss: zh ? '你的九型人格类型——你最想要什么、又在躲什么的模式' : 'your Enneagram type — the pattern of what you want most, and what you avoid', text: e ? { en: firstSentence(e.interpretation.core.en), zh: firstSentence(e.interpretation.core.zh) } : (zh ? '你还没有做九型测验——先在报告上方的测验区做完它，这里就会有你的类型。' : 'You have not taken the Enneagram quiz yet — take it in the quiz section above and your type will appear here.') };
+    }
+    if (has('mbti')) {
+      const m = personality && personality.mbti;
+      return { label: 'MBTI', gloss: zh ? '你的 MBTI 类型——你天生如何接收信息、如何做决定' : 'your MBTI type — how you naturally take in information and make decisions', text: m ? { en: firstSentence(m.interpretation.en), zh: firstSentence(m.interpretation.zh) } : (zh ? '你还没有做 MBTI 测验——先在报告上方的测验区做完它，这里就会有你的类型。' : 'You have not taken the MBTI quiz yet — take it in the quiz section above and your type will appear here.') };
+    }
+    const elKeys = [['wood', '木'], ['fire', '火'], ['earth', '土'], ['metal', '金'], ['water', '水']];
+    for (const [key, ch] of elKeys) {
+      if (has(key) || q.includes(ch)) {
+        return { label: zh ? elName(key, 'zh') : elName(key, 'en'), gloss: elementMeaning(key, lang), text: reading.bazi.elementBalance };
+      }
+    }
+    for (const p of reading.ziwei.palaces) {
+      if (has(p.en.toLowerCase(), p.zh)) return { label: L(p), gloss: L(p.text), text: reading.ziwei.sections[p.key] || reading.ziwei.sections.overview, ziwei: true };
+    }
+    for (const c of reading.tarot.cardsDetailed) {
+      if (q.includes(L(c.name).toLowerCase()) || (c.name.zh && q.includes(c.name.zh))) {
+        return { label: L(c.name), gloss: zh ? '这张牌在' + L(c.position) + '位置——它指出的那一部分，要先看' : 'this card in the ' + L(c.position) + ' position — what it names is the part to look at first', text: c.meaning };
+      }
+    }
+    return null;
+  }
+  const term = findTerm();
+  const isExplain = /what does (that|this|it) mean|what is|what'?s|什么意思|是什么|解释|不懂|mean\?/i.test(msg);
+  const isExample = /example|例子|举例|比如/.test(q);
+  const isDeeper = /tell me more|more about|deeper|详细|多说|深入|展开|再说/.test(q);
+
+  // (a) Explain a term from their reading. The gloss already names the
+  // term in most cases ("your Life Path number — ..."), so only prepend
+  // the label when the gloss does not already start with it.
+  if (term && (isExplain || msg.trim().length < 30)) {
+    const action = zh ? '这周留意一次，你在自己身上看到它的时候，用一行字记下来。' : 'This week, notice one moment when you see it in yourself, and write down one line about it.';
+    const head = term.gloss.toLowerCase().startsWith(term.label.toLowerCase()) ? term.gloss : term.label + (zh ? '——' : ' — ') + term.gloss;
+    const headCap = !zh ? head.charAt(0).toUpperCase() + head.slice(1) : head;
+    return (zh ? headCap + '。' + sent(term.text) + (term.ziwei ? '（紫微为样本内容，仅供参考。）' : '') + '\n\n一小步：' + action
+      : headCap + '. ' + sent(term.text) + (term.ziwei ? ' (Zi Wei is sample content, for reflection only.)' : '') + '\n\nOne small step: ' + action);
+  }
+  // "What does that mean?" with no term named: explain the core of what
+  // the Master just said, from the last topic in the conversation.
+  // But "What is X?" naming a word that is NOT in their reading gets an
+  // honest answer instead — the Master only explains their own report.
+  if (isExplain && !term && /what is|什么是/.test(q)) {
+    return zh ? '你的报告里没有这个词——我只能解释你自己报告里的词。试试：日主、生命灵数、卦象、塔罗牌、九型或 MBTI。'
+      : "I don't have that in your reading — I can only explain words from your own report. Try: Day Master, Life Path, your hexagram, a tarot card, Enneagram or MBTI.";
+  }
+  if (isExplain && !term) {
+    const t2 = lastTopic === 'general' ? 'general' : lastTopic;
+    const core = topicCore(reading, t2, lang);
+    const p2 = topicPick(reading, t2);
+    return zh ? core + ' 换句话说：' + sent(p2[0][1]) : core + ' In plain words: ' + sent(p2[0][1]);
+  }
+
+  // (b) Example — a concrete everyday example tied to their reading.
+  if (isExample) {
+    const t2 = topic === 'general' ? lastTopic : topic;
+    const dom = reading.bazi.dominant, weak = reading.bazi.weakest;
+    if (zh) {
+      const ex = {
+        career: '举个例子：你最旺的五行是' + elName(dom, 'zh') + '。这周工作上遇到卡住的事，先做' + elName(dom, 'zh') + '的那一部分——' + firstSentence(elementMeaning(dom, 'zh')) + '；' + elName(weak, 'zh') + '的那一部分，交给清单或同事。',
+        love: '举个例子：你的月亮在' + reading.horoscope.moon.zh + '。今晚不要只暗示，直接说出一个需要——比如“我需要早点休息”——看看会发生什么。',
+        money: '举个例子：这周写下两个数字——进了多少，出了多少。你最弱的五行是' + elName(weak, 'zh') + '，数字会告诉你，缺口在哪里。',
+        health: '举个例子：这周留出一段固定的休息时间——每天同一时间，手机放一边。你最弱的五行是' + elName(weak, 'zh') + '，休息不是奖励，是燃料。',
+        timing: '举个例子：你的卦是第 ' + reading.yijing.hexagramNumber + ' 卦「' + reading.yijing.hexagramZh + '」。这周先准备好一件事，等窗口打开时，你就能直接行动。',
+        general: '举个例子：你的命盘核心是' + reading.bazi.dayMaster.zh + '。在平常的一天里，它看起来是这样的——' + firstSentence(reading.bazi.dayMasterText.zh) + '。今天留意一次，你在哪里看到了它。',
+      }[t2] || '';
+      return ex;
+    }
+    const ex = {
+      career: 'Here is one from everyday life: your strongest element is ' + elName(dom, 'en') + '. At work this week, when a task feels stuck, do the ' + elName(dom, 'en') + ' part first — ' + firstSentence(elementMeaning(dom, 'en')) + ' — and leave the ' + elName(weak, 'en') + ' part to a checklist or a colleague.',
+      love: "Here is one from everyday life: your Moon is in " + reading.horoscope.moon.en + ". Tonight, instead of hinting, say one plain need — 'I need an early night' — and see what happens.",
+      money: 'Here is one from everyday life: this week, write down two numbers — what came in, and what went out. Your lightest element is ' + elName(weak, 'en') + ', and the numbers will show you where the gap is.',
+      health: 'Here is one from everyday life: protect one rest window this week — same time every day, phone aside. Your lightest element is ' + elName(weak, 'en') + ', so rest is not a reward, it is fuel.',
+      timing: 'Here is one from everyday life: your hexagram is ' + reading.yijing.hexagramNumber + ' · ' + reading.yijing.hexagramEn + '. This week, prepare one thing now, so when the window opens you can move at once.',
+      general: "Here is one from everyday life: your chart's core is " + reading.bazi.dayMaster.en + '. In a normal day it looks like this — ' + firstSentence(reading.bazi.dayMasterText.en) + ' — notice it once today, and write down where you saw it.',
+    }[t2] || '';
+    return ex;
+  }
+
+  // (c) Deeper — a second, different layer on the same topic: pairs 2-3
+  // of the topic's sections, never the pairs Live Reader used (0-1).
+  if (isDeeper) {
+    const t2 = topic === 'general' ? lastTopic : topic;
+    const p2 = topicPick(reading, t2);
+    const s2 = p2[2], s3 = p2[3];
+    return zh
+      ? '再往深一层。' + sysName(s2[0]) + '：' + sent(s2[1]) + ' ' + sysName(s3[0]) + '补充：' + sent(s3[1]) + sampleNote(s2[0]) + sampleNote(s3[0]) + '\n\n一小步：' + smallStep(t2)
+      : 'Here is the next layer. ' + sysName(s2[0]) + ': ' + sent(s2[1]) + ' ' + sysName(s3[0]) + ' adds: ' + sent(s3[1]) + sampleNote(s2[0]) + sampleNote(s3[0]) + '\n\nOne small step: ' + smallStep(t2);
+  }
+
+  // (d) Specific area as a follow-up. If this topic was already covered
+  // in the conversation (e.g. Live Reader just answered about work),
+  // use the next layer (pairs 2-3) and say so; otherwise answer like
+  // Live Reader (pairs 0-1) with a conversational lead-in.
+  if (topic !== 'general') {
+    const already = lastTopic === topic;
+    const p2 = already ? [pick[2], pick[3]] : [pick[0], pick[1]];
+    const lead = already
+      ? (zh ? '你刚才问了' + topicWord(topic, 'zh') + '——这是同一份报告里的下一层。' : 'You asked about ' + topicWord(topic, 'en') + ' earlier — here is the next layer from that same reading.')
+      : (zh ? '你的报告对' + topicWord(topic, 'zh') + '是这样说的：' : "Here's what your reading says about " + topicWord(topic, 'en') + ':');
+    return lead + ' ' + sysName(p2[0][0]) + (zh ? '：' : ': ') + sent(p2[0][1]) + ' ' + sysName(p2[1][0]) + (zh ? '也这么说：' : ' says the same: ') + sent(p2[1][1]) + sampleNote(p2[0][0]) + sampleNote(p2[1][0]) + (zh ? '\n\n一小步：' : '\n\nOne small step: ') + smallStep(topic);
+  }
+
+  // Default: one-line portrait + an invitation to dig in.
+  const essence = firstSentence(L(reading.portrait.essenceLine));
+  return zh
+    ? '你的报告一句话：' + essence + '。你可以问我某个词是什么意思——比如“我的生命灵数是什么意思？”——或者要一个例子，比如“举个例子。”'
+    : 'Your reading in one line: ' + essence + ". Ask me what a word means — for example, 'What does my Life Path mean?' — or ask for an example, like 'Give me an example.'";
 }
 
 // --- Enneagram / MBTI ---------------------------------------------------------
@@ -460,6 +727,12 @@ if (require.main === module) {
     if (!config.stripeSecretKey) console.log('WARNING: STRIPE_SECRET_KEY is not set — checkout will return 503 until it is configured.');
     if (!config.resendApiKey && !config.smtp.host) console.log('WARNING: No email provider configured — emails will use the console log fallback (dev only).');
     if (!config.ownerPasswordHash) console.log('WARNING: OWNER_PASSWORD_HASH is not set — owner login is disabled.');
+    // Sandbox sender (7 Nov 2026): Resend's onboarding@resend.dev only
+    // delivers to the Resend account owner's own email. Until a verified
+    // domain is set as RESEND_FROM_EMAIL, report emails to any other
+    // address will be rejected with 403 — buyers are covered by the
+    // in-app Download report fallback, not by email.
+    if (config.resendFrom === 'onboarding@resend.dev') console.log('WARNING: RESEND_FROM_EMAIL is still the Resend sandbox sender (onboarding@resend.dev) — report emails will only deliver to the Resend account owner’s own email until a verified domain is set.');
   });
 }
-module.exports = { app, liveReaderAnswer };
+module.exports = { app, liveReaderAnswer, masterChatAnswer };
