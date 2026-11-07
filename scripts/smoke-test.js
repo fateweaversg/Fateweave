@@ -304,28 +304,28 @@ async function main() {
     check('master-chat setup: live-reader career answer stored', res.ok && lrCareerAnswer.length > 50, `got ${res.status}`);
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('What does that mean?') });
     data = await res.json();
-    check('master-chat explain references the previous answer topic', res.ok && data.questionsUsed === 0 && data.questionsRemaining === 5 && data.answer.includes('Your core:'), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    check('master-chat without Gemini returns retryable 503, not a canned explanation', res.status === 503 && data.code === 'gemini_unavailable' && data.questionsUsed === 0 && data.questionsRemaining === 5 && !data.answer, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('Give me an example') });
     data = await res.json();
-    check('master-chat example returns an everyday example tied to the reading', res.ok && data.questionsUsed === 0 && data.answer.includes('everyday life') && /strongest element|Moon|hexagram|Life Path/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    check('master-chat without Gemini does not invent an example', res.status === 503 && !data.answer && data.questionsUsed === 0, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('Tell me more about work') });
     data = await res.json();
-    check('master-chat deeper gives a different layer, never the live-reader text', res.ok && data.questionsUsed === 0 && data.answer.includes('next layer') && data.answer !== lrCareerAnswer, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    check('master-chat without Gemini does not repeat the reading', res.status === 503 && !data.answer && data.questionsUsed === 0, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     // Repeat-topic follow-up references the earlier conversation.
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('What about my career?') });
     data = await res.json();
-    check('master-chat repeat topic references earlier question', res.ok && data.questionsUsed === 0 && /asked about work earlier/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    check('master-chat failed requests consume no follow-ups', res.status === 503 && data.questionsUsed === 0, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('What does my Life Path mean?') });
     data = await res.json();
-    check('master-chat 5th follow-up ok, counter still 0 used / 5 left (rule-based replies do not consume)', res.ok && data.questionsUsed === 0 && data.questionsRemaining === 5 && /Life Path/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    check('master-chat fifth failed attempt still leaves five Gemini follow-ups', res.status === 503 && data.questionsUsed === 0 && data.questionsRemaining === 5, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     res = await fetch(`${BASE}/api/master-chat?token=${mcToken}&email=mc@example.com&birthDate=1990-05-14&sessionId=${mcSession}`);
     data = await res.json();
-    check('master-chat history returns the full thread on load', res.ok && Array.isArray(data.messages) && data.messages.length === 12 && data.messages[0].source === 'live-reader' && data.messages[data.messages.length - 1].role === 'master' && data.questionsRemaining === 5, `got ${res.status} len=${data.messages?.length}`);
+    check('master-chat history returns the full thread on load', res.ok && Array.isArray(data.messages) && data.messages.length === 2 && data.messages[0].source === 'live-reader' && data.messages[data.messages.length - 1].role === 'master' && data.questionsRemaining === 5, `got ${res.status} len=${data.messages?.length}`);
     // A different sessionId for the same buyer: the thread is keyed by
     // buyer, not by session — a reload must return the SAME thread.
     res = await fetch(`${BASE}/api/master-chat?token=${mcToken}&email=mc@example.com&birthDate=1990-05-14&sessionId=smoke-mc-reload`);
     data = await res.json();
-    check('master-chat history survives a new sessionId (reload)', res.ok && Array.isArray(data.messages) && data.messages.length === 12 && data.questionsUsed === 0 && data.questionsRemaining === 5, `got ${res.status} len=${data.messages?.length} used=${data.questionsUsed}`);
+    check('master-chat history survives a new sessionId (reload)', res.ok && Array.isArray(data.messages) && data.messages.length === 2 && data.questionsUsed === 0 && data.questionsRemaining === 5, `got ${res.status} len=${data.messages?.length} used=${data.questionsUsed}`);
     // Separate buyer: zh term explanation + safety guard (the limit is
     // per buyer, so the 5-question buyer above cannot ask more).
     const mcZhOrder = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('mczh@example.com', '1990-05-14', 'Master Chat Zh');
@@ -333,10 +333,10 @@ async function main() {
     const mcZh = 'smoke-mc-2';
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: mcZhToken, email: 'mczh@example.com', birthDate: '1990-05-14', sessionId: mcZh, message: '我的生命灵数是什么意思？', lang: 'zh' }) });
     data = await res.json();
-    check('master-chat zh term explanation in Simplified Chinese', res.ok && data.answer.includes('生命灵数') && !data.answer.includes('生命靈數') && !data.answer.includes('還'), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    check('master-chat unavailable message is Simplified Chinese', res.status === 503 && data.error.includes('追问次数未扣除') && !data.answer, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: mcZhToken, email: 'mczh@example.com', birthDate: '1990-05-14', sessionId: mcZh, message: 'Should I invest in stocks?', lang: 'en' }) });
     data = await res.json();
-    check('master-chat refuses financial advice', res.ok && /can.t (advise|give financial advice)/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    check('master-chat unavailable service does not return financial advice', res.status === 503 && !data.answer, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     // Frontend: Ask the Master section exists, only inside the (hidden-until-unlocked) report card.
     check('frontend has Ask the Master section + chips + counter', html.includes('id="master-chat"') && html.includes('id="mc-thread"') && html.includes('id="mc-left"') && html.includes('data-chip="explain"') && html.includes('data-chip="example"') && html.includes('data-chip="deeper"') && appJs.includes('/api/master-chat') && appJs.includes('loadMasterChat'), 'master-chat UI missing');
     check('frontend has download-report fallback button', html.includes('id="download-report-btn"') && appJs.includes('reportDownloadHTML') && appJs.includes("download = `FateWeave-report-"), 'download button missing');
@@ -397,9 +397,9 @@ async function main() {
       // section 18 header — leaves no room for 4 more here; the
       // 6th-question behaviour is covered by the expired/non-upgraded
       // buyers below and the limit5 buyer in section 26.)
-      if (!res.ok || data.extended !== true || data.questionsUsed !== 0 || data.questionsRemaining !== 30) { upOk = false; break; }
+      if (res.status !== 503 || data.code !== 'gemini_unavailable' || data.extended !== true || data.questionsUsed !== 0 || data.questionsRemaining !== 30) { upOk = false; break; }
     }
-    check('master-chat extended: 3 rule-based follow-ups all succeed, counter stays 0 used / 30 left (rule-based replies do not consume)', upOk, 'upgrade did not lift the limit, or the counter moved on rule-based replies');
+    check('master-chat extended: 3 unavailable requests return 503 with 0 used / 30 left', upOk, 'upgrade did not lift the limit, or the counter moved on rule-based replies');
     // Expired upgrade + another buyer without one: the limit still applies.
     const order2 = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('other@example.com', '1985-03-02', 'Other');
     const { token: token2 } = issueAccessToken('other@example.com', '1985-03-02', order2.lastInsertRowid);
@@ -409,7 +409,7 @@ async function main() {
       await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token2, email: 'other@example.com', birthDate: '1985-03-02', sessionId: expSession, message: `Question ${i}?`, lang: 'en' }) });
     }
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token2, email: 'other@example.com', birthDate: '1985-03-02', sessionId: expSession, message: 'Question 6?', lang: 'en' }) });
-    check('master-chat expired upgrade: 6th rule-based follow-up still succeeds (rule-based replies do not consume the 5 AI chats)', res.status === 200, `got ${res.status}`);
+    check('master-chat expired upgrade unavailable requests preserve allowance', res.status === 503, `got ${res.status}`);
     // Non-upgraded users still hit the limit (fresh session, buyer 2, no upgrade row for a new birth date).
     const order3 = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('third@example.com', '1992-07-07', 'Third');
     const { token: token3 } = issueAccessToken('third@example.com', '1992-07-07', order3.lastInsertRowid);
@@ -419,7 +419,7 @@ async function main() {
     }
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token3, email: 'third@example.com', birthDate: '1992-07-07', sessionId: limSession, message: 'Question 6?', lang: 'en' }) });
     data = await res.json();
-    check('master-chat non-upgraded: 6th rule-based follow-up still succeeds, counter 0 used / 5 left (the 429 fires only after 5 AI replies — see the limit5 buyer in section 26)', res.status === 200 && data.questionsUsed === 0 && data.questionsRemaining === 5, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
+    check('master-chat non-upgraded sixth failed request keeps five AI chats', res.status === 503 && data.questionsUsed === 0 && data.questionsRemaining === 5, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
     check('frontend explains the 5 limit + shows the upgrade offer', html.includes('id="mc-upgrade-btn"') && html.includes('id="mc-upgrade-offer"') && appJs.includes('buyMasterUpgrade') && appJs.includes('/api/checkout-upgrade') && appJs.includes('masterChatExplainer') && appJs.includes('upgradeOffer'), 'upgrade UI missing');
     const successHtml = fs.readFileSync(path.join(pub, 'success.html'), 'utf8');
     check('upgrade return lands DIRECTLY on /master (not the hub)', successHtml.includes('data.upgrade') && successHtml.includes('/master?upgraded=1&session_id=') && !successHtml.includes("/?upgraded=1&session_id=") && successHtml.includes('Ask the Master →'), 'upgrade redirect still points at the hub');
@@ -623,15 +623,15 @@ async function main() {
     let calls429 = 0;
     const mock429 = async () => { calls429++; return { ok: false, status: 429, json: async () => ({}) }; };
     r = await ai.resolveAiMaster({ email: 'ai3@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mock429 });
-    check('ai resolve: Gemini 429 is retried once, then quota fallback + cooldown', r.status === 'fallback' && r.reason === 'quota' && calls429 === 2, JSON.stringify(r));
+    check('ai resolve: Gemini 429 is retried once, then quota fallback + cooldown', r.status === 'fallback' && r.reason === 'quota' && calls429 === 3, JSON.stringify(r));
     r = await ai.resolveAiMaster({ email: 'ai3@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello again?', lang: 'en', history: [], personality: null, fetchImpl: mock429 });
-    check('ai resolve: cooldown holds — second call never reaches Gemini', r.status === 'fallback' && r.reason === 'cooldown' && calls429 === 2, JSON.stringify(r));
+    check('ai resolve: cooldown holds — second call never reaches Gemini', r.status === 'fallback' && r.reason === 'cooldown' && calls429 === 3, JSON.stringify(r));
     ai.resetAiCooldownForTests();
-    // 5xx → unavailable fallback after exactly one retry.
+    // 5xx → unavailable fallback after primary retry and Gemini fallback.
     let calls500 = 0;
     const mock500 = async () => { calls500++; return { ok: false, status: 500, json: async () => ({}) }; };
     r = await ai.resolveAiMaster({ email: 'ai4@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mock500 });
-    check('ai resolve: Gemini 5xx → unavailable fallback after exactly one retry', r.status === 'fallback' && r.reason === 'unavailable' && calls500 === 2, JSON.stringify(r));
+    check('ai resolve: Gemini 5xx → unavailable fallback after primary retry and Gemini fallback', r.status === 'fallback' && r.reason === 'unavailable' && calls500 === 3, JSON.stringify(r));
     ai.resetAiCooldownForTests();
     // Extended 30-total cap: 30 mocked AI replies, then the 31st is blocked.
     let capCalls = 0;
@@ -660,7 +660,7 @@ async function main() {
     // (d2) AI resilience (7 Nov 2026 fix): one transient Google 503
     // must never silence the AI for an hour. The Gemini call retries
     // ONCE after ~1s; a 5xx/timeout then rests the AI for 5 minutes
-    // (not 1 hour), a 429 for 3 minutes (after one retry, not 15);
+    // (not 1 hour), a 429 for 3 minutes (after primary retry and Gemini fallback, not 15);
     // every attempt outcome is logged. These run BEFORE the
     // global-cap top-up below, so the global limit does not mask them.
     ai.setGeminiApiKeyForTests('test-key-not-real');
@@ -674,7 +674,7 @@ async function main() {
     r = await ai.resolveAiMaster({ email: 'retry@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mock503thenOk });
     check('ai resilience: one transient 503 is retried once, then the AI answers', r.status === 'ai' && /Recovered AI reply/.test(r.answer) && calls503 === 2, JSON.stringify(r).slice(0, 160));
     check('ai resilience: the successful retry is recorded in the ledger', ai.buyerAiCallsTotal('retry@example.com', '1990-05-14') === 1, 'retry success not recorded');
-    // 5xx → unavailable fallback after exactly one retry, then a
+    // 5xx → unavailable fallback after primary retry and Gemini fallback, then a
     // 5-MINUTE cooldown (not 1 hour): the next question is a
     // 'cooldown' fallback without touching Gemini; once the cooldown
     // has expired, the AI answers again.
@@ -682,13 +682,13 @@ async function main() {
     const mock500b = async () => { callsCool++; return { ok: false, status: 500, json: async () => ({}) }; };
     r = await ai.resolveAiMaster({ email: 'cool@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mock500b });
     const coolState = ai.aiCooldownState();
-    check('ai resilience: 5xx → unavailable fallback after one retry, 5-min cooldown set', r.status === 'fallback' && r.reason === 'unavailable' && callsCool === 2 && coolState.active === true && coolState.reason === 'unavailable' && coolState.msLeft > 0 && coolState.msLeft <= 5 * 60 * 1000, JSON.stringify({ r, coolState, callsCool }));
+    check('ai resilience: 5xx → unavailable fallback after primary retry and Gemini fallback, 15-second retry delay set', r.status === 'fallback' && r.reason === 'unavailable' && callsCool === 3 && coolState.active === true && coolState.reason === 'unavailable' && coolState.msLeft > 0 && coolState.msLeft <= 15000, JSON.stringify({ r, coolState, callsCool }));
     r = await ai.resolveAiMaster({ email: 'cool@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello again?', lang: 'en', history: [], personality: null, fetchImpl: mock500b });
-    check('ai resilience: cooldown holds — the next question never reaches Gemini', r.status === 'fallback' && r.reason === 'cooldown' && callsCool === 2, JSON.stringify(r));
+    check('ai resilience: cooldown holds — the next question never reaches Gemini', r.status === 'fallback' && r.reason === 'cooldown' && callsCool === 3, JSON.stringify(r));
     ai.setAiCooldownForTests(Date.now() - 1000, 'unavailable');
     check('ai resilience: an expired cooldown no longer blocks', ai.aiCooldownState().active === false, JSON.stringify(ai.aiCooldownState()));
     r = await ai.resolveAiMaster({ email: 'cool@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello a third time?', lang: 'en', history: [], personality: null, fetchImpl: mockOk });
-    check('ai resilience: after the cooldown expires the AI answers again', r.status === 'ai' && callsCool === 2, JSON.stringify(r).slice(0, 160));
+    check('ai resilience: after the cooldown expires the AI answers again', r.status === 'ai' && callsCool === 3, JSON.stringify(r).slice(0, 160));
     // 429 → retried once, then quota fallback with a 3-MINUTE
     // cooldown (7 Nov 2026 fix 1: one transient per-minute 429 at
     // 22:41 SGT silenced the AI for 15 min although the same key
@@ -698,7 +698,7 @@ async function main() {
     const mock429b = async () => { calls429b++; return { ok: false, status: 429, json: async () => ({}) }; };
     r = await ai.resolveAiMaster({ email: 'cool429@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mock429b });
     const cool429State = ai.aiCooldownState();
-    check('ai resilience: 429 → retried once, then quota fallback with a 3-min cooldown', r.status === 'fallback' && r.reason === 'quota' && calls429b === 2 && cool429State.active === true && cool429State.reason === 'quota' && cool429State.msLeft > 2 * 60 * 1000 && cool429State.msLeft <= 3 * 60 * 1000, JSON.stringify({ r, cool429State, calls429b }));
+    check('ai resilience: 429 → retried once, then quota fallback with a 30-second retry delay', r.status === 'fallback' && r.reason === 'quota' && calls429b === 3 && cool429State.active === true && cool429State.reason === 'quota' && cool429State.msLeft > 0 && cool429State.msLeft <= 30000, JSON.stringify({ r, cool429State, calls429b }));
     check('ai resilience: cooldown fallback note is honest, EN + zh', /resting for a few minutes/.test(ai.fallbackNote('cooldown', 'en')) && /短暂休息/.test(ai.fallbackNote('cooldown', 'zh')), ai.fallbackNote('cooldown', 'en'));
     ai.resetAiCooldownForTests();
     // (d3) 429 retry success (7 Nov 2026 fix 1): a 429 with a
@@ -830,7 +830,7 @@ async function main() {
       }
       return bad.length === 0;
     })(), 'files still containing Unlimited — see the check above');
-    check('frontend has AI badge + rule-based tag + extended counter', html.includes('id="mc-ai-badge"') && html.includes('id="mc-left-label"') && appJs.includes('mcRuleBasedTag') && appJs.includes('masterChatsLeft') && appJs.includes("suffix.textContent = ' / 30'") && appJs.includes('aiMasterLive') && css.includes('.ai-badge') && css.includes('.mc-rb-tag'), 'AI Master UI missing');
+    check('frontend has AI badge + rule-based tag + extended counter', html.includes('id="mc-ai-badge"') && html.includes('id="mc-left-label"') && appJs.includes('mcRuleBasedTag') && appJs.includes('masterChatsLeft') && appJs.includes("suffix.textContent = ' / ' + state.mcMax") && appJs.includes('aiMasterLive') && css.includes('.ai-badge') && css.includes('.mc-rb-tag'), 'AI Master UI missing');
     // (g) Friendly failure (7 Nov 2026 live bug): a transport failure
     // or a non-JSON reply must show a short friendly message in the
     // user's language — never the raw browser error ("The string did
@@ -858,10 +858,10 @@ async function main() {
     // a GET with a never-used sessionId returns the SAME full thread.
     res = await fetch(`${BASE}/api/master-chat?token=${token}&email=buyer@example.com&birthDate=1990-05-14&sessionId=smoke-fresh-session-1`);
     data = await res.json();
-    check('buyer-keyed counter + history: fresh sessionId returns the full thread, 1 used / 29 left', res.ok && data.extended === true && data.questionsUsed === 1 && data.questionsRemaining === 29 && data.max === 30 && Array.isArray(data.messages) && data.messages.length === 14 && data.messages[0].source === 'live-reader' && data.messages[data.messages.length - 1].source === 'ai', `got ${res.status} used=${data.questionsUsed} left=${data.questionsRemaining} len=${data.messages?.length} last=${data.messages?.[data.messages.length - 1]?.source}`);
+    check('buyer-keyed counter + history: fresh sessionId returns the full thread, 1 used / 29 left', res.ok && data.extended === true && data.questionsUsed === 1 && data.questionsRemaining === 29 && data.max === 30 && Array.isArray(data.messages) && data.messages.length === 8 && data.messages[0].source === 'live-reader' && data.messages[data.messages.length - 1].source === 'ai', `got ${res.status} used=${data.questionsUsed} left=${data.questionsRemaining} len=${data.messages?.length} last=${data.messages?.[data.messages.length - 1]?.source}`);
     res = await fetch(`${BASE}/api/master-chat?token=${token}&email=buyer@example.com&birthDate=1990-05-14&sessionId=smoke-fresh-session-2`);
     data = await res.json();
-    check('buyer-keyed history: a second fresh sessionId returns the same thread again', res.ok && Array.isArray(data.messages) && data.messages.length === 14 && data.questionsUsed === 1, `got ${res.status} len=${data.messages?.length}`);
+    check('buyer-keyed history: a second fresh sessionId returns the same thread again', res.ok && Array.isArray(data.messages) && data.messages.length === 8 && data.questionsUsed === 1, `got ${res.status} len=${data.messages?.length}`);
     // The AI-resting flag is exposed (false here — no cooldown is active).
     check('master-chat GET exposes aiResting (false when no cooldown)', data.aiResting === false, `aiResting=${data.aiResting}`);
     // (e) Live Reader count persists across sessions: buyer@example.com
@@ -893,7 +893,7 @@ async function main() {
     check('rate limiter trip consumes no chat (counter unchanged at 1 used / 29 left)', res.ok && data.questionsUsed === 1 && data.questionsRemaining === 29, `got ${res.status} used=${data.questionsUsed} left=${data.questionsRemaining}`);
     // Frontend: the AI-resting note exists (EN + Simplified Chinese) and
     // is wired into loadMasterChat / sendMasterChat.
-    check('frontend shows an honest AI-resting note when the AI is cooling down', appJs.includes('function renderAiRestNote') && appJs.includes("t('aiRestingNote')") && appJs.includes('aiRestingNote:') && /aiRestingNote: 'AI \\u638c\\u95e8/.test(appJs) && html.includes('id="mc-ai-rest"'), 'ai-resting note missing from the frontend');
+    check('frontend shows an honest AI-resting note when the AI is cooling down', appJs.includes('function renderAiRestNote') && appJs.includes("t('aiRestingNote')") && appJs.includes('aiRestingNote:') && appJs.includes('Gemini 暂时无法回答') && html.includes('id="mc-ai-rest"'), 'ai-resting note missing from the frontend');
 
     // 28. Migration (7 Nov 2026 fix): a pre-fix DB — master_chat_messages
     // with NO email/birth_date columns, old live_reader_usage table —
@@ -1088,7 +1088,7 @@ async function main() {
     const tHangStart = Date.now();
     r = await ai.resolveAiMaster({ email: 'hang@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mockHang });
     const tHangElapsed = Date.now() - tHangStart;
-    check('fix4 timeout: a never-resolving Gemini fetch falls back (unavailable) within the deadline budget, after exactly one retry', r.status === 'fallback' && r.reason === 'unavailable' && hangCalls === 2 && tHangElapsed < 5000, JSON.stringify({ r, hangCalls, tHangElapsed }));
+    check('fix4 timeout: a never-resolving Gemini fetch falls back (unavailable) within the deadline budget, after primary retry and Gemini fallback', r.status === 'fallback' && r.reason === 'unavailable' && hangCalls === 3 && tHangElapsed < 5000, JSON.stringify({ r, hangCalls, tHangElapsed }));
     check('fix4 timeout: the hang set the 5-min cooldown (no silent AI)', ai.aiCooldownState().active === true && ai.aiCooldownState().reason === 'unavailable', JSON.stringify(ai.aiCooldownState()));
     ai.resetAiCooldownForTests();
     // (b) Headers arrive but the body never finishes: res.json()
@@ -1098,7 +1098,7 @@ async function main() {
     const tStallStart = Date.now();
     r = await ai.resolveAiMaster({ email: 'stall@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mockStallBody });
     const tStallElapsed = Date.now() - tStallStart;
-    check('fix4 timeout: a stalled response body falls back within the deadline budget, after exactly one retry', r.status === 'fallback' && r.reason === 'unavailable' && stallCalls === 2 && tStallElapsed < 5000, JSON.stringify({ r, stallCalls, tStallElapsed }));
+    check('fix4 timeout: a stalled response body falls back within the deadline budget, after primary retry and Gemini fallback', r.status === 'fallback' && r.reason === 'unavailable' && stallCalls === 3 && tStallElapsed < 5000, JSON.stringify({ r, stallCalls, tStallElapsed }));
     ai.resetAiCooldownForTests();
     ai.setGeminiTimeoutForTests(null);
     check('fix4 timeout: default deadline is 25 s (config, env-overridable)', ai.geminiTimeoutMs() === 25000 && cfg.ai.geminiTimeoutMs === 25000, `geminiTimeoutMs=${ai.geminiTimeoutMs()}`);

@@ -39,7 +39,7 @@ class El {
   click() {}
 }
 
-const IDS = ['lang-en', 'lang-zh', 'systems', 'sys-hero', 'quiz-list', 'quiz-area', 'hook-card', 'teaser-status', 'birthDate', 'birthTime', 'name', 'email', 'unlocked-banner', 'unlocked-card', 'unlocked-sub', 'unlock-card', 'price-line', 'pay-btn', 'report-card', 'report', 'lr-used', 'lr-question', 'lr-answers', 'lr-speak', 'lr-stop', 'mc-left', 'mc-left-label', 'mc-left-suffix', 'mc-ai-badge', 'mc-upgrade-btn', 'mc-upgrade-offer', 'mc-thread', 'mc-question', 'resend-status', 'view-report-btn', 'resend-btn', 'download-report-btn', 'hook-form', 'checkout-form', 'lr-ask', 'lr-voice', 'mc-ask', 'mc-voice', 'mc-upgrade-offer-btn', 'brand-hero', 'hub-next', 'step-nav', 'daily-card', 'limits-card', 'quiz-card', 'master-locked-card', 'live-reader', 'master-chat'];
+const IDS = ['lang-en', 'lang-zh', 'systems', 'sys-hero', 'quiz-list', 'quiz-area', 'hook-card', 'teaser-status', 'birthDate', 'birthTime', 'name', 'email', 'unlocked-banner', 'unlocked-card', 'unlocked-sub', 'unlock-card', 'price-line', 'pay-btn', 'report-card', 'report', 'lr-used', 'lr-question', 'lr-answers', 'lr-speak', 'lr-stop', 'mc-left', 'mc-left-label', 'mc-left-suffix', 'mc-ai-badge', 'mc-ai-rest', 'mc-upgrade-btn', 'mc-upgrade-offer', 'mc-thread', 'mc-question', 'resend-status', 'view-report-btn', 'resend-btn', 'download-report-btn', 'hook-form', 'checkout-form', 'lr-ask', 'lr-voice', 'mc-ask', 'mc-voice', 'mc-upgrade-offer-btn', 'brand-hero', 'hub-next', 'step-nav', 'daily-card', 'limits-card', 'quiz-card', 'master-locked-card', 'live-reader', 'master-chat'];
 
 async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
   const els = {};
@@ -81,6 +81,7 @@ async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
     // fetchMode 'hang' (7 Nov 2026 fix 5): the POST never resolves —
     // the long silent stretches Jason saw on video. The page must show
     // a thinking bubble and disable Ask while it waits.
+    if (fetchMode === 'geminiDown' && isMasterPost) return { ok: false, status: 503, json: async () => ({ code: 'gemini_unavailable', error: 'Gemini is unavailable. Please retry; no follow-up was used.', questionsRemaining: 5 }) };
     if (fetchMode === 'throw' && isMasterPost) throw new Error('The string did not match the expected pattern');
     if (fetchMode === 'nonJson' && isMasterPost) return { ok: false, status: 502, json: async () => { throw new SyntaxError('Unexpected token < in JSON at position 0'); } };
     if (fetchMode === 'hang' && (isMasterPost || isLrPost)) return new Promise(() => {});
@@ -196,7 +197,7 @@ function check(name, ok, detail) {
   // /master unlocked after a $3 upgrade return: ?upgraded=1 verifies the
   // session, the banner reads Extended, the chat is open, no quiz in sight.
   els = await runCase({ page: 'master', unlocked: true, search: '?upgraded=1&session_id=cs_test_upgrade' });
-  check('master upgrade return: banner shows Extended Master Chat unlocked', !els['unlocked-banner'].hidden && els['unlocked-banner'].innerHTML.includes('Extended Master Chat unlocked'));
+  check('master upgrade return: banner shows Extended Master Chat unlocked', !els['unlocked-banner'].hidden && els['unlocked-banner'].innerHTML.includes('Extended unlocked'));
   check('master upgrade return: report card visible, locked prompt hidden, quiz hidden', !els['report-card'].hidden && els['master-locked-card'].hidden && els['quiz-card'].hidden);
   check('master unlocked: no quiz anywhere on the Master page', els['quiz-card'].hidden && !els.systems.innerHTML.includes('quiz'));
 
@@ -221,6 +222,15 @@ function check(name, ok, detail) {
   await new Promise((r) => setTimeout(r, 50));
   check('master chat non-JSON reply: friendly message, no raw browser error', els['mc-thread'].innerHTML.includes('try again in a moment') && !els['mc-thread'].innerHTML.includes('Unexpected token') && !els['mc-thread'].innerHTML.includes('Network error'), els['mc-thread'].innerHTML.slice(0, 200));
   check('master chat non-JSON reply: question not stored, counter still 5', !els['mc-thread'].innerHTML.includes('How is my career next year?') && Number(els['mc-left'].textContent) === 5, `left=${els['mc-left'].textContent}`);
+
+  els = await runCase({ page: 'master', unlocked: true, fetchMode: 'geminiDown' });
+  els['mc-question'].value = 'How does my Sun sign affect work?';
+  await els['mc-ask']._handlers.click[0]();
+  check('Gemini outage: keep input and count, show retry notice outside the thread',
+    els['mc-question'].value === 'How does my Sun sign affect work?' && Number(els['mc-left'].textContent) === 5 &&
+    els['mc-ai-rest'].textContent.includes('no follow-up was used') && !els['mc-ai-rest'].hidden &&
+    !els['mc-thread'].innerHTML.includes('How does my Sun sign affect work?') && !els['mc-thread'].innerHTML.includes('Gemini is unavailable'));
+  check('Gemini outage: Ask button re-enables for retry', els['mc-ask'].disabled === false);
 
   // Fix 4: the Live Reader count is loaded from the server on page init
   // (GET /api/live-reader), so the screen shows the real used count.
