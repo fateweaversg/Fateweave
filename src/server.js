@@ -30,6 +30,10 @@ const { buildFullReading, buildTeaser, parseBirth, scoreEnneagramFromChoices, sc
 const { strings } = require('./i18n');
 const { sendReportEmail } = require('./email');
 const { issueAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword, hashToken } = require('./auth');
+const {
+  aiMasterLive, validateMasterMessage, resolveAiMaster, fallbackNote, aiUsageSummary,
+  buyerAiCallsTotal,
+} = require('./ai-master');
 
 const app = express();
 app.set('trust proxy', 1); // Railway terminates TLS behind a proxy; rate-limit needs the real client IP.
@@ -71,6 +75,10 @@ app.get('/api/config', (req, res) => {
     liveReaderMax: config.liveReaderMaxPerSession,
     masterChatMax: config.masterChatMaxPerSession,
     masterChatUpgrade: { amountCents: config.masterChatUpgradePriceCents, currency: config.currency },
+    // AI Master (Gemini): true only when GEMINI_API_KEY is set server-side.
+    // The key itself is never exposed — only whether the AI is live.
+    aiMasterLive: aiMasterLive(),
+    masterChatExtendedTotal: config.ai.extendedChatTotalMax,
   });
 });
 
@@ -126,7 +134,7 @@ app.post('/api/checkout', async (req, res) => {
   }
 });
 
-// --- Checkout: Unlimited Master Chat upgrade ($3, paid token only) ----------
+// --- Checkout: Extended Master Chat upgrade ($3, paid token only) ----------
 // Same $1/$8 unlock is untouched. The upgrade is a separate Stripe
 // Checkout session created with inline price_data (no dashboard price ID,
 // exactly like /api/checkout). Only a buyer with a VALID paid token can
@@ -137,17 +145,17 @@ app.post('/api/checkout', async (req, res) => {
 // they had just paid for. /master restores the reading from the stored
 // token at init (loadReport), so no re-entry and no quiz is needed —
 // checkUpgradeReturn() on that page verifies the session and flips the
-// counter to Unlimited. Cancel returns to /master too, for the same reason.
+// counter to Extended (30 chats). Cancel returns to /master too, for the same reason.
 // Price: config.masterChatUpgradePriceCents ($3 default).
 app.post('/api/checkout-upgrade', async (req, res) => {
   const { token, email, birthDate } = req.body || {};
   const access = verifyAccessToken(token, email, birthDate);
-  if (!access) return res.status(403).json({ error: 'A valid paid access token is required to buy the Unlimited Master Chat upgrade.' });
+  if (!access) return res.status(403).json({ error: 'A valid paid access token is required to buy the Extended Master Chat upgrade.' });
   if (!stripe) return res.status(503).json({ error: 'Payments are not configured yet (STRIPE_SECRET_KEY missing).' });
   const buyerEmail = access.email;
   const buyerBirthDate = access.birth_date;
-  const already = isChatUnlimited(buyerEmail, buyerBirthDate);
-  if (already) return res.json({ alreadyUnlimited: true, chatUnlimitedUntil: already.expires_at });
+  const already = isChatExtended(buyerEmail, buyerBirthDate);
+  if (already) return res.json({ alreadyExtended: true, chatExtendedUntil: already.expires_at });
   const priceCents = config.masterChatUpgradePriceCents;
   const order = db.prepare(
     'INSERT INTO orders (email, birth_date, birth_time, name, amount_cents, currency, price_label, provider, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -159,7 +167,7 @@ app.post('/api/checkout-upgrade', async (req, res) => {
       line_items: [{
         price_data: {
           currency: config.currency,
-          product_data: { name: 'FateWeave — Unlimited Master Chat' },
+          product_data: { name: 'FateWeave — Extended Master Chat' },
           unit_amount: priceCents,
         },
         quantity: 1,
@@ -176,18 +184,18 @@ app.post('/api/checkout-upgrade', async (req, res) => {
   }
 });
 
-// --- Unlimited Master Chat upgrade (7 Nov 2026) --------------------------
+// --- Extended Master Chat upgrade (7 Nov 2026) --------------------------
 // A paid $3 upgrade lifts the 5-follow-up limit for the same 90-day window
 // as the unlock. Stored per buyer (email + birth_date) in chat_upgrades,
 // never per token. The upgrade never outlives the reading: expires_at is
 // the buyer's current unlock expiry (or now + 90 days if none is found).
-function isChatUnlimited(email, birthDate) {
+function isChatExtended(email, birthDate) {
   if (!email || !birthDate) return false;
   const row = db.prepare('SELECT * FROM chat_upgrades WHERE email = ? AND birth_date = ?').get(String(email).toLowerCase(), birthDate);
   if (!row) return false;
   return new Date(row.expires_at) > new Date() ? row : false;
 }
-function grantChatUnlimited(email, birthDate, orderId) {
+function grantChatExtended(email, birthDate, orderId) {
   const tokenRow = db.prepare('SELECT expires_at FROM access_tokens WHERE email = ? AND birth_date = ? AND revoked = 0 ORDER BY id DESC').get(String(email).toLowerCase(), birthDate);
   const expiresAt = tokenRow ? tokenRow.expires_at : new Date(Date.now() + config.accessTokenDays * 24 * 60 * 60 * 1000).toISOString();
   db.prepare(`INSERT INTO chat_upgrades (email, birth_date, order_id, expires_at)
@@ -207,11 +215,11 @@ app.get('/api/checkout-session/:sessionId', async (req, res) => {
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
     if (!order) return res.status(404).json({ error: 'Order not found.' });
     // Upgrade order: no new access token — the buyer already holds one.
-    // Mark it paid and grant unlimited Master Chat for the unlock window.
+    // Mark it paid and grant Extended Master Chat (30 chats) for the unlock window.
     if (order.price_label === 'master-chat-upgrade' || session.metadata?.upgrade === '1') {
       db.prepare("UPDATE orders SET status = 'paid', paid_at = datetime('now') WHERE id = ?").run(orderId);
-      const until = grantChatUnlimited(order.email, order.birth_date, orderId);
-      return res.json({ paid: true, upgrade: true, email: order.email, birthDate: order.birth_date, chatUnlimitedUntil: until });
+      const until = grantChatExtended(order.email, order.birth_date, orderId);
+      return res.json({ paid: true, upgrade: true, email: order.email, birthDate: order.birth_date, chatExtendedUntil: until });
     }
     // Reuse an existing token for this order if one was already issued.
     // The stored token is only a hash, so it cannot be recovered — issue a
@@ -261,8 +269,8 @@ app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), async
       if (session.metadata?.upgrade === '1') {
         const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
         if (order) {
-          const until = grantChatUnlimited(order.email, order.birth_date, orderId);
-          console.log(`Order ${orderId}: Unlimited Master Chat granted until ${until}.`);
+          const until = grantChatExtended(order.email, order.birth_date, orderId);
+          console.log(`Order ${orderId}: Extended Master Chat granted until ${until}.`);
         }
       }
     }
@@ -383,39 +391,70 @@ app.get('/api/master-chat', (req, res) => {
   if (!access) return res.status(403).json({ error: 'A valid paid access token is required for Ask the Master.' });
   if (!sessionId) return res.status(400).json({ error: 'sessionId is required.' });
   const used = masterChatCount(token, sessionId);
-  const unlimited = !!isChatUnlimited(access.email, access.birth_date);
+  const extended = !!isChatExtended(access.email, access.birth_date);
+  // Extended buyers count AI chats from the ledger (30 total, 90 days);
+  // everyone else counts this session's follow-ups (5). Rule-based
+  // replies never touch the ledger, so they never consume the 30.
+  const aiUsed = extended ? buyerAiCallsTotal(access.email, access.birth_date) : used;
+  const max = extended ? config.ai.extendedChatTotalMax : config.masterChatMaxPerSession;
   return res.json({
     messages: masterChatHistory(token, sessionId),
-    questionsUsed: used,
-    questionsRemaining: unlimited ? null : Math.max(0, config.masterChatMaxPerSession - used),
-    max: config.masterChatMaxPerSession,
-    unlimited,
+    questionsUsed: aiUsed,
+    questionsRemaining: Math.max(0, max - aiUsed),
+    max,
+    extended,
+    extendedTotal: config.ai.extendedChatTotalMax,
+    aiMasterLive: aiMasterLive(),
   });
 });
-app.post('/api/master-chat', masterChatLimiter, (req, res) => {
+app.post('/api/master-chat', masterChatLimiter, async (req, res) => {
   const { token, email, birthDate, sessionId, message, lang } = req.body || {};
   const access = verifyAccessToken(token, email, birthDate);
   if (!access) return res.status(403).json({ error: 'A valid paid access token is required for Ask the Master.' });
-  if (!sessionId || !message || String(message).trim().length < 2 || String(message).trim().length > 500) {
-    return res.status(400).json({ error: 'sessionId and a message (2–500 characters) are required.' });
-  }
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required.' });
+  // One short question only (max 500 chars) — a friendly message, not a
+  // technical error, when the user writes too much.
+  const valid = validateMasterMessage(message, lang === 'zh' ? 'zh' : 'en');
+  if (!valid.ok) return res.status(400).json({ error: valid.error });
   const used = masterChatCount(token, sessionId);
-  const unlimited = !!isChatUnlimited(access.email, access.birth_date);
-  if (!unlimited && used >= config.masterChatMaxPerSession) {
+  const extended = !!isChatExtended(access.email, access.birth_date);
+  if (!extended && used >= config.masterChatMaxPerSession) {
     return res.status(429).json({ error: 'Ask the Master allows ' + config.masterChatMaxPerSession + ' follow-up messages per session.', questionsUsed: used, questionsRemaining: 0, upgradePriceCents: config.masterChatUpgradePriceCents });
   }
   const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
   const personality = loadPersonality(access.email, access.birth_date);
   const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
   const history = masterChatHistory(token, sessionId);
-  const answer = masterChatAnswer(reading, String(message), lang === 'zh' ? 'zh' : 'en', history, personality);
+  // AI Master first (Gemini, when GEMINI_API_KEY is set and the caps
+  // allow); rule-based reply otherwise — never a dead chat. The stored
+  // message is labelled with its source ('ai' or 'rule-based') so the
+  // UI can show a small "summary from your reading" note on rule-based
+  // replies, and the owner usage view can count fallbacks.
+  const ai = await resolveAiMaster({
+    email: access.email, birthDate: access.birth_date, extended,
+    reading, message: valid.text, lang: lang === 'zh' ? 'zh' : 'en', history, personality,
+  });
+  let answer, source;
+  if (ai.status === 'ai') {
+    answer = ai.answer;
+    source = 'ai';
+  } else {
+    answer = masterChatAnswer(reading, valid.text, lang === 'zh' ? 'zh' : 'en', history, personality);
+    source = 'rule-based';
+    const note = fallbackNote(ai.reason, lang === 'zh' ? 'zh' : 'en');
+    if (note) answer = answer + '\n\n' + note;
+  }
   try {
     db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, lang, source) VALUES (?, ?, 'user', ?, ?, 'master')")
-      .run(hashToken(token), sessionId, String(message), lang === 'zh' ? 'zh' : 'en');
-    db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, lang, source) VALUES (?, ?, 'master', ?, ?, 'master')")
-      .run(hashToken(token), sessionId, answer, lang === 'zh' ? 'zh' : 'en');
+      .run(hashToken(token), sessionId, valid.text, lang === 'zh' ? 'zh' : 'en');
+    db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, lang, source) VALUES (?, ?, 'master', ?, ?, ?)")
+      .run(hashToken(token), sessionId, answer, lang === 'zh' ? 'zh' : 'en', source);
   } catch (e) { console.error('Master chat history store failed:', e.message); }
-  return res.json({ answer, questionsUsed: used + 1, questionsRemaining: unlimited ? null : config.masterChatMaxPerSession - used - 1, unlimited, messages: masterChatHistory(token, sessionId) });
+  // Counter: Extended buyers see AI chats used/left out of 30 (ledger);
+  // everyone else sees this session's follow-ups out of 5.
+  const max = extended ? config.ai.extendedChatTotalMax : config.masterChatMaxPerSession;
+  const aiUsed = extended ? buyerAiCallsTotal(access.email, access.birth_date) : used + 1;
+  return res.json({ answer, questionsUsed: aiUsed, questionsRemaining: Math.max(0, max - aiUsed), max, extended, extendedTotal: config.ai.extendedChatTotalMax, messages: masterChatHistory(token, sessionId), ai: source === 'ai', source });
 });
 
 /* Live Reader (rewritten 7 Nov 2026, item E) — the old version picked ONE
@@ -928,7 +967,7 @@ function masterChatAnswerRaw(reading, message, lang, history, personality) {
    text, contained in one, or the same first 100 characters — fall back to
    a different, unused section (another system's section for the topic, or
    the portrait) and compose from that instead. The guard keeps the
-   5-follow-up limit and the Unlimited flag untouched; it only changes
+   5-follow-up limit and the Extended flag untouched; it only changes
    WHICH unused material an answer is built from. */
 function dedupFallback(reading, message, lang, history, personality, prevMaster) {
   const zh = lang === 'zh';
@@ -1033,6 +1072,23 @@ app.get('/api/owner/report', (req, res) => {
   const reading = buildFullReading({ birthDate, birthTime: null, name: null });
   return res.json({ ...reading, ownerPreview: true });
 });
+// --- Owner: AI Master usage (Gemini cost + caps) ---------------------------
+// Today + last 7 days: AI calls, tokens, estimated cost, fallback count,
+// and the top buyers by AI calls. Costs are estimates from the Gemini
+// 2.5 Flash paid-tier prices in config.ai — the real bill is Google's.
+// No message text is ever stored or returned here.
+app.get('/api/owner/ai-usage', (req, res) => {
+  if (!verifyOwnerToken(req.headers['x-owner-token'])) return res.status(401).json({ error: 'Owner token required.' });
+  const summary = aiUsageSummary(7);
+  return res.json({
+    aiMasterLive: aiMasterLive(),
+    provider: config.ai.provider,
+    model: config.ai.model,
+    prices: { inputPerMillionUsd: config.ai.inputPricePerMillionUsd, outputPerMillionUsd: config.ai.outputPricePerMillionUsd },
+    caps: { extendedChatTotalMax: config.ai.extendedChatTotalMax, globalDailyMax: config.ai.globalDailyMax },
+    ...summary,
+  });
+});
 
 // --- Unsubscribe --------------------------------------------------------------
 app.get('/api/unsubscribe', (req, res) => {
@@ -1071,6 +1127,7 @@ if (require.main === module) {
     console.log(`FateWeave server listening on ${config.baseUrl} (port ${config.port})`);
     console.log(`Price in force: ${JSON.stringify(currentPrice())}`);
     if (!config.stripeSecretKey) console.log('WARNING: STRIPE_SECRET_KEY is not set — checkout will return 503 until it is configured.');
+    console.log(`AI Master: ${aiMasterLive() ? `live (Gemini ${config.ai.model})` : 'rule-based only — set GEMINI_API_KEY to light up the AI Master (see src/ai-master.js).'}`);
     if (!config.resendApiKey && !config.smtp.host) console.log('WARNING: No email provider configured — emails will use the console log fallback (dev only).');
     if (!config.ownerPasswordHash) console.log('WARNING: OWNER_PASSWORD_HASH is not set — owner login is disabled.');
     // Sandbox sender (7 Nov 2026): Resend's onboarding@resend.dev only
