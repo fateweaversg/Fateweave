@@ -79,7 +79,23 @@ db.exec(`
     UNIQUE(email, send_date)
   );
 
-  -- Personality quiz results, saved only for paid (token-verified) sessions,
+  -- Ask the Master follow-up chat (7 Nov 2026): conversation memory per
+  -- paid session. One row per message, user or Master. Live Reader Q&A is
+  -- stored here too (source = 'live-reader') so follow-ups can refer back
+  -- to it; only source = 'master' user messages count toward the 5-message
+  -- follow-up limit. No other buyer's data is ever read for a session.
+  CREATE TABLE IF NOT EXISTS master_chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL, -- 'user' | 'master'
+    content TEXT NOT NULL,
+    lang TEXT NOT NULL DEFAULT 'en',
+    source TEXT NOT NULL DEFAULT 'master', -- 'master' | 'live-reader'
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_master_chat_session ON master_chat_messages(token_hash, session_id, id);
+
   -- so the full report / portrait lens survives a refresh. Free (pre-payment)
   -- quiz attempts are never stored server-side.
   CREATE TABLE IF NOT EXISTS personality_results (
