@@ -78,6 +78,19 @@ db.exec(`
     send_date TEXT NOT NULL,
     UNIQUE(email, send_date)
   );
+
+  -- Personality quiz results, saved only for paid (token-verified) sessions,
+  -- so the full report / portrait lens survives a refresh. Free (pre-payment)
+  -- quiz attempts are never stored server-side.
+  CREATE TABLE IF NOT EXISTS personality_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    birth_date TEXT NOT NULL,
+    kind TEXT NOT NULL, -- 'enneagram' | 'mbti'
+    result_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(email, birth_date, kind)
+  );
 `);
 
 module.exports = { db };
