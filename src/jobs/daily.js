@@ -3,12 +3,19 @@
  * Daily encouragement job — run at 07:00 SGT.
  * Usage: `node src/jobs/daily.js` from a cron (see README / DEPLOY-CHECKLIST).
  * Sends one short encouragement email per subscribed buyer, once per day.
- * Uses the buyer's stored birth profile to personalise the essence line.
+ *
+ * Item F (7 Nov 2026): the message is GENERATED for today, from that
+ * buyer's own birth profile entered at input (buildDailyMessage in
+ * readings.js) — today's seeded tarot card and hexagram plus the profile's
+ * own Day Master / elements / Life Path. No generic line rotated from a
+ * fixed list: same profile on a different day gets a different message,
+ * and different profiles on the same day get different messages.
+ * A subscriber with no stored birth date gets no mail (there is nothing
+ * personal to generate from) — it is counted as skipped, not sent generic.
  * Never sends to unsubscribed addresses. Idempotent per (email, send_date).
  */
 const { db } = require('../db');
-const { buildFullReading } = require('../readings');
-const { DAILY_ENCOURAGEMENTS } = require('../i18n');
+const { buildDailyMessage } = require('../readings');
 const { sendDailyEmail } = require('../email');
 
 async function main() {
@@ -21,12 +28,14 @@ async function main() {
   for (const sub of subs) {
     const already = db.prepare('SELECT 1 FROM daily_sends WHERE email = ? AND send_date = ?').get(sub.email, todaySgt);
     if (already) { skipped++; continue; }
+    if (!sub.birth_date) {
+      console.log(`Daily job: no birth date stored for ${sub.email} — skipping (no generic mail).`);
+      skipped++;
+      continue;
+    }
     try {
-      const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
-      const encouragement = DAILY_ENCOURAGEMENTS[dayOfYear % DAILY_ENCOURAGEMENTS.length];
-      let reading = null;
-      if (sub.birth_date) { try { reading = buildFullReading({ birthDate: sub.birth_date, birthTime: null, name: sub.name }); } catch { reading = null; } }
-      await sendDailyEmail(sub.email, sub.name, reading, encouragement, 'en');
+      const daily = buildDailyMessage({ birthDate: sub.birth_date, birthTime: null, name: sub.name }, todaySgt);
+      await sendDailyEmail(sub.email, sub.name, daily, 'en');
       db.prepare('INSERT INTO daily_sends (email, send_date) VALUES (?, ?)').run(sub.email, todaySgt);
       sent++;
     } catch (e) {
