@@ -11,13 +11,38 @@ function unsubscribeUrl(email) {
   return `${config.baseUrl}/api/unsubscribe?email=${encodeURIComponent(email)}`;
 }
 
+// Resend sandbox restriction (verified 7 Nov 2026, against Resend's docs
+// and third-party write-ups): the shared sender onboarding@resend.dev
+// only delivers to the Resend account owner's own email address. Any other
+// recipient is rejected with 403 validation_error: "You can only send
+// testing emails to your own email address". That is why the resend failed
+// for jasonhunghp@hotmail.com (not the Resend account owner) while the
+// first report email to fateweaver.sg@gmail.com (the account owner)
+// delivered. The fix is a verified sending domain — NOT a code change,
+// NOT a new provider, NOT a different sender address (do not change it
+// without the owner's say-so). What code CAN do: name the failure
+// precisely (code below) so the frontend can say so, and the in-app
+// Download report fallback covers the buyer either way.
+function classifyResendError(error) {
+  const msg = String((error && error.message) || '');
+  const status = error && (error.statusCode || error.status);
+  if (/only send testing emails to your own email address/i.test(msg)) return 'resend_sandbox_recipient';
+  if (status === 403 && /testing email/i.test(msg)) return 'resend_sandbox_recipient';
+  return 'resend_error';
+}
+
 async function sendViaResend(to, subject, html) {
   const { Resend } = require('resend');
   const resend = new Resend(config.resendApiKey);
   const { error } = await resend.emails.send({
     from: config.resendFrom, to, subject, html,
   });
-  if (error) throw new Error(`Resend error: ${error.message || JSON.stringify(error)}`);
+  if (error) {
+    const e = new Error(`Resend error: ${error.message || JSON.stringify(error)}`);
+    e.code = classifyResendError(error);
+    e.resendStatus = error.statusCode || error.status || null;
+    throw e;
+  }
   return { provider: 'resend' };
 }
 
@@ -32,6 +57,16 @@ async function sendViaSmtp(to, subject, html) {
 }
 
 async function sendEmail(to, subject, html) {
+  // Test hook (smoke test only): EMAIL_FAIL_MODE=resend-sandbox makes
+  // sendEmail fail exactly the way Resend's sandbox sender fails for a
+  // non-owner recipient, so /api/resend-report's specific error can be
+  // tested without a live Resend key or network call. Never set in prod.
+  if (process.env.EMAIL_FAIL_MODE === 'resend-sandbox') {
+    const e = new Error('Resend error: You can only send testing emails to your own email address');
+    e.code = 'resend_sandbox_recipient';
+    e.resendStatus = 403;
+    throw e;
+  }
   if (config.resendApiKey) return sendViaResend(to, subject, html);
   if (config.smtp.host) return sendViaSmtp(to, subject, html);
   // Dev fallback — loudly visible, so nobody mistakes it for real sending.
@@ -137,4 +172,4 @@ async function sendDailyEmail(email, name, daily, lang = 'en') {
   return sendEmail(email, subject, html);
 }
 
-module.exports = { sendEmail, sendReportEmail, sendDailyEmail, unsubscribeUrl };
+module.exports = { sendEmail, sendReportEmail, sendDailyEmail, unsubscribeUrl, classifyResendError };
