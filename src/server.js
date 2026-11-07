@@ -26,7 +26,7 @@ const path = require('path');
 
 const { config, currentPrice } = require('./config');
 const { db } = require('./db');
-const { buildFullReading, buildTeaser, parseBirth, scoreEnneagram, scoreMbti } = require('./readings');
+const { buildFullReading, buildTeaser, parseBirth, scoreEnneagramFromChoices, scoreMbti, getPersonalityQuestions, lockedPersonalitySummary } = require('./readings');
 const { strings } = require('./i18n');
 const { sendReportEmail } = require('./email');
 const { issueAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword, hashToken } = require('./auth');
@@ -133,9 +133,15 @@ app.get('/api/checkout-session/:sessionId', async (req, res) => {
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
     if (!order) return res.status(404).json({ error: 'Order not found.' });
     // Reuse an existing token for this order if one was already issued.
+    // The stored token is only a hash, so it cannot be recovered — issue a
+    // FRESH token for the same verified-paid order instead, so the success
+    // page always has a working token and never strands the buyer on a
+    // bare page. The old token stays valid too (same order, same buyer).
     const existing = db.prepare('SELECT * FROM access_tokens WHERE order_id = ? AND revoked = 0').get(orderId);
     if (existing) {
-      return res.json({ paid: true, email: order.email, birthDate: order.birth_date, tokenAlreadyIssued: true, message: 'Access was already issued for this order. Check your email for your report link.' });
+      const fresh = issueAccessToken(order.email, order.birth_date, orderId);
+      db.prepare("UPDATE orders SET status = 'paid', paid_at = datetime('now') WHERE id = ?").run(orderId);
+      return res.json({ paid: true, email: order.email, birthDate: order.birth_date, token: fresh.token, expiresAt: fresh.expiresAt, tokenAlreadyIssued: true, message: 'Access was already issued for this order — a fresh token has been issued for this session.' });
     }
     const { token, expiresAt } = issueAccessToken(order.email, order.birth_date, orderId);
     db.prepare("UPDATE orders SET status = 'paid', paid_at = datetime('now') WHERE id = ?").run(orderId);
@@ -190,13 +196,38 @@ app.post('/api/webhook/hitpay', express.raw({ type: 'application/json' }), (req,
 });
 
 // --- Full report: paid token only -------------------------------------------
+function loadPersonality(email, birthDate) {
+  const rows = db.prepare('SELECT kind, result_json FROM personality_results WHERE email = ? AND birth_date = ?').all(String(email).toLowerCase(), birthDate);
+  const out = {};
+  for (const r of rows) { try { out[r.kind] = JSON.parse(r.result_json); } catch {} }
+  return Object.keys(out).length ? out : null;
+}
+
 app.get('/api/report', (req, res) => {
   const { token, email, birthDate } = req.query;
   const access = verifyAccessToken(token, email, birthDate);
   if (!access) return res.status(403).json({ error: 'A valid paid access token is required for the full report.' });
   const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
-  const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null });
-  return res.json({ ...reading, access: { email: access.email, expiresAt: access.expires_at, liveReaderMax: config.liveReaderMaxPerSession } });
+  const personality = loadPersonality(access.email, access.birth_date);
+  const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
+  return res.json({ ...reading, personality: personality || undefined, access: { email: access.email, expiresAt: access.expires_at, liveReaderMax: config.liveReaderMaxPerSession } });
+});
+
+// --- Resend the detailed report email (paid token only) ----------------------
+app.post('/api/resend-report', async (req, res) => {
+  const { token, email, birthDate } = req.body || {};
+  const access = verifyAccessToken(token, email, birthDate);
+  if (!access) return res.status(403).json({ error: 'A valid paid access token is required.' });
+  try {
+    const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
+    const personality = loadPersonality(access.email, access.birth_date);
+    const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
+    await sendReportEmail(access.email, reading, 'en');
+    return res.json({ resent: true, email: access.email });
+  } catch (e) {
+    console.error('Resend report email failed:', e.message);
+    return res.status(502).json({ error: 'Could not resend the report email.' });
+  }
 });
 
 // --- Live Reader: 3 questions max per paid session, server-enforced --------
@@ -214,7 +245,8 @@ app.post('/api/live-reader', (req, res) => {
     return res.status(429).json({ error: `Live Reader allows ${config.liveReaderMaxPerSession} questions per session.`, questionsUsed: count, questionsRemaining: 0 });
   }
   const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
-  const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null });
+  const personality = loadPersonality(access.email, access.birth_date);
+  const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
   const answer = liveReaderAnswer(reading, String(question), lang === 'zh' ? 'zh' : 'en');
   db.prepare(`INSERT INTO live_reader_usage (token_hash, session_id, question_count, last_asked_at)
     VALUES (?, ?, 1, datetime('now'))
@@ -254,16 +286,45 @@ function liveReaderAnswer(reading, question, lang) {
   return lang === 'zh' ? zh[pickSystem] : en[pickSystem];
 }
 
-// --- Enneagram / MBTI (paid, brief scored versions) -------------------------
+// --- Enneagram / MBTI ---------------------------------------------------------
+// Quizzes are takeable BEFORE payment (that is the hook). The question lists
+// are public, but scoring letters / type numbers are stripped — the browser
+// never sees how answers map to types.
+//   - No token: scoring runs server-side, but only a LOCKED summary is
+//     returned (type + name + one teaser line). No scores, no interpretation,
+//     no strengths/lacking. The full breakdown unlocks after payment, when
+//     the frontend re-submits the same answers with a valid token.
+//   - Valid token: full result returned AND saved, so /api/report includes
+//     the personality lens (and Complete Portrait) on every later visit.
+app.get('/api/personality/questions', (req, res) => {
+  const q = getPersonalityQuestions();
+  return res.json({
+    enneagram: q.enneagram.map((item) => ({ n: item.n, q: item.q, opts: item.opts.map((o) => ({ en: o.en, zh: o.zh })) })),
+    mbti: q.mbti.map((item) => ({ n: item.n, dim: item.dim, q: item.q, a: { en: item.a.en, zh: item.a.zh }, b: { en: item.b.en, zh: item.b.zh } })),
+  });
+});
+
 app.post('/api/personality', (req, res) => {
   const { token, email, birthDate, enneagramAnswers, mbtiAnswers } = req.body || {};
-  const access = verifyAccessToken(token, email, birthDate);
-  if (!access) return res.status(403).json({ error: 'A valid paid access token is required.' });
+  if (!enneagramAnswers && !mbtiAnswers) return res.status(400).json({ error: 'Provide enneagramAnswers and/or mbtiAnswers.' });
   const out = {};
-  if (enneagramAnswers) out.enneagram = scoreEnneagram(enneagramAnswers);
+  if (enneagramAnswers) out.enneagram = scoreEnneagramFromChoices(enneagramAnswers);
   if (mbtiAnswers) out.mbti = scoreMbti(mbtiAnswers);
-  if (!out.enneagram && !out.mbti) return res.status(400).json({ error: 'Provide enneagramAnswers and/or mbtiAnswers.' });
-  return res.json(out);
+  if (!out.enneagram && !out.mbti) return res.status(400).json({ error: 'Invalid answers — check the question counts (Enneagram 9 or 27, MBTI 8 or 24).' });
+
+  const access = token ? verifyAccessToken(token, email, birthDate) : null;
+  if (!access) {
+    // Pre-payment: locked teaser only.
+    return res.json({ ...lockedPersonalitySummary(out.enneagram, out.mbti), unlocked: false });
+  }
+  // Paid: save for the portrait lens, return the full breakdown.
+  for (const [kind, result] of Object.entries(out)) {
+    db.prepare(`INSERT INTO personality_results (email, birth_date, kind, result_json, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(email, birth_date, kind) DO UPDATE SET result_json = excluded.result_json, updated_at = datetime('now')`)
+      .run(access.email, access.birth_date, kind, JSON.stringify(result));
+  }
+  return res.json({ ...out, unlocked: true });
 });
 
 // --- Owner: login (server-checked bcrypt hash) + manual access issue -------
