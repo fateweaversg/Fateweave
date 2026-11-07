@@ -29,7 +29,7 @@ const STEP_ORDER = [
 ];
 const state = {
   lang: 'en', teaser: null, report: null, unlocked: false, price: null,
-  mcUnlimited: false,
+  mcExtended: false,
   sessionId: crypto.randomUUID(),
   revealed: {}, tarotFlipped: [false, false, false], ziweiCast: false, yijingCast: false,
   yijingLines: [], yijingCasting: false,
@@ -56,18 +56,21 @@ const STR = {
     masterChatTitle: 'Ask the Master',
     masterChatBody: 'Still wondering about something in your reading? Ask a follow-up — the Master answers from your own report, and remembers what you asked before.',
     followupsLeft: 'Follow-ups left',
+    masterChatsLeft: 'Master chats left',
+    aiBadge: 'AI Master',
+    mcRuleBasedTag: 'Summary from your reading',
     chipExplain: 'What does that mean?', chipExample: 'Give me an example', chipDeeper: 'Tell me more about work',
     mcAskPh: 'Ask a follow-up…',
     masterChatNote: 'Follow-ups are answered from your own reading only — no predictions, and no medical, financial or legal advice.',
     masterChatExplainer: 'Ask the Master — 5 follow-up questions included with your unlock. Ask what a reply means, for an example, or to go deeper.',
     upgradeTitle: 'Want more than 5 follow-ups?',
-    upgradeBody: 'Upgrade to Unlimited Master Chat for $3 — ask as many follow-ups as you like, for the same 90 days as your reading.',
-    upgradeBtn: 'Upgrade to Unlimited Master Chat — $3',
-    upgradeUnlimited: 'Unlimited Master Chat',
-    upgradeOffer: 'You have used all 5 follow-ups. Upgrade to Unlimited Master Chat for $3 and keep asking.',
-    upgradeDone: 'Unlimited Master Chat unlocked — ask as many follow-ups as you like.',
+    upgradeBody: 'Upgrade to Extended Master Chat for $3 — 30 Master chats in total, for the same 90 days as your reading.',
+    upgradeBtn: 'Upgrade to Extended Master Chat — $3',
+    upgradeExtended: 'Extended Master Chat',
+    upgradeOffer: 'You have used all 5 follow-ups. Upgrade to Extended Master Chat for $3 — 30 chats in total.',
+    upgradeDone: 'Extended Master Chat unlocked — 30 Master chats in total.',
     upgradeFail: 'Could not start the upgrade checkout. Please try again.',
-    upgradePending: 'Your Unlimited Master Chat is being activated — if the counter still shows a limit, refresh this page in a moment.',
+    upgradePending: 'Your Extended Master Chat is being activated — if the counter still shows a limit, refresh this page in a moment.',
     skipToMaster: 'Skip to Master →',
     sysOpen: 'Open the full page',
     backToHub: '← All six systems',
@@ -150,18 +153,21 @@ const STR = {
     masterChatTitle: '\u95ee\u638c\u95e8',
     masterChatBody: '\u62a5\u544a\u91cc\u8fd8\u6709\u4e0d\u660e\u767d\u7684\u5730\u65b9\uff1f\u63a5\u7740\u95ee\u2014\u2014\u638c\u95e8\u53ea\u6839\u636e\u4f60\u81ea\u5df1\u7684\u62a5\u544a\u56de\u7b54\uff0c\u4e5f\u8bb0\u5f97\u4f60\u4e4b\u524d\u95ee\u8fc7\u4ec0\u4e48\u3002',
     followupsLeft: '\u5269\u4f59\u8ffd\u95ee\u6b21\u6570',
+    masterChatsLeft: '\u638c\u95e8\u8ffd\u95ee\u8fd8\u5269',
+    aiBadge: 'AI \u638c\u95e8',
+    mcRuleBasedTag: '\u6839\u636e\u4f60\u7684\u62a5\u544a\u6574\u7406',
     chipExplain: '\u8fd9\u662f\u4ec0\u4e48\u610f\u601d\uff1f', chipExample: '\u4e3e\u4e2a\u4f8b\u5b50', chipDeeper: '\u591a\u8bf4\u4e00\u70b9\u5de5\u4f5c',
     mcAskPh: '\u95ee\u4e00\u4e2a\u8ffd\u95ee\u2026\u2026',
     masterChatNote: '\u8ffd\u95ee\u53ea\u6839\u636e\u4f60\u81ea\u5df1\u7684\u62a5\u544a\u56de\u7b54\u2014\u2014\u6ca1\u6709\u9884\u6d4b\uff0c\u4e5f\u4e0d\u7ed9\u533b\u7597\u3001\u8d22\u52a1\u6216\u6cd5\u5f8b\u5efa\u8bae\u3002',
     masterChatExplainer: '\u95ee\u638c\u95e8\u2014\u2014\u89e3\u9501\u5305\u542b 5 \u6b21\u8ffd\u95ee\u3002\u95ee\u95ee\u67d0\u4e2a\u56de\u7b54\u662f\u4ec0\u4e48\u610f\u601d\u3001\u8981\u4e00\u4e2a\u4f8b\u5b50\uff0c\u6216\u8005\u5f80\u6df1\u91cc\u804a\u3002',
     upgradeTitle: '\u60f3\u8981\u8d85\u8fc7 5 \u6b21\u8ffd\u95ee\uff1f',
-    upgradeBody: '\u82b1 $3 \u5347\u7ea7\u4e3a\u65e0\u9650\u8ffd\u95ee\u638c\u95e8\u2014\u2014\u5728\u62a5\u544a\u6709\u6548\u7684 90 \u5929\u5185\uff0c\u60f3\u95ee\u591a\u5c11\u5c31\u95ee\u591a\u5c11\u3002',
-    upgradeBtn: '\u5347\u7ea7\u4e3a\u65e0\u9650\u8ffd\u95ee\u638c\u95e8 \u2014 $3',
-    upgradeUnlimited: '\u65e0\u9650\u8ffd\u95ee\u638c\u95e8',
-    upgradeOffer: '5 \u6b21\u8ffd\u95ee\u5df2\u7ecf\u7528\u5b8c\u3002\u82b1 $3 \u5347\u7ea7\u4e3a\u65e0\u9650\u8ffd\u95ee\u638c\u95e8\uff0c\u7ee7\u7eed\u95ee\u4e0b\u53bb\u3002',
-    upgradeDone: '\u65e0\u9650\u8ffd\u95ee\u638c\u95e8\u5df2\u89e3\u9501\u2014\u2014\u60f3\u95ee\u591a\u5c11\u5c31\u95ee\u591a\u5c11\u3002',
+    upgradeBody: '\u82b1 $3 \u5347\u7ea7\u4e3a\u52a0\u957f\u638c\u95e8\u8ffd\u95ee\u2014\u201490 \u5929\u5185\u5171 30 \u6b21\u8ffd\u95ee\uff0c\u4e0e\u62a5\u544a\u6709\u6548\u671f\u76f8\u540c\u3002',
+    upgradeBtn: '\u5347\u7ea7\u4e3a\u52a0\u957f\u638c\u95e8\u8ffd\u95ee \u2014 $3',
+    upgradeExtended: '\u52a0\u957f\u638c\u95e8\u8ffd\u95ee',
+    upgradeOffer: '5 \u6b21\u8ffd\u95ee\u5df2\u7ecf\u7528\u5b8c\u3002\u82b1 $3 \u5347\u7ea7\u4e3a\u52a0\u957f\u638c\u95e8\u8ffd\u95ee\uff0c\u5171 30 \u6b21\uff0c\u7ee7\u7eed\u95ee\u4e0b\u53bb\u3002',
+    upgradeDone: '\u52a0\u957f\u638c\u95e8\u8ffd\u95ee\u5df2\u89e3\u9501\u2014\u2014\u5171 30 \u6b21\u3002',
     upgradeFail: '\u65e0\u6cd5\u5f00\u59cb\u5347\u7ea7\u7ed3\u8d26\uff0c\u8bf7\u518d\u8bd5\u4e00\u6b21\u3002',
-    upgradePending: '\u65e0\u9650\u8ffd\u95ee\u6b63\u5728\u5f00\u901a\u4e2d\u2014\u2014\u5982\u679c\u8ba1\u6570\u4ecd\u663e\u793a\u4e0a\u9650\uff0c\u8bf7\u7a0d\u540e\u5237\u65b0\u672c\u9875\u3002',
+    upgradePending: '\u52a0\u957f\u638c\u95e8\u8ffd\u95ee\u6b63\u5728\u5f00\u901a\u4e2d\u2014\u2014\u5982\u679c\u8ba1\u6570\u4ecd\u663e\u793a\u4e0a\u9650\uff0c\u8bf7\u7a0d\u540e\u5237\u65b0\u672c\u9875\u3002',
     skipToMaster: '\u76f4\u63a5\u53bb\u627e\u638c\u95e8 \u2192',
     sysOpen: '打开完整页面',
     backToHub: '← 回到六个系统',
@@ -261,7 +267,7 @@ function setLang(lang) {
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { if (STR[lang][el.dataset.i18nPh]) el.placeholder = STR[lang][el.dataset.i18nPh]; });
   $('lang-en').classList.toggle('active', lang === 'en');
   $('lang-zh').classList.toggle('active', lang === 'zh');
-  renderSystems(); renderQuizList(); renderReportCard(); renderMcThread();
+  renderSystems(); renderQuizList(); renderReportCard(); renderMcThread(); renderMcCounter();
 }
 $('lang-en').onclick = () => setLang('en');
 $('lang-zh').onclick = () => setLang('zh');
@@ -474,7 +480,7 @@ function stepNavHTML() {
 function hubNextHTML() {
   if (pageSystem || (!state.teaser && !state.report)) return '';
   // Unlocked users get a "Skip to Master" shortcut as well (7 Nov 2026):
-  // after paying for Unlimited Master Chat they land straight on /master,
+  // after paying for Extended Master Chat they land straight on /master,
   // and an unlocked user on the hub must never have to walk the whole
   // step flow — least of all the Portrait quizzes — to reach the chat.
   // Quizzes are optional content on the Portrait page only, never a gate.
@@ -1195,12 +1201,15 @@ $('lr-stop').addEventListener('click', () => { speechSynthesis.cancel(); $('lr-s
    reload restores the thread. Voice in reuses the Live Reader pattern
    (zh-CN/en-US); voice out reuses the Live Reader speak checkbox. */
 function renderMcCounter() {
-  const left = $('mc-left'), suffix = $('mc-left-suffix'), btn = $('mc-upgrade-btn'), offer = $('mc-upgrade-offer');
+  const left = $('mc-left'), label = $('mc-left-label'), suffix = $('mc-left-suffix'), btn = $('mc-upgrade-btn'), offer = $('mc-upgrade-offer');
   if (!left) return;
-  if (state.mcUnlimited) {
-    left.textContent = t('upgradeUnlimited');
-    if (suffix) suffix.textContent = '';
-    if (btn) { btn.textContent = '✓ ' + t('upgradeUnlimited'); btn.disabled = true; }
+  // Counter: Extended buyers see "Master chats left: n / 30"; everyone
+  // else sees "Follow-ups left: n / 5".
+  if (label) label.textContent = state.mcExtended ? t('masterChatsLeft') : t('followupsLeft');
+  if (state.mcExtended) {
+    left.textContent = state.mcLeft;
+    if (suffix) suffix.textContent = ' / 30';
+    if (btn) { btn.textContent = '✓ ' + t('upgradeExtended'); btn.disabled = true; }
     if (offer) offer.classList.add('hidden');
   } else {
     left.textContent = state.mcLeft;
@@ -1211,7 +1220,11 @@ function renderMcCounter() {
 function renderMcThread() {
   const box = $('mc-thread');
   if (!box) return;
-  box.innerHTML = (state.mcMessages || []).map((m) => `<p class="${m.role === 'user' ? 'mc-user' : 'mc-master'}"><strong>${esc(m.role === 'user' ? t('mcYou') : t('mcMaster'))}:</strong> ${esc(m.content)}</p>`).join('');
+  box.innerHTML = (state.mcMessages || []).map((m) => {
+    const tag = m.role === 'master' && m.source === 'rule-based'
+      ? ` <small class="mc-rb-tag">${esc(t('mcRuleBasedTag'))}</small>` : '';
+    return `<p class="${m.role === 'user' ? 'mc-user' : 'mc-master'}"><strong>${esc(m.role === 'user' ? t('mcYou') : t('mcMaster'))}:</strong> ${esc(m.content)}${tag}</p>`;
+  }).join('');
   box.scrollTop = box.scrollHeight;
 }
 async function loadMasterChat() {
@@ -1222,8 +1235,15 @@ async function loadMasterChat() {
     if (!res.ok) return;
     const data = await res.json();
     state.mcMessages = data.messages || [];
-    state.mcUnlimited = !!data.unlimited;
-    state.mcLeft = data.questionsRemaining === null ? Infinity : data.questionsRemaining;
+    state.mcExtended = !!data.extended;
+    state.mcLeft = typeof data.questionsRemaining === 'number' ? data.questionsRemaining : 0;
+    // AI badge: shown only when the AI Master is actually live (the
+    // server sets GEMINI_API_KEY). Rule-based mode shows no badge.
+    const badge = $('mc-ai-badge');
+    if (badge) {
+      badge.textContent = t('aiBadge');
+      badge.classList.toggle('hidden', !data.aiMasterLive);
+    }
     renderMcCounter();
     renderMcThread();
   } catch {}
@@ -1238,7 +1258,7 @@ function mcSpeak(text) {
 async function sendMasterChat(text) {
   const q = (text || $('mc-question').value || '').trim();
   if (!q) return;
-  if (!state.mcUnlimited && state.mcLeft <= 0) {
+  if (!state.mcExtended && state.mcLeft <= 0) {
     state.mcMessages = [...state.mcMessages, { role: 'master', content: t('upgradeOffer'), lang: state.lang, source: 'master' }];
     const offer = $('mc-upgrade-offer'); if (offer) offer.classList.remove('hidden');
     renderMcThread();
@@ -1257,8 +1277,8 @@ async function sendMasterChat(text) {
       return;
     }
     state.mcMessages = data.messages || state.mcMessages;
-    state.mcUnlimited = !!data.unlimited;
-    state.mcLeft = data.questionsRemaining === null ? Infinity : data.questionsRemaining;
+    state.mcExtended = !!data.extended;
+    state.mcLeft = typeof data.questionsRemaining === 'number' ? data.questionsRemaining : 0;
     renderMcCounter();
     $('mc-question').value = '';
     renderMcThread();
@@ -1276,11 +1296,11 @@ document.querySelectorAll('[data-chip]').forEach((b) => {
     sendMasterChat(kind === 'explain' ? t('chipExplain') : kind === 'example' ? t('chipExample') : t('chipDeeper'));
   };
 });
-/* --- Unlimited Master Chat upgrade ($3) ------------------------------------
+/* --- Extended Master Chat upgrade ($3, 30 chats) --------------------------
    Paid token only (the server checks the token and the Stripe payment).
    On success Stripe lands the buyer DIRECTLY on /master?upgraded=1 —
    checkUpgradeReturn() there verifies the session and the counter then
-   reads Unlimited. No hub detour, no step flow, no quiz in the way. */
+   reads Extended (30 chats). No hub detour, no step flow, no quiz in the way. */
 async function buyMasterUpgrade() {
   const btn = $('mc-upgrade-btn');
   if (btn) btn.disabled = true;
@@ -1288,7 +1308,7 @@ async function buyMasterUpgrade() {
     const res = await fetch('/api/checkout-upgrade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(authParams()) });
     const data = await res.json();
     if (!res.ok) { alert(data.error || t('upgradeFail')); if (btn) btn.disabled = false; return; }
-    if (data.alreadyUnlimited) { state.mcUnlimited = true; renderMcCounter(); return; }
+    if (data.alreadyExtended) { state.mcExtended = true; renderMcCounter(); return; }
     location.href = data.checkoutUrl;
   } catch (e) { alert(t('upgradeFail')); if (btn) btn.disabled = false; }
 }
@@ -1307,7 +1327,8 @@ $('mc-voice').addEventListener('click', () => {
    /master?upgraded=1&session_id=… (7 Nov 2026 fix — the old hub landing
    forced the buyer through the whole guided flow, quizzes included, to
    reach the chat). Confirm the upgrade on the server (the webhook may not
-   have landed yet) and refresh the Master counter so it reads Unlimited.
+   have landed yet) and refresh the Master counter so it reads Extended
+   (30 chats).
    Runs at init on every page, after loadReport() restores the token —
    /master works standalone: no re-entry, no quiz required. If the session
    cannot be verified yet (payment still settling), say so plainly instead
@@ -1319,7 +1340,7 @@ async function checkUpgradeReturn() {
     const res = await fetch('/api/checkout-session/' + encodeURIComponent(params.get('session_id')));
     const data = await res.json();
     if (res.ok && data.upgrade) {
-      state.mcUnlimited = true;
+      state.mcExtended = true;
       const banner = $('unlocked-banner');
       banner.innerHTML = `${esc(t('upgradeDone'))}`;
       banner.classList.remove('hidden');
