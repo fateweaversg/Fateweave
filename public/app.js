@@ -106,6 +106,7 @@ const STR = {
     readingGlimpse: 'Reading your glimpse\u2026', enterDateFirst: 'Enter your birth date in the free glimpse form first.',
     couldNotRead: 'Could not read that birth date.', networkError: 'Network error: ',
     masterUnreachable: 'The Master couldn\u2019t be reached just now \u2014 please try again in a moment.',
+    aiRestingNote: 'The AI Master is resting briefly after a hiccup \u2014 answers for now are summaries from your reading. Try again in a few minutes.',
     unreachable: 'Couldn\u2019t be reached just now \u2014 please try again in a moment.',
     payUnlock: 'Pay & unlock', priceUnavailable: 'Price unavailable \u2014 please try again later.',
     questions: 'questions', questionOf: 'Question', of: 'of', back: '\u2190 Back', restart: 'Restart quiz',
@@ -205,6 +206,7 @@ const STR = {
     readingGlimpse: '\u6b63\u5728\u8bfb\u53d6\u4f60\u7684\u9884\u89c8\u2026\u2026', enterDateFirst: '\u8bf7\u5148\u5728\u514d\u8d39\u4e00\u77a5\u8868\u5355\u8f93\u5165\u51fa\u751f\u65e5\u671f\u3002',
     couldNotRead: '\u65e0\u6cd5\u8bfb\u53d6\u8be5\u51fa\u751f\u65e5\u671f\u3002', networkError: '\u7f51\u7edc\u9519\u8bef\uff1a',
     masterUnreachable: '\u638c\u95e8\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+    aiRestingNote: 'AI \u638c\u95e8\u521a\u624d\u51fa\u4e86\u4e00\u70b9\u5c0f\u72b6\u51b5\uff0c\u6b63\u5728\u77ed\u6682\u4f11\u606f\u2014\u2014\u4e0b\u9762\u7684\u56de\u7b54\u5148\u662f\u6839\u636e\u4f60\u7684\u62a5\u544a\u6574\u7406\u7684\u6458\u8981\u3002\u51e0\u5206\u949f\u540e\u518d\u8bd5\u3002',
     unreachable: '\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     payUnlock: '\u4ed8\u6b3e\u5e76\u89e3\u9501', priceUnavailable: '\u6682\u65f6\u65e0\u6cd5\u53d6\u5f97\u4ef7\u683c\u2014\u2014\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     questions: '\u9898', questionOf: '\u7b2c', of: '/', back: '\u2190 \u4e0a\u4e00\u9898', restart: '\u91cd\u65b0\u6d4b\u9a8c',
@@ -1211,10 +1213,18 @@ $('lr-stop').addEventListener('click', () => { speechSynthesis.cancel(); $('lr-s
 
 /* --- Ask the Master — follow-up chat on the buyer's own reading -----------
    Paid-only (the section lives inside #report-card, hidden until unlocked).
-   5 follow-ups per paid session, server-enforced, separate from Live
-   Reader's 3 questions. History loads from the server on unlock, so a
-   reload restores the thread. Voice in reuses the Live Reader pattern
-   (zh-CN/en-US); voice out reuses the Live Reader speak checkbox. */
+   5 follow-ups per BUYER (Extended: 30 chats in total), server-enforced,
+   separate from Live Reader's 3 questions. History loads from the server
+   on unlock, so a reload restores the thread — the server keys it by the
+   buyer, not by the browser session, so a fresh sessionId never wipes
+   it. Voice in reuses the Live Reader pattern (zh-CN/en-US); voice out
+   reuses the Live Reader speak checkbox. */
+function renderAiRestNote(resting) {
+  const el = $('mc-ai-rest');
+  if (!el) return;
+  el.textContent = resting ? t('aiRestingNote') : '';
+  el.classList.toggle('hidden', !resting);
+}
 function renderMcCounter() {
   const left = $('mc-left'), label = $('mc-left-label'), suffix = $('mc-left-suffix'), btn = $('mc-upgrade-btn'), offer = $('mc-upgrade-offer');
   if (!left) return;
@@ -1259,6 +1269,9 @@ async function loadMasterChat() {
       badge.textContent = t('aiBadge');
       badge.classList.toggle('hidden', !data.aiMasterLive);
     }
+    // AI resting after a brief hiccup (short cooldown server-side):
+    // say so honestly instead of silently serving summaries.
+    renderAiRestNote(!!data.aiResting);
     renderMcCounter();
     renderMcThread();
   } catch {}
@@ -1316,6 +1329,7 @@ async function sendMasterChat(text) {
     state.mcMessages = data.messages || state.mcMessages;
     state.mcExtended = !!data.extended;
     state.mcLeft = typeof data.questionsRemaining === 'number' ? data.questionsRemaining : 0;
+    renderAiRestNote(!!data.aiResting);
     renderMcCounter();
     $('mc-question').value = '';
     renderMcThread();
