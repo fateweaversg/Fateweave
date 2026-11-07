@@ -272,6 +272,69 @@ async function main() {
     check('frontend has details-collapse + glance + bignum + real-card CSS', css.includes('details.more') && css.includes('.glance') && css.includes('.bignum-row') && css.includes('.card-art') && css.includes('.rev-banner'), 'visual CSS missing');
     check('frontend sectionHTML collapses extra sections', appJs.includes('<details class="more"') && appJs.includes("t('moreDetail')"), 'details collapse missing');
 
+    // 18. Ask the Master (7 Nov 2026): paid-only follow-up chat, 5 per
+    // session, with conversation memory of the Live Reader Q&A.
+    const mcSession = 'smoke-mc-1';
+    const mcBody = (message, sessionId, extra) => JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14', sessionId: sessionId || mcSession, message, lang: 'en', ...(extra || {}) });
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('What does that mean?').replace('"token":"' + token + '"', '"token":"nope"') });
+    check('master-chat 403 without token', res.status === 403, `got ${res.status}`);
+    res = await fetch(`${BASE}/api/master-chat?email=buyer@example.com&birthDate=1990-05-14&sessionId=${mcSession}`);
+    check('master-chat history 403 without token', res.status === 403, `got ${res.status}`);
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14', message: 'hi' }) });
+    check('master-chat 400 without sessionId', res.status === 400, `got ${res.status}`);
+    // First a Live Reader question, so the follow-up has something to refer to.
+    res = await fetch(`${BASE}/api/live-reader`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14', sessionId: mcSession, question: 'Should I change jobs this year?', lang: 'en' }) });
+    data = await res.json();
+    const lrCareerAnswer = data.answer || '';
+    check('master-chat setup: live-reader career answer stored', res.ok && lrCareerAnswer.length > 50, `got ${res.status}`);
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('What does that mean?') });
+    data = await res.json();
+    check('master-chat explain references the previous answer topic', res.ok && data.questionsUsed === 1 && data.answer.includes('Your core:'), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('Give me an example') });
+    data = await res.json();
+    check('master-chat example returns an everyday example tied to the reading', res.ok && data.questionsUsed === 2 && data.answer.includes('everyday life') && /strongest element|Moon|hexagram|Life Path/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('Tell me more about work') });
+    data = await res.json();
+    check('master-chat deeper gives a different layer, never the live-reader text', res.ok && data.questionsUsed === 3 && data.answer.includes('next layer') && data.answer !== lrCareerAnswer, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    // Repeat-topic follow-up references the earlier conversation.
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('What about my career?') });
+    data = await res.json();
+    check('master-chat repeat topic references earlier question', res.ok && data.questionsUsed === 4 && /asked about work earlier/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('What does my Life Path mean?') });
+    data = await res.json();
+    check('master-chat 5th follow-up ok', res.ok && data.questionsUsed === 5 && data.questionsRemaining === 0 && /Life Path/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('One more question?') });
+    data = await res.json();
+    check('master-chat 6th follow-up rejected (429)', res.status === 429 && data.questionsUsed === 5 && data.questionsRemaining === 0, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
+    res = await fetch(`${BASE}/api/master-chat?token=${token}&email=buyer@example.com&birthDate=1990-05-14&sessionId=${mcSession}`);
+    data = await res.json();
+    check('master-chat history returns the full thread on load', res.ok && Array.isArray(data.messages) && data.messages.length === 12 && data.messages[0].source === 'live-reader' && data.messages[data.messages.length - 1].role === 'master' && data.questionsRemaining === 0, `got ${res.status} len=${data.messages?.length}`);
+    // Separate session: zh term explanation + safety guard (limit is per session).
+    const mcZh = 'smoke-mc-2';
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14', sessionId: mcZh, message: '我的生命灵数是什么意思？', lang: 'zh' }) });
+    data = await res.json();
+    check('master-chat zh term explanation in Simplified Chinese', res.ok && data.answer.includes('生命灵数') && !data.answer.includes('生命靈數') && !data.answer.includes('還'), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14', sessionId: mcZh, message: 'Should I invest in stocks?', lang: 'en' }) });
+    data = await res.json();
+    check('master-chat refuses financial advice', res.ok && /can.t (advise|give financial advice)/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    // Frontend: Ask the Master section exists, only inside the (hidden-until-unlocked) report card.
+    check('frontend has Ask the Master section + chips + counter', html.includes('id="master-chat"') && html.includes('id="mc-thread"') && html.includes('id="mc-left"') && html.includes('data-chip="explain"') && html.includes('data-chip="example"') && html.includes('data-chip="deeper"') && appJs.includes('/api/master-chat') && appJs.includes('loadMasterChat'), 'master-chat UI missing');
+    check('frontend has download-report fallback button', html.includes('id="download-report-btn"') && appJs.includes('reportDownloadHTML') && appJs.includes("download = `FateWeave-report-"), 'download button missing');
+
+    // 19. Resend failure (7 Nov 2026): the sandbox sender only delivers
+    // to the Resend account owner's own email — a resend to any other
+    // address must return a SPECIFIC error, not the generic one.
+    const { classifyResendError } = require('../src/email');
+    check('classifyResendError names the sandbox rejection', classifyResendError({ message: 'You can only send testing emails to your own email address', statusCode: 403 }) === 'resend_sandbox_recipient', 'wrong code');
+    check('classifyResendError falls back for other failures', classifyResendError({ message: 'network timeout' }) === 'resend_error', 'wrong fallback');
+    process.env.EMAIL_FAIL_MODE = 'resend-sandbox'; // test hook in src/email.js
+    res = await fetch(`${BASE}/api/resend-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14' }) });
+    data = await res.json();
+    check('resend-report returns specific sandbox error, not generic', res.status === 502 && data.code === 'resend_sandbox_recipient' && /test mode/.test(data.error) && data.error !== 'Could not resend the report email.', `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    delete process.env.EMAIL_FAIL_MODE;
+    res = await fetch(`${BASE}/api/resend-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14' }) });
+    check('resend-report works again once the failure is cleared', res.ok, `got ${res.status}`);
+
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
   } finally {
