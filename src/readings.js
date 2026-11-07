@@ -475,6 +475,12 @@ function buildTeaser(profile) {
     yijing: {
       hexagram: full.yijing.hexagram,
       hook: { en: full.yijing.theme.en, zh: full.yijing.theme.zh },
+      // The six coin-toss lines (line number, coin sum, solid/broken,
+      // changing or not) — the casting ritual itself, not the interpretation.
+      // The frontend animates these one toss at a time, bottom to top, so
+      // the hexagram shown always matches the lines shown. No line text
+      // (interpretation) is included here; that stays paid-only.
+      lines: full.yijing.lines.map((l) => ({ line: l.line, sum: l.sum, yang: l.yang, changing: l.changing })),
     },
     tarot: {
       firstCard: full.tarot.cards[0],
