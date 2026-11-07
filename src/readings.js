@@ -138,6 +138,14 @@ function castYijing(seedStr) {
   return { lines, hex, transformed, changingLines: lines.filter((l) => l.changing).map((l) => l.line), upper: D.TRI[hi], lower: D.TRI[lo] };
 }
 function elName(key, lang) { return lang === 'zh' ? D.ELNAME[key].replace(/^[A-Za-z]+ /, '') : D.ELNAME[key].replace(/ [^ ]+$/, ''); }
+// Plain element meaning from the original EL_TXT table (Ask the Master
+// "what does Wood mean?" answers) — never invented, always the buyer's
+// own table text.
+function elementMeaning(key, lang) {
+  const row = D.EL_TXT[key];
+  if (!row) return '';
+  return lang === 'zh' ? row.zh : row.en;
+}
 
 /* --- Current-date helpers (item F, 7 Nov 2026) ---------------------------
    Timing must be computed from the actual current date at request time —
@@ -683,4 +691,4 @@ function buildDailyMessage(profile, dateStr) {
   };
 }
 
-module.exports = { buildFullReading, buildTeaser, scoreEnneagram, scoreEnneagramFromChoices, scoreMbti, parseBirth, getPersonalityQuestions, buildPersonalitySummary, buildPortrait, lockedPersonalitySummary, buildDailyMessage, elName, currentYear, chineseYearLabel, nextTwelveMonths };
+module.exports = { buildFullReading, buildTeaser, scoreEnneagram, scoreEnneagramFromChoices, scoreMbti, parseBirth, getPersonalityQuestions, buildPersonalitySummary, buildPortrait, lockedPersonalitySummary, buildDailyMessage, elName, elementMeaning, currentYear, chineseYearLabel, nextTwelveMonths };
