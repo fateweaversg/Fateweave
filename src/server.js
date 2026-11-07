@@ -131,9 +131,14 @@ app.post('/api/checkout', async (req, res) => {
 // Checkout session created with inline price_data (no dashboard price ID,
 // exactly like /api/checkout). Only a buyer with a VALID paid token can
 // buy it; the token's email + birth date are the buyer, never the body.
-// Success returns to /success.html?upgrade=1, which verifies via
-// /api/checkout-session/:id — that endpoint (and the webhook) grants the
-// unlimited flag. Price: config.masterChatUpgradePriceCents ($3 default).
+// Success lands DIRECTLY on /master?upgraded=1 (7 Nov 2026 fix): the old
+// success.html → hub redirect forced the buyer to walk the whole guided
+// flow (Bazi → … → Portrait quizzes → Master) just to reach the chat
+// they had just paid for. /master restores the reading from the stored
+// token at init (loadReport), so no re-entry and no quiz is needed —
+// checkUpgradeReturn() on that page verifies the session and flips the
+// counter to Unlimited. Cancel returns to /master too, for the same reason.
+// Price: config.masterChatUpgradePriceCents ($3 default).
 app.post('/api/checkout-upgrade', async (req, res) => {
   const { token, email, birthDate } = req.body || {};
   const access = verifyAccessToken(token, email, birthDate);
@@ -160,8 +165,8 @@ app.post('/api/checkout-upgrade', async (req, res) => {
         quantity: 1,
       }],
       metadata: { orderId: String(order.lastInsertRowid), email: buyerEmail, birthDate: buyerBirthDate, upgrade: '1' },
-      success_url: `${config.baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}&upgrade=1`,
-      cancel_url: `${config.baseUrl}/?upgrade_cancelled=1`,
+      success_url: `${config.baseUrl}/master?upgraded=1&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${config.baseUrl}/master?upgrade_cancelled=1`,
     });
     db.prepare('UPDATE orders SET provider_session_id = ? WHERE id = ?').run(session.id, order.lastInsertRowid);
     return res.json({ checkoutUrl: session.url, orderId: order.lastInsertRowid, price: { amountCents: priceCents, currency: config.currency } });
