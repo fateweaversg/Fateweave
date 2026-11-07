@@ -249,8 +249,8 @@ async function callGemini({ systemInstruction, contents, fetchImpl, model = conf
     generationConfig: {
       temperature: config.ai.temperature,
       maxOutputTokens: config.ai.maxOutputTokens,
-      // Thinking tokens bill as output — do not pay for thinking.
-      thinkingConfig: { thinkingBudget: 0 },
+      // Use the model's supported defaults. Newer Gemini models reject
+      // thinkingBudget: 0; that made the lighter fallback fail with 400.
     },
   };
   let lastErr = null;
@@ -323,8 +323,11 @@ async function callGemini({ systemInstruction, contents, fetchImpl, model = conf
         continue; // one retry on 5xx only, never on 429
       }
       if (!res.ok) {
+        const detail = typeof res.text === 'function'
+          ? extract429Detail(await withDeadline(res.text(), remainingMs(), 'error body').catch(() => '')) : '';
         const e = new Error(`Gemini error (${res.status})`);
         e.status = res.status;
+        e.detail = detail;
         throw e;
       }
       const data = await withDeadline(res.json(), remainingMs(), 'response body');
