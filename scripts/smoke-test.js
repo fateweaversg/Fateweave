@@ -94,6 +94,72 @@ async function main() {
     res = await fetch(`${BASE}/api/owner/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: 'wrong-password' }) });
     check('owner login rejects wrong password', res.status === 401, `got ${res.status}`);
 
+    // 9. Personality questions are public but leak NO scoring mapping
+    res = await fetch(`${BASE}/api/personality/questions`);
+    data = await res.json();
+    const qText = JSON.stringify(data);
+    check('personality questions: 27 enneagram + 24 mbti', res.ok && data.enneagram?.length === 27 && data.mbti?.length === 24, `got ${data.enneagram?.length}/${data.mbti?.length}`);
+    check('personality questions leak NO scoring letters/types', !qText.includes('"t":') && !qText.includes('"l":'), 'scoring field present in questions');
+
+    // 10. Personality scoring pre-payment: locked summary only (type + 1 line)
+    const enneaChoices = Array.from({ length: 27 }, (_, i) => i % 3);
+    const mbtiChoices = Array.from({ length: 24 }, (_, i) => (i % 2 === 0 ? 'a' : 'b'));
+    res = await fetch(`${BASE}/api/personality`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enneagramAnswers: enneaChoices, mbtiAnswers: mbtiChoices }) });
+    data = await res.json();
+    const lockedText = JSON.stringify(data);
+    check('personality pre-payment returns locked summary', res.ok && data.unlocked === false && data.enneagram?.type && data.enneagram?.teaser && data.mbti?.type && data.mbti?.teaser, JSON.stringify(data).slice(0, 200));
+    check('personality locked summary leaks NO full breakdown', !lockedText.includes('interpretation') && !lockedText.includes('"scores"') && !lockedText.includes('strengths'), 'full breakdown fields in locked response');
+
+    // 11. Personality scoring WITH token: full breakdown, saved, appears in report
+    res = await fetch(`${BASE}/api/personality`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14', enneagramAnswers: enneaChoices, mbtiAnswers: mbtiChoices }) });
+    data = await res.json();
+    check('personality paid returns full breakdown', res.ok && data.unlocked === true && data.enneagram?.interpretation?.core && data.enneagram?.scores?.length === 9 && data.mbti?.interpretation?.en, JSON.stringify(data).slice(0, 200));
+    res = await fetch(`${BASE}/api/report?token=${token}&email=buyer@example.com&birthDate=1990-05-14`);
+    data = await res.json();
+    check('report includes saved personality lens', res.ok && data.personality?.enneagram?.type && data.personality?.mbti?.type && data.portrait?.essenceLine?.en?.includes('Enneagram'), `got ${res.status}`);
+
+    // 12. Resend report: 403 without token, 200 with token (log fallback in test)
+    res = await fetch(`${BASE}/api/resend-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: 'nope', email: 'buyer@example.com', birthDate: '1990-05-14' }) });
+    check('resend-report 403 without token', res.status === 403, `got ${res.status}`);
+    res = await fetch(`${BASE}/api/resend-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14' }) });
+    data = await res.json();
+    check('resend-report 200 with token', res.ok && data.resent === true, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
+
+    // 13. Hook still teaser-only, now with 1–2 line hooks per system
+    res = await fetch(`${BASE}/api/hook`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' }) });
+    data = await res.json();
+    check('hook has per-system hook lines + tarot names', res.ok && data.bazi?.hook?.en && data.ziwei?.hook?.en && data.tarot?.cards?.length === 3 && data.yijing?.hook?.en, JSON.stringify(data).slice(0, 200));
+    check('hook still leaks NO full content', !JSON.stringify(data).includes('guidance') && !JSON.stringify(data).includes('synthesis') && !data.tarot?.cardsDetailed, 'full fields in hook');
+
+    // 14. Regression (7 Nov 2026): Numerology Relationships must never end in
+    // a literal "undefined" — LP_PORTRAIT rows only carry gEn/gZh, and an
+    // earlier build read .en/.zh off them. The same class of bug also hit
+    // the Personal Year text (PY_TXT only has 1–9, but digitalRoot could
+    // return a master number). Sweep twelve years of dates plus dates that
+    // produce the master Life Paths 11, 22 and 33, with and without a name
+    // (Destiny number), and assert no literal "undefined" anywhere in a
+    // full reading.
+    const { buildFullReading } = require('../src/readings');
+    const badDates = [];
+    const seenLp = new Set();
+    const sweep = (from, to, name) => {
+      for (let d = new Date(from); d <= to; d.setUTCDate(d.getUTCDate() + 1)) {
+        const bd = d.toISOString().slice(0, 10);
+        const r = buildFullReading({ birthDate: bd, birthTime: null, name: name || null });
+        seenLp.add(r.numerology.lifePath);
+        if (JSON.stringify(r).includes('undefined') || !r.numerology.sections.relationships.en || /:\s*$/.test(r.numerology.sections.relationships.en)) badDates.push(bd + (name ? ` (${name})` : ''));
+      }
+    };
+    sweep(new Date('1980-01-01T00:00:00Z'), new Date('1991-12-31T00:00:00Z'));
+    sweep(new Date('1990-01-01T00:00:00Z'), new Date('1990-03-31T00:00:00Z'), 'Test User');
+    for (const bd of ['1989-09-29', '1991-01-01', '1991-11-29']) { // LP 11, 22, 33
+      const r = buildFullReading({ birthDate: bd, birthTime: null, name: null });
+      seenLp.add(r.numerology.lifePath);
+      if (JSON.stringify(r).includes('undefined')) badDates.push(bd);
+    }
+    check('numerology: no "undefined" in any full reading (all life paths)', badDates.length === 0, badDates.slice(0, 5).join(', '));
+    check('numerology sweep covered life paths 1-9 + masters', [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22, 33].every((n) => seenLp.has(n)), `seen: ${[...seenLp].sort((a, b) => a - b).join(',')}`);
+
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
   } finally {
