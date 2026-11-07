@@ -29,6 +29,12 @@ const D = require('./original-data');
 function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return Math.abs(h); }
 function seededRand(seed) { let x = seed % 2147483647; if (x <= 0) x += 2147483646; return () => { x = x * 16807 % 2147483647; return (x - 1) / 2147483646; }; }
 function digitalRoot(n) { while (n > 9 && n !== 11 && n !== 22 && n !== 33) { let s = 0; const t = String(n); for (let i = 0; i < t.length; i++) s += parseInt(t[i], 10); n = s; } return n; }
+// Personal Year is a 1–9 cycle (the PY_TXT table only has 1–9, and classic
+// numerology does not keep master numbers for the personal year). Reducing
+// with digitalRoot() could return 11/22/33 and render a literal
+// "undefined" in the reading (bug found live 7 Nov 2026, same class as the
+// Life Path Relationships bug).
+function singleDigit(n) { while (n > 9) { let s = 0; const t = String(n); for (let i = 0; i < t.length; i++) s += parseInt(t[i], 10); n = s; } return n; }
 function seedFrom(str) { return hashCode(str) || 1; }
 const L = (lang) => (lang === 'zh' ? 'zh' : 'en');
 // bilingual text helper: t({en, zh}, lang)
@@ -95,7 +101,7 @@ function calcNumbers(date, name) {
   }
   const pyStr = String(date.getMonth() + 1) + String(date.getDate()) + '2026'; let pySum = 0;
   for (let k = 0; k < pyStr.length; k++) pySum += parseInt(pyStr[k], 10);
-  return { lp, dest, py: digitalRoot(pySum) };
+  return { lp, dest, py: singleDigit(pySum) };
 }
 function pillarObj(p, labelEn, labelZh) {
   const st = D.STEMS[p.stem], br = D.BRANCHES[p.branch];
@@ -179,13 +185,22 @@ function horoscopeSections(a, lang) {
   };
 }
 function numerologySections(n, lang) {
+  // LP_PORTRAIT rows carry only gEn/gZh (the "what's lacking" lesson) — there
+  // is no .en/.zh field on them. Reading .en produced the literal string
+  // "undefined" in the Relationships line (bug found live 7 Nov 2026).
+  // Fall back to the Life Path text itself if a portrait row is ever missing.
+  const lpLesson = (l) => {
+    const row = D.LP_PORTRAIT[n.lp];
+    if (row) return l === 'zh' ? row.gZh : row.gEn;
+    return l === 'zh' ? D.LP.zh[String(n.lp)] : D.LP.en[String(n.lp)];
+  };
   return {
     overview: sec(`Life Path ${n.lp}: ${D.LP.en[String(n.lp)]} This is the lesson your life keeps re-teaching in new costumes. Work with it and effort compounds; work against it and the same frustration returns wearing different clothes.`, `生命靈數 ${n.lp}：${D.LP.zh[String(n.lp)]}這是你反覆要學的一課：順著它走，事情有累積感；逆著它硬闖，同一類挫折會以不同面貌回來。`),
     lifePath: sec(D.LP.en[String(n.lp)], D.LP.zh[String(n.lp)]),
     destiny: n.dest ? sec(`Destiny ${n.dest}: ${D.LP.en[String(n.dest)]} This is the outward assignment your name carries — the direction the world keeps asking you to practise.`, `命運數 ${n.dest}：${D.LP.zh[String(n.dest)]}這是你的名字帶出的外在功課——世界不斷要求你練習的方向。`) : sec('No name was given, so no Destiny number was calculated.', '未提供姓名，因此沒有計算命運數。'),
     personalYear: sec(`2026 is ${D.PY_TXT.en[String(n.py)]}`, `2026 年是${D.PY_TXT.zh[String(n.py)]}`),
     career: sec(`Career follows Life Path ${n.lp}: roles that let you practise ${D.LP.en[String(n.lp)].split('.')[0].toLowerCase()} will compound; roles that ask you to do the opposite will feel like pushing uphill every week.`, `事業跟隨生命靈數 ${n.lp}：能讓你練習「${D.LP.zh[String(n.lp)]}」的崗位會有累積感；要求你做相反事的崗位，每週都會像推石上山。`),
-    relationships: sec(`In relationships, Life Path ${n.lp} asks for the same lesson in a different room: ${D.LP_PORTRAIT[n.lp] ? D.LP_PORTRAIT[n.lp].en : ''}`, `在關係中，生命靈數 ${n.lp} 要求同一課在另一個房間重演：${D.LP_PORTRAIT[n.lp] ? D.LP_PORTRAIT[n.lp].zh : ''}`),
+    relationships: sec(`In relationships, Life Path ${n.lp} asks for the same lesson in a different room: ${lpLesson('en')}`, `在關係中，生命靈數 ${n.lp} 要求同一課在另一個房間重演：${lpLesson('zh')}`),
     health: sec(`Your Personal Year ${n.py} sets the energy budget for 2026: ${D.PY_TXT.en[String(n.py)]} Plan rest and effort around that theme, not against it.`, `你的個人年 ${n.py} 定下 2026 年的能量預算：${D.PY_TXT.zh[String(n.py)]}按這個主題安排休息與努力，而不是逆著它。`),
     timing: sec(`2026 is ${D.PY_TXT.en[String(n.py)]} Across the year, the strongest windows are the months that match this theme — use them for the big move, and let the other months be for preparation.`, `2026 年是${D.PY_TXT.zh[String(n.py)]}全年最強的窗口，是與這個主題相符的月份——大事放在那些月份，其他月份用來準備。`),
   };
