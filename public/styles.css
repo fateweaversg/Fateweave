@@ -271,6 +271,18 @@ body.theme-master { --card: #1d1233; --card-2: #2a1a4a; --navy-2: #170e2b; --gol
 .sys-hero .hero-sub.essence { font-family: var(--serif); font-style: italic; color: var(--gold-soft); font-size: 1.15rem; border-left: none; padding-left: 0; }
 .sys-nav { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; padding: 10px 0 18px; }
 .sys-nav a { color: var(--gold-soft); font-weight: 600; font-size: .95rem; }
+/* Guided step flow (7 Nov 2026): the big bottom bar on every system page,
+   and the hub's "Start your reading" button after a glimpse. */
+#step-nav { margin: 6px 0 26px; text-align: center; }
+#step-nav:empty { display: none; }
+.step-progress { font-weight: 700; color: var(--gold-soft); margin-bottom: 10px; }
+.step-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.step-btn { display: inline-block; background: linear-gradient(180deg, var(--gold-soft), var(--gold)); color: #171204; border-radius: 10px; padding: 14px 22px; font-size: 1.05rem; font-weight: 700; min-height: 46px; }
+.step-btn.prev { background: transparent; border: 1px solid var(--gold-dim); color: var(--gold-soft); }
+.step-all { display: inline-block; margin-top: 12px; color: var(--gold-soft); font-weight: 600; font-size: .95rem; }
+#hub-next { text-align: center; margin: 0 0 18px; }
+#hub-next:empty { display: none; }
+.hub-next-btn { display: inline-block; background: linear-gradient(180deg, var(--gold-soft), var(--gold)); color: #171204; border-radius: 12px; padding: 16px 28px; font-size: 1.15rem; font-weight: 800; }
 .sys-open { margin: 14px 0 0; text-align: right; }
 .sys-open a { color: var(--gold-soft); font-weight: 600; }
 
