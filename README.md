@@ -1,4 +1,4 @@
-# FateWeave 天機匯 — Pay-First Server Build
+# FateWeave 天机汇 — Pay-First Server Build
 
 Deployable Node.js + SQLite codebase for the FateWeave pay-first model.
 **This is not a Muse artifact and has no public link here** — it is meant to be
