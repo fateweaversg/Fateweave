@@ -2,27 +2,42 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Payment — FateWeave 天機匯</title><link rel="stylesheet" href="/styles.css"></head>
-<body><main><section class="card"><h1>Checking your payment…</h1><p id="status">Please wait — we are verifying your payment with Stripe.</p><p><a href="/">Back to FateWeave</a></p></section></main>
+<body><main><section class="card" style="text-align:center"><h1 id="heading">Checking your payment…</h1><p id="status">Please wait — we are verifying your payment with Stripe.</p><p id="actions" class="hidden"><a href="/"><button type="button">See my full reading →</button></a></p></section></main>
 <script>
 (async () => {
   const params = new URLSearchParams(location.search);
   const sessionId = params.get('session_id');
   const status = document.getElementById('status');
-  if (!sessionId) { status.textContent = 'No checkout session found.'; return; }
+  const heading = document.getElementById('heading');
+  const actions = document.getElementById('actions');
+  const goHome = (ms) => { actions.classList.remove('hidden'); setTimeout(() => { location.href = '/'; }, ms); };
+  if (!sessionId) { status.textContent = 'No checkout session found.'; goHome(4000); return; }
   try {
     const res = await fetch('/api/checkout-session/' + encodeURIComponent(sessionId));
     const data = await res.json();
-    if (!res.ok) { status.textContent = data.error || 'Payment could not be verified yet.'; return; }
+    if (!res.ok) { status.textContent = data.error || 'Payment could not be verified yet.'; goHome(5000); return; }
     if (data.token) {
+      // Fresh token (or first issue) — always stored, then straight to the reading.
       localStorage.setItem('fateweave_token', data.token);
       localStorage.setItem('fateweave_email', data.email);
       localStorage.setItem('fateweave_birthDate', data.birthDate);
-      status.textContent = 'Payment confirmed. Your full reading is unlocked — your detailed report has been emailed to ' + data.email + '. Returning to your reading…';
-      setTimeout(() => location.href = '/', 2500);
+      heading.textContent = '✓ Payment confirmed — your reading is unlocked';
+      status.textContent = 'Your full reading is open and your detailed report has been emailed to ' + data.email + '. Taking you there now…';
+      goHome(2200);
+    } else if (localStorage.getItem('fateweave_token')) {
+      // Server could not issue a new token, but this device already holds one.
+      heading.textContent = '✓ Payment confirmed';
+      status.textContent = 'Your reading is already unlocked on this device. Taking you there now…';
+      goHome(2200);
     } else {
-      status.textContent = data.message || 'Payment confirmed. Check your email for your report link, then return here.';
+      heading.textContent = 'Payment confirmed';
+      status.textContent = (data.message || 'Payment confirmed. Check your email for your report link.') + ' Tap below to open your reading.';
+      goHome(6000);
     }
-  } catch (e) { status.textContent = 'Could not verify payment: ' + e.message; }
+  } catch (e) {
+    status.textContent = 'Could not verify payment: ' + e.message + ' — please tap below to try your reading.';
+    goHome(6000);
+  }
 })();
 </script>
 </body>
