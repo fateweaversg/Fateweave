@@ -42,6 +42,7 @@
   </section>
 
   <!-- Interactive systems — rendered by app.js from teaser (free) or report (paid) -->
+  <div id="sys-hero"></div>
   <div id="systems"></div>
 
   <section class="card" id="quiz-card">
@@ -91,8 +92,11 @@
 
     <div id="master-chat">
       <h3 data-i18n="masterChatTitle">Ask the Master</h3>
-      <p data-i18n="masterChatBody">Still wondering about something in your reading? Ask a follow-up — the Master answers from your own report, and remembers what you asked before.</p>
-      <p><span data-i18n="followupsLeft">Follow-ups left</span>: <span id="mc-left">5</span> / 5</p>
+      <p data-i18n="masterChatExplainer">Ask the Master — 5 follow-up questions included with your unlock. Ask what a reply means, for an example, or to go deeper.</p>
+      <p><span data-i18n="followupsLeft">Follow-ups left</span>: <span id="mc-left">5</span><span id="mc-left-suffix"> / 5</span></p>
+      <p class="small" data-i18n="upgradeBody">Upgrade to Unlimited Master Chat for $3 — ask as many follow-ups as you like, for the same 90 days as your reading.</p>
+      <button type="button" class="ghost" id="mc-upgrade-btn" data-i18n="upgradeBtn">Upgrade to Unlimited Master Chat — $3</button>
+      <div id="mc-upgrade-offer" class="notice hidden"><strong data-i18n="upgradeTitle">Want more than 5 follow-ups?</strong><br><span data-i18n="upgradeOffer">You have used all 5 follow-ups. Upgrade to Unlimited Master Chat for $3 and keep asking.</span><br><button type="button" id="mc-upgrade-offer-btn" data-i18n="upgradeBtn">Upgrade to Unlimited Master Chat — $3</button></div>
       <div id="mc-thread"></div>
       <div class="mc-chips">
         <button type="button" class="ghost chip-btn" data-chip="explain" data-i18n="chipExplain">What does that mean?</button>
