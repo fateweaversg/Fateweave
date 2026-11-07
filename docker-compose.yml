@@ -1,0 +1,16 @@
+services:
+  fateweave:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_PATH=/app/data/fateweave.db
+      - BASE_URL=${BASE_URL:-http://localhost:3000}
+    volumes:
+      - fateweave-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  fateweave-data:
