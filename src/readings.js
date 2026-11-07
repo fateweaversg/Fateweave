@@ -194,7 +194,7 @@ function nextTwelveMonths() {
 
 /* --- Section text (bilingual, derived from the original tables) ---------- */
 function sec(en, zh) { return { en, zh }; }
-function baziSections(b, dom, weak, dmTxt, lang) {
+function baziSections(b, dom, weak, dmTxt, lang, py) {
   const domE = elName(dom, 'en'), weakE = elName(weak, 'en');
   return {
     overview: sec(
@@ -202,13 +202,13 @@ function baziSections(b, dom, weak, dmTxt, lang) {
       `你的日主是${STEM_ZH[b.dayMaster]}。整体五行以${elName(dom, 'zh')}最旺、${elName(weak, 'zh')}最弱——行事风格与需要补足的方向，都从这里读出来。`),
     dayMaster: sec(dmTxt.en, dmTxt.zh),
     strengths: sec(
-      `Your strongest element, ${domE}, is the mode you run without effort — ${D.EL_TXT[dom].en} is a default strength. ${D.DM_PORTRAIT[b.dayMaster].sEn}.`,
+      `Your strongest element, ${domE}, is the mode you run without effort — ${D.EL_TXT[dom].en}, and that is a default strength. ${D.DM_PORTRAIT[b.dayMaster].sEn}.`,
       `你最旺的${elName(dom, 'zh')}是你不费力就做到的模式——${D.EL_TXT[dom].zh}。${D.DM_PORTRAIT[b.dayMaster].sZh}。`),
     challenges: sec(
-      `Your lightest element, ${weakE}, is the one to cultivate deliberately — ${D.EL_TXT[weak].en} does not switch on by itself. ${D.DM_PORTRAIT[b.dayMaster].gEn}.`,
+      `Your lightest element, ${weakE}, is the one to cultivate deliberately — ${D.EL_TXT[weak].en}. It does not switch on by itself. ${D.DM_PORTRAIT[b.dayMaster].gEn}.`,
       `你最弱的${elName(weak, 'zh')}需要刻意经营——${D.EL_TXT[weak].zh}。${D.DM_PORTRAIT[b.dayMaster].gZh}。`),
     career: sec(
-      `At work, ${domE} energy is how you deliver without forcing it: ${D.EL_TXT[dom].en} Lower your reliance on willpower in ${weakE} areas — put structure, a checklist or a collaborator there instead. Your useful god is ${weakE}: feed the lightest element to balance the chart.`,
+      `At work, ${domE} energy is how you deliver without forcing it: ${D.EL_TXT[dom].en}. Lower your reliance on willpower in ${weakE} areas — put structure, a checklist or a collaborator there instead. Your useful god is ${weakE}: feed the lightest element to balance the chart.`,
       `工作上，${elName(dom, 'zh')}是你不费力的工作方式：${D.EL_TXT[dom].zh}。在${elName(weak, 'zh')}的范畴，少靠意志力，多靠结构、清单或合作者。你的用神是${elName(weak, 'zh')}：补最弱者，平衡全局。`),
     relationships: sec(
       `In relationships, your Day Master sets the tone: ${dmTxt.en} People experience you as steady in your own direction — say what you need plainly, rather than letting correctness or habit speak for it.`,
@@ -217,8 +217,8 @@ function baziSections(b, dom, weak, dmTxt, lang) {
       `Energy management: ${domE} is your natural fuel, ${weakE} is where you leak. Schedule deliberate slack in your ${weakE}-light months and protect rest the way you protect deadlines — ${D.EL_PORTRAIT[weak].pEn}`,
       `精力管理：${elName(dom, 'zh')}是你的天然燃料，${elName(weak, 'zh')}是你漏气的地方。在${elName(weak, 'zh')}较弱的月份主动留白，像守约一样保护恢复——${D.EL_PORTRAIT[weak].pZh}`),
     timing: sec(
-      `This year is ${chineseYearLabel(currentYear()).en} — it feeds your ${domE}. The current luck pillar runs a decade at a time; the theme now is building. Over the next twelve months (${nextTwelveMonths().en}), keep the pace steady: this is a year for consolidating, not expanding.`,
-      `今年是${chineseYearLabel(currentYear()).zh}，与你的${elName(dom, 'zh')}相生。当前大运十年一步，现行主题是建立。未来十二个月（${nextTwelveMonths().zh}），保持节奏稳定：今年适合整固，而非扩张。`),
+      `This year is ${chineseYearLabel(currentYear()).en} — it feeds your ${domE}. The current luck pillar runs a decade at a time; the theme now is building. Over the next twelve months (${nextTwelveMonths().en}), ${D.PY_TXT.en[String(py)]}`,
+      `今年是${chineseYearLabel(currentYear()).zh}，与你的${elName(dom, 'zh')}相生。当前大运十年一步，现行主题是建立。未来十二个月（${nextTwelveMonths().zh}），${D.PY_TXT.zh[String(py)]}`),
   };
 }
 function horoscopeSections(a, lang) {
@@ -351,7 +351,7 @@ function buildFullReading(profile, personality) {
     elementBalance: { en: D.EL_TXT[dom].en, zh: D.EL_TXT[dom].zh },
     luckPillar: { en: `${D.STEMS[(b.pillars[1].stem + 3) % 10][0]}${D.BRANCHES[(b.pillars[1].branch + 3) % 12][0]}`, zh: `${D.STEMS[(b.pillars[1].stem + 3) % 10][0]}${D.BRANCHES[(b.pillars[1].branch + 3) % 12][0]}`, note: { en: 'Indicative only — one pillar per decade, current theme: building.', zh: '仅供参考——十年一步，现行主题：建立。' } },
     currentYear: chineseYearLabel(currentYear()),
-    sections: baziSections(b, dom, weak, dmTxt, 'en'),
+    sections: baziSections(b, dom, weak, dmTxt, 'en', n.py),
     note: 'Simplified engine — no true solar-time correction yet.',
     noteZh: '简化引擎——尚未做真太阳时校正。',
   };
@@ -412,7 +412,7 @@ function buildFullReading(profile, personality) {
     zh: `在六个系统中，一条线不断重复：${elName(bazi.dayMaster.elementKey, 'zh')}的稳定、${a.sun.zh}的时机，以及生命灵数 ${n.lp}。它们在细节上并不一致，但在方向上一致：从小开始，持续前行，让结果跟上来。一致之处：八字以${elName(dom, 'zh')}最旺、生命灵数 ${n.lp}与塔罗第一张牌都奖励同一种工作方式——累积与手艺，而非运气或捷径。张力之处：月亮在${a.moon.zh}令你情绪节奏较快，但八字缺${elName(weak, 'zh')}——想得快、补给慢。`,
     agree: { en: `Your Bazi chart leans ${dom}-heavy, your life-path ${n.lp} and your first tarot card all reward the same working style: accumulation and craft over luck or shortcuts.`, zh: `八字五行以${elName(dom, 'zh')}最旺、数字命理生命灵数 ${n.lp}、塔罗第一张牌，三者都指向同一种工作方式：靠累积与手艺，而非靠运气或人脉捷径。` },
     tension: { en: `Your Moon in ${a.moon.en} runs a fast emotional cycle, yet the chart is light on ${weak} — quick to process, slow to replenish. The full report turns this into a concrete 12-month pacing plan.`, zh: `月亮在${a.moon.zh}令你情绪节奏较快，但八字缺${elName(weak, 'zh')}——想得快、补给慢。完整报告会把这点展开为具体的十二个月安排。` },
-    full: { en: `Full synthesis: over the next twelve months (${nextTwelveMonths().en}), keep the pace steady. On relationships, the Yi-Jing changing line and the third tarot card give the same instruction — boundaries before commitments. Health-wise, schedule deliberate slack in your ${weak}-light months. Your Zi Wei life-palace star and your Bazi useful god point, unusually, at the same conclusion: this is a year for consolidating, not expanding.`, zh: `完整综合：未来十二个月（${nextTwelveMonths().zh}），保持节奏稳定；感情层面，易经变爻与塔罗第三张牌同时提示「先定界线，后谈承诺」。健康上，缺${elName(weak, 'zh')}的月份要主动留白。紫微命宫主星与八字用神罕有地指向同一结论：今年适合整固，而非扩张。` },
+    full: { en: `Full synthesis: ${D.PY_TXT.en[String(n.py)]} Your hexagram is ${cast.hex[0]} · ${cast.hex[1]} — ${D.HEX_THEME.en[cast.hex[0]].replace(/\.$/, '')}${cast.changingLines.length ? `, shifting toward Hexagram ${cast.transformed[0]} · ${cast.transformed[1]} — ${D.HEX_THEME.en[cast.transformed[0]].replace(/\.$/, '')}` : ', with no changing lines — the cast is stable'}. Your Path card is ${tarot.cards[2].name.en}. Health-wise, schedule deliberate slack in your ${weak}-light months.`, zh: `完整综合：${D.PY_TXT.zh[String(n.py)]}你的卦是第 ${cast.hex[0]} 卦「${cast.hex[2]}」——${D.HEX_THEME.zh[cast.hex[0]].replace(/。$/, '')}${cast.changingLines.length ? `，正向第 ${cast.transformed[0]} 卦「${cast.transformed[2]}」变化——${D.HEX_THEME.zh[cast.transformed[0]].replace(/。$/, '')}` : '，无变爻，卦象稳定'}。塔罗指引牌是「${tarot.cards[2].name.zh}」。健康上，缺${elName(weak, 'zh')}的月份要主动留白。` },
     personalityLens: personality ? personalityLensText(personality) : null,
   };
 
