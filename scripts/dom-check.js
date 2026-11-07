@@ -39,7 +39,7 @@ class El {
   click() {}
 }
 
-const IDS = ['lang-en', 'lang-zh', 'systems', 'sys-hero', 'quiz-list', 'quiz-area', 'hook-card', 'teaser-status', 'birthDate', 'birthTime', 'name', 'email', 'unlocked-banner', 'unlocked-card', 'unlocked-sub', 'unlock-card', 'price-line', 'pay-btn', 'report-card', 'report', 'lr-used', 'lr-question', 'lr-answers', 'lr-speak', 'lr-stop', 'mc-left', 'mc-left-suffix', 'mc-upgrade-btn', 'mc-upgrade-offer', 'mc-thread', 'mc-question', 'resend-status', 'view-report-btn', 'resend-btn', 'download-report-btn', 'hook-form', 'checkout-form', 'lr-ask', 'lr-voice', 'mc-ask', 'mc-voice', 'mc-upgrade-offer-btn', 'brand-hero', 'hub-next', 'step-nav', 'daily-card', 'limits-card', 'quiz-card', 'master-locked-card', 'live-reader', 'master-chat'];
+const IDS = ['lang-en', 'lang-zh', 'systems', 'sys-hero', 'quiz-list', 'quiz-area', 'hook-card', 'teaser-status', 'birthDate', 'birthTime', 'name', 'email', 'unlocked-banner', 'unlocked-card', 'unlocked-sub', 'unlock-card', 'price-line', 'pay-btn', 'report-card', 'report', 'lr-used', 'lr-question', 'lr-answers', 'lr-speak', 'lr-stop', 'mc-left', 'mc-left-label', 'mc-left-suffix', 'mc-ai-badge', 'mc-upgrade-btn', 'mc-upgrade-offer', 'mc-thread', 'mc-question', 'resend-status', 'view-report-btn', 'resend-btn', 'download-report-btn', 'hook-form', 'checkout-form', 'lr-ask', 'lr-voice', 'mc-ask', 'mc-voice', 'mc-upgrade-offer-btn', 'brand-hero', 'hub-next', 'step-nav', 'daily-card', 'limits-card', 'quiz-card', 'master-locked-card', 'live-reader', 'master-chat'];
 
 async function runCase({ page, unlocked, submitHook, search }) {
   const els = {};
@@ -68,7 +68,7 @@ async function runCase({ page, unlocked, submitHook, search }) {
     if (u.startsWith('/api/report')) return unlocked
       ? { ok: true, json: async () => buildFullReading({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' }) }
       : { ok: false, status: 403, json };
-    if (u.startsWith('/api/master-chat')) return { ok: true, json: async () => ({ messages: [], questionsUsed: 0, questionsRemaining: 5, max: 5, unlimited: false }) };
+    if (u.startsWith('/api/master-chat')) return { ok: true, json: async () => ({ messages: [], questionsUsed: 0, questionsRemaining: 5, max: 5, extended: false, aiMasterLive: false }) };
     if (u.startsWith('/api/checkout-session/')) return { ok: true, json: async () => ({ paid: true, upgrade: true, email: 'buyer@example.com', birthDate: '1990-05-14' }) };
     return { ok: false, status: 404, json };
   };
@@ -169,9 +169,9 @@ function check(name, ok, detail) {
   check('hub unlocked: no hub-next shortcut before unlock (locked glimpse only)', (await runCase({ page: null, unlocked: false, submitHook: true }))['hub-next'].innerHTML.includes('href="/master"') === false);
 
   // /master unlocked after a $3 upgrade return: ?upgraded=1 verifies the
-  // session, the banner reads Unlimited, the chat is open, no quiz in sight.
+  // session, the banner reads Extended, the chat is open, no quiz in sight.
   els = await runCase({ page: 'master', unlocked: true, search: '?upgraded=1&session_id=cs_test_upgrade' });
-  check('master upgrade return: banner shows Unlimited Master Chat unlocked', !els['unlocked-banner'].hidden && els['unlocked-banner'].innerHTML.includes('Unlimited Master Chat unlocked'));
+  check('master upgrade return: banner shows Extended Master Chat unlocked', !els['unlocked-banner'].hidden && els['unlocked-banner'].innerHTML.includes('Extended Master Chat unlocked'));
   check('master upgrade return: report card visible, locked prompt hidden, quiz hidden', !els['report-card'].hidden && els['master-locked-card'].hidden && els['quiz-card'].hidden);
   check('master unlocked: no quiz anywhere on the Master page', els['quiz-card'].hidden && !els.systems.innerHTML.includes('quiz'));
 
