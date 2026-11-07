@@ -26,7 +26,7 @@ const path = require('path');
 
 const { config, currentPrice } = require('./config');
 const { db } = require('./db');
-const { buildFullReading, buildTeaser, parseBirth, scoreEnneagramFromChoices, scoreMbti, getPersonalityQuestions, lockedPersonalitySummary } = require('./readings');
+const { buildFullReading, buildTeaser, parseBirth, scoreEnneagramFromChoices, scoreMbti, getPersonalityQuestions, lockedPersonalitySummary, elName } = require('./readings');
 const { strings } = require('./i18n');
 const { sendReportEmail } = require('./email');
 const { issueAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword, hashToken } = require('./auth');
@@ -255,35 +255,123 @@ app.post('/api/live-reader', (req, res) => {
   return res.json({ answer, questionsUsed: count + 1, questionsRemaining: config.liveReaderMaxPerSession - count - 1 });
 });
 
-function liveReaderAnswer(reading, question, lang) {
-  // Rule-based, detailed discussion grounded ONLY in the buyer's unlocked data.
-  // No LLM call is made here — a model-backed Live Reader is a Phase 2 option.
-  const q = question.toLowerCase();
-  const pickSystem = q.includes('bazi') || q.includes('八字') ? 'bazi'
-    : q.includes('tarot') || q.includes('塔羅') ? 'tarot'
-    : q.includes('zi wei') || q.includes('紫微') ? 'ziwei'
-    : q.includes('horoscope') || q.includes('星座') || q.includes('astrology') ? 'horoscope'
-    : q.includes('numerology') || q.includes('生命靈數') ? 'numerology'
-    : q.includes('yi') || q.includes('易經') ? 'yijing' : 'portrait';
-  const en = {
-    bazi: `Your Day Master is ${reading.bazi.dayMaster.en} (${reading.bazi.dayMaster.zh}), and its element is ${reading.bazi.element}. ${reading.bazi.guidance.en} That is the first thread to hold onto when you ask about "${question}": the answer is not a different self, it is this same self, used more deliberately. In practical terms, look at the next week and name one decision where you would normally rush or hold back — then choose the middle pace your element points to. The second thread is timing. Your reading does not promise an outcome; it points to the conditions that make an outcome more likely, and the condition here is steadiness before speed. Third, notice what you are already doing well and do more of that, rather than adding a new habit on top of a tired one. If the question is about a relationship or a choice, ask the same question again in a week with fresh eyes — a reading is a mirror, not a verdict, and the most useful part is what you notice when you return to it.`,
-    tarot: `Your spread is ${reading.tarot.cards.join(', ')}. ${reading.tarot.guidance.en} Applied to "${question}", the cards are less a prediction than a sequence: what you carry from the past, what is asking for attention now, and what is forming next. The present card is the one to sit with longest — it names the energy that is already moving, whether or not you have named it yet. The near-future card does not decide for you; it shows the shape of the path you are already on, so you can choose whether to stay on it. Take one small action that matches the present card this week, and watch what changes. That is how a reading earns its keep.`,
-    ziwei: `Your Life Palace is ${reading.ziwei.lifePalace}. ${reading.ziwei.guidance.en} For "${question}", the useful question is not "what will happen?" but "what part of me is this palace asking me to take responsibility for?" A palace is a room you live in — you cannot redecorate it by wishing; you change how you use it, day by day. Start with the smallest responsibility inside that room, keep it for a week, and notice what shifts around it.`,
-    horoscope: `Your Sun sign is ${reading.horoscope.sunSign.en}. ${reading.horoscope.guidance.en} For "${question}", your sign's timing is the clue: the moments when you feel most yourself are usually the moments when the answer is clearest. Do not decide when you are tired or rushed — decide in the window when you are most like yourself, and the choice will feel less like a gamble.`,
-    numerology: `Your Life Path is ${reading.numerology.lifePath}. ${reading.numerology.guidance.en} Applied to "${question}", the number is a reminder of the lesson you keep meeting. The same lesson in a new situation is not a failure — it is the curriculum. Ask what this situation is teaching you that the last one also taught, and the next step usually becomes obvious.`,
-    yijing: `Your hexagram is ${reading.yijing.hexagram}. ${reading.yijing.guidance.en} For "${question}", the hexagram invites a small, honest move rather than a grand plan. Name the smallest step, take it today, and let the next step reveal itself after that.`,
-    portrait: `${reading.portrait.essenceLine.en} ${reading.synthesis.en} For your question — "${question}" — the portrait suggests the same move: return to your own direction, not someone else's pace. ${reading.portrait.growingEdge.en}`,
-  };
-  const zh = {
-    bazi: `你的日主是${reading.bazi.dayMaster.zh}，五行屬${reading.bazi.dayMaster.element}。${reading.bazi.guidance.zh}面對「${question}」這個問題，第一條線是：答案不是一個不同的自己，而是更刻意地使用同一個自己。實際的做法是：看看下週，找出一個你通常會急著決定或退縮的選擇，然後選擇屬於你的中間節奏。第二條線是時機。報告不承諾結果，它指出讓結果更可能出現的條件，而這裡的條件是「先穩，再快」。第三，留意你已經做得好的地方，多做那個，而不是在疲憊之上再加一個新習慣。`,
-    tarot: `你的牌陣是 ${reading.tarot.cards.join('、')}。${reading.tarot.guidance.zh}針對「${question}」，牌更像是一段順序：你從過去帶來什麼、現在什麼在要求注意、接下來什麼正在形成。現在這張牌最值得久坐——它說的是已經在動的能量，無論你是否已為它命名。近期未來的牌不是替你決定，而是顯示你已經走在的路的形狀，讓你選擇是否繼續走下去。本週做一件與現在這張牌相符的小事，看看什麼改變了。`,
-    ziwei: `你的命宮是${reading.ziwei.lifePalaceZh}。${reading.ziwei.guidance.zh}面對「${question}」，有用的問題不是「會發生什麼？」而是「這個宮位要我為自己的哪一部分負責？」宮位是你住的房間——不是許願就能重新裝修，而是日復一日改變使用它的方式。先從房間裡最小的責任開始，守一週，留意周圍的變化。`,
-    horoscope: `你的太陽星座是${reading.horoscope.sunSign.zh}。${reading.horoscope.guidance.zh}面對「${question}」，星座的時機就是線索：你感覺最像自己的時刻，通常也是答案最清晰的時刻。不要在疲憊或匆忙時決定——在最像自己的時段決定，選擇會比較不像賭博。`,
-    numerology: `你的生命靈數是 ${reading.numerology.lifePath}。${reading.numerology.guidance.zh}針對「${question}」，這個數字提醒你不斷遇到的課題。同一個課題換一個情境出現，不是失敗，而是課程。問問這個情境在教你什麼，是上一個情境也教過的，下一步通常就清楚了。`,
-    yijing: `你的卦象是「${reading.yijing.hexagram}」。${reading.yijing.guidance.zh}面對「${question}」，卦象邀請你採取一個小而誠實的行動，而不是一個宏大的計劃。說出最小的一步，今天就做，然後讓下一步在那之後顯現。`,
-    portrait: `${reading.portrait.essenceLine.zh} ${reading.synthesis.zh}面對你的問題——「${question}」——整體肖像建議同一個行動：回到自己的方向，而不是別人的速度。${reading.portrait.growingEdge.zh}`,
-  };
-  return lang === 'zh' ? zh[pickSystem] : en[pickSystem];
+/* Live Reader (rewritten 7 Nov 2026, item E) — the old version picked ONE
+   system by keyword and returned one fixed template per system, so all
+   three answers read the same. Now each question is classified by TOPIC
+   (career / love / money / health / timing / general) as well as system,
+   and the answer is composed from the matching sections of THAT buyer's
+   actual reading — never generic filler, never the same text for two
+   different topics. Short and plain: (1) one direct answer, (2) what the
+   chart actually says in 1–2 short lines naming the system, (3) one small
+   thing to do this week. Technical terms are glossed in plain words. */
+const TOPICS = [
+  { id: 'career', en: ['career', 'job', 'work', 'promotion', 'boss', 'business', 'study', 'exam', 'school', 'interview'], zh: ['事业', '工作', '职业', '升职', '老板', '生意', '学习', '考试', '学业', '面试'] },
+  { id: 'love', en: ['love', 'relationship', 'marriage', 'partner', 'boyfriend', 'girlfriend', 'wife', 'husband', 'dating', 'crush'], zh: ['感情', '爱情', '婚姻', '伴侣', '男友', '女友', '老公', '老婆', '对象', '喜欢'] },
+  { id: 'money', en: ['money', 'wealth', 'finance', 'salary', 'income', 'invest', 'debt', 'buy', 'house', 'price', 'rich'], zh: ['财运', '钱', '财富', '工资', '收入', '投资', '买房', '债务', '赚钱'] },
+  { id: 'health', en: ['health', 'body', 'sleep', 'tired', 'sick', 'energy', 'exercise', 'rest'], zh: ['健康', '身体', '睡眠', '累', '生病', '精力', '运动', '休息'] },
+  { id: 'timing', en: ['when', 'timing', 'next month', 'this year', 'soon', 'should i'], zh: ['什么时候', '时机', '何时', '今年', '下个月', '该不该'] },
+];
+function firstSentence(text) {
+  if (!text) return '';
+  const m = String(text).match(/^[^.!?。]+[.!?。]?/);
+  return (m ? m[0] : String(text)).trim();
+}
+function plainEN(s) {
+  return String(s)
+    .replace(/your Day Master/g, "your chart's core")
+    .replace(/Day Master/g, "your chart's core")
+    .replace(/useful god/g, 'the element you most need')
+    .replace(/luck pillar/g, 'ten-year phase');
+}
+function plainZH(s) {
+  return String(s)
+    .replace(/日主/g, '命盘核心')
+    .replace(/用神/g, '你最需要补的五行')
+    .replace(/大运/g, '十年阶段');
+}
+function liveReaderAnswer(reading, question, lang = 'en') {
+  const q = String(question || '').toLowerCase();
+  const has = (list) => list.some((w) => q.includes(w.toLowerCase()));
+  let topic = 'general';
+  for (const t of TOPICS) { if (has(t.en) || has(t.zh)) { topic = t.id; break; } }
+  const L = (o) => (o && typeof o === 'object' ? (lang === 'zh' ? o.zh || o.en : o.en || o.zh) : o);
+  const sent = (sec) => (lang === 'zh' ? plainZH(firstSentence(L(sec))) : plainEN(firstSentence(L(sec))));
+  const sysName = (name) => (lang === 'zh' ? { Bazi: '八字', Horoscope: '星座', Tarot: '塔罗', Numerology: '数字命理', 'Yi-Jing': '易经', 'Zi Wei': '紫微' }[name] || name : name);
+  // Matching sections of this buyer's actual reading, per topic.
+  const pick = {
+    career: [
+      ['Bazi', reading.bazi.sections.career],
+      ['Horoscope', reading.horoscope.sections.career],
+      ['Tarot', reading.tarot.sections.career],
+      ['Numerology', reading.numerology.sections.career],
+    ],
+    love: [
+      ['Bazi', reading.bazi.sections.relationships],
+      ['Horoscope', reading.horoscope.sections.relationships],
+      ['Tarot', reading.tarot.sections.relationships],
+      ['Numerology', reading.numerology.sections.relationships],
+    ],
+    money: [
+      ['Bazi', reading.bazi.sections.timing],
+      ['Numerology', reading.numerology.sections.career],
+      ['Tarot', reading.tarot.sections.timing],
+      ['Zi Wei', reading.ziwei.sections.wealth],
+    ],
+    health: [
+      ['Bazi', reading.bazi.sections.health],
+      ['Horoscope', reading.horoscope.sections.health],
+      ['Tarot', reading.tarot.sections.health],
+      ['Numerology', reading.numerology.sections.health],
+    ],
+    timing: [
+      ['Yi-Jing', reading.yijing.sections.timing],
+      ['Bazi', reading.bazi.sections.timing],
+      ['Numerology', reading.numerology.sections.timing],
+      ['Tarot', reading.tarot.sections.timing],
+    ],
+    general: [
+      ['Bazi', reading.bazi.sections.overview],
+      ['Horoscope', reading.horoscope.sections.overview],
+      ['Tarot', reading.tarot.sections.overview],
+      ['Numerology', reading.numerology.sections.overview],
+    ],
+  }[topic];
+  // The system's core fact for this topic — from this buyer's computed values.
+  const core = {
+    career: lang === 'zh'
+      ? `你的核心：最旺的五行是${elName(reading.bazi.dominant, 'zh')}，太阳在${reading.horoscope.sun.zh}。`
+      : `Your core: your strongest element is ${elName(reading.bazi.dominant, 'en')}, and your Sun is ${reading.horoscope.sun.en}.`,
+    love: lang === 'zh'
+      ? `你的核心：月亮在${reading.horoscope.moon.zh}——那是你私下最需要的安全感来源。`
+      : `Your core: your Moon is ${reading.horoscope.moon.en} — that is what you privately need to feel safe.`,
+    money: lang === 'zh'
+      ? `你的核心：最弱的五行是${elName(reading.bazi.weakest, 'zh')}，补它比追运气更实在。`
+      : `Your core: your lightest element is ${elName(reading.bazi.weakest, 'en')} — feeding it matters more than chasing luck.`,
+    health: lang === 'zh'
+      ? `你的核心：最弱的五行是${elName(reading.bazi.weakest, 'zh')}，那就是你漏气的地方。`
+      : `Your core: your lightest element is ${elName(reading.bazi.weakest, 'en')} — that is where you leak energy.`,
+    timing: lang === 'zh'
+      ? `你的核心：你的卦是第 ${reading.yijing.hexagramNumber} 卦「${reading.yijing.hexagramZh}」，个人年是 ${reading.numerology.personalYear}。`
+      : `Your core: your hexagram is ${reading.yijing.hexagramNumber} · ${reading.yijing.hexagramEn}, and your Personal Year is ${reading.numerology.personalYear}.`,
+    general: lang === 'zh'
+      ? `你的核心：命盘核心是${reading.bazi.dayMaster.zh}，生命灵数是 ${reading.numerology.lifePath}。`
+      : `Your core: your chart's core is ${reading.bazi.dayMaster.en}, and your Life Path is ${reading.numerology.lifePath}.`,
+  }[topic];
+  const action = {
+    career: lang === 'zh' ? '这周在工作中做一件能发挥你最强一面的事，事后写下一行结果。' : 'This week, do one thing at work that uses your strongest side — and write down how it went.',
+    love: lang === 'zh' ? '这周对最亲近的人直接说出一个需要——说出来，不要只暗示。' : 'This week, say one plain need to the person closest to you — out loud, not as a hint.',
+    money: lang === 'zh' ? '这周写下两个数字：进了多少，出了多少。不评判，只记数字。' : 'This week, write down two numbers: what came in and what went out. No judgement, just the numbers.',
+    health: lang === 'zh' ? '这周像守死线一样守住一段休息时间——固定时间，不挪动。' : 'This week, protect one rest window the way you protect a deadline — same time, no moving it.',
+    timing: lang === 'zh' ? '这周先准备好一件事，等窗口打开时你就能直接行动。' : 'This week, prepare one thing, so you are ready when the window opens.',
+    general: lang === 'zh' ? '这周做一件报告里提到的小事，然后留意有什么变化。' : 'This week, do one small thing the reading points to, then notice what changes.',
+  }[topic];
+  const s1 = pick[0], s2 = pick[1];
+  const sampleNote = (s1[0] === 'Zi Wei' || s2[0] === 'Zi Wei')
+    ? (lang === 'zh' ? '（紫微为样本内容，仅供参考。）' : ' (Zi Wei is sample content, for reflection only.)')
+    : '';
+  return lang === 'zh'
+    ? `${sysName(s1[0])}：${sent(s1[1])}\n\n${core} ${sysName(s2[0])}也这么说：${sent(s2[1])}${sampleNote}\n\n本周一件事：${action}`
+    : `${sysName(s1[0])}: ${sent(s1[1])}\n\n${core} ${sysName(s2[0])} says the same: ${sent(s2[1])}${sampleNote}\n\nOne thing this week: ${action}`;
 }
 
 // --- Enneagram / MBTI ---------------------------------------------------------
