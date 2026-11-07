@@ -96,6 +96,23 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_master_chat_session ON master_chat_messages(token_hash, session_id, id);
 
+  -- Unlimited Master Chat upgrade (7 Nov 2026): a paid $3 upgrade lifts
+  -- the 5-follow-up limit for the same 90-day window as the unlock.
+  -- Keyed by buyer (email + birth_date), not by one token, because a
+  -- buyer can hold several tokens (fresh token per checkout-session
+  -- exchange). expires_at is the unlock's expiry; the upgrade never
+  -- outlives the reading it belongs to.
+  CREATE TABLE IF NOT EXISTS chat_upgrades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    birth_date TEXT NOT NULL,
+    order_id INTEGER,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(email, birth_date)
+  );
+  CREATE INDEX IF NOT EXISTS idx_chat_upgrades_buyer ON chat_upgrades(email, birth_date);
+
   -- so the full report / portrait lens survives a refresh. Free (pre-payment)
   -- quiz attempts are never stored server-side.
   CREATE TABLE IF NOT EXISTS personality_results (
