@@ -111,6 +111,30 @@ function pillarObj(p, labelEn, labelZh) {
     branch: { en: BRANCH_EN[p.branch], zh: BRANCH_ZH[p.branch], char: br[0], pinyin: br[1], element: br[2], elementKey: br[3] },
   };
 }
+// Rider-Waite major arcana pictures (Task 3, 7 Nov 2026): the original
+// 1909 deck (Pamela Colman Smith) is public domain; images are stored
+// LOCALLY under public/tarot/ and served by the app. If a file is ever
+// missing, the frontend falls back to the drawn symbol card — the image
+// field is empty for that card only (see public/tarot/README.md).
+const TAROT_IMAGE_FILES = [
+  '00-fool.jpg', '01-magician.jpg', '02-high-priestess.jpg', '03-empress.jpg',
+  '04-emperor.jpg', '05-hierophant.jpg', '06-lovers.jpg', '07-chariot.jpg',
+  '08-strength.jpg', '09-hermit.jpg', '10-wheel-of-fortune.jpg', '11-justice.jpg',
+  '12-hanged-man.jpg', '13-death.jpg', '14-temperance.jpg', '15-devil.jpg',
+  '16-tower.jpg', '17-star.jpg', '18-moon.jpg', '19-sun.jpg',
+  '20-judgement.jpg', '21-world.jpg',
+];
+function tarotImage(idx) {
+  const f = TAROT_IMAGE_FILES[idx];
+  return f ? `/tarot/${f}` : null;
+}
+// Display-only article fix (7 Nov 2026): card names already start with
+// "The" ("The Hanged Man"), so "the " + name rendered "the The Hanged
+// Man" in career/health/timing sentences. Strip the leading article when
+// the name follows "the" — the original data tables are untouched.
+function theCard(nameEn) {
+  return String(nameEn || '').replace(/^The /, '');
+}
 function drawTarot(seedStr) {
   const r = seededRand(seedFrom(seedStr));
   const used = {}, out = [];
@@ -256,6 +280,7 @@ function tarotSections(draw, lang) {
     const card = D.TAROT[c.idx];
     return {
       position: { en: posEn[i], zh: posZh[i] }, idx: c.idx, number: card[0], name: { en: card[1], zh: card[2] },
+      image: tarotImage(c.idx),
       emoji: card[3], keywords: card[4], keywordsZh: D.TAROT_ZH_KEYWORDS[c.idx], reversed: c.rev,
       meaning: { en: c.rev ? D.TAROT_REV.en[c.idx] : card[5], zh: c.rev ? D.TAROT_REV.zh[c.idx] : D.TAROT_ZH_MEANING[c.idx] },
       positionText: { en: D.TAROT_POS.en[i], zh: D.TAROT_POS.zh[i] },
@@ -270,10 +295,10 @@ function tarotSections(draw, lang) {
   return {
     cards, story,
     overview: sec(`Past — ${cards[0].name.en}. Present — ${cards[1].name.en}. Near future — ${cards[2].name.en}. The thread between them is the choice you are already making.`, `过去——${cards[0].name.zh}。现在——${cards[1].name.zh}。近期未来——${cards[2].name.zh}。贯穿其中的，是你已经在做的选择。`),
-    career: sec(`At work, the ${cards[1].name.en} in the Present position is the card to sit with longest — it names the energy that is already moving, whether or not you have named it yet.`, `工作上，现在位置的「${cards[1].name.zh}」最值得久坐——它说的是已经在动的能量，无论你是否已为它命名。`),
+    career: sec(`At work, the ${theCard(cards[1].name.en)} in the Present position is the card to sit with longest — it names the energy that is already moving, whether or not you have named it yet.`, `工作上，现在位置的「${cards[1].name.zh}」最值得久坐——它说的是已经在动的能量，无论你是否已为它命名。`),
     relationships: sec(`In relationships, the Path card — ${cards[2].name.en} — does not decide for you; it shows the shape of the path you are already on, so you can choose whether to stay on it.`, `在关系中，路径位置的「${cards[2].name.zh}」不是替你决定，而是显示你已经走在的路的形状，让你选择是否继续走下去。`),
     health: sec(`For energy, the Past card — ${cards[0].name.en} — names what you carry. Acknowledge it before you try to fix the present; the fix lands differently once the root is named.`, `精力方面，过去位置的「${cards[0].name.zh}」说出你携带的东西。先承认它，再去处理现在；根源被说出来之后，修正的方式会不同。`),
-    timing: sec(`Take one small action this week that matches the Present card, ${cards[1].name.en}, and watch what changes. That is how a reading earns its keep.`, `本周做一件与现在这张牌「${cards[1].name.zh}」相符的小事，看看什么改变了。`),
+    timing: sec(`Take one small action this week that matches the Present card, ${theCard(cards[1].name.en)}, and watch what changes. That is how a reading earns its keep.`, `本周做一件与现在这张牌「${cards[1].name.zh}」相符的小事，看看什么改变了。`),
   };
 }
 // Zi Wei palaces — verbatim from the original prototype (sample, NOT computed).
@@ -515,7 +540,7 @@ function buildTeaser(profile) {
       firstCard: full.tarot.cards[0],
       // Card names + keywords only — the interpretation stays locked.
       cards: full.tarot.cardsDetailed.map((c) => ({
-        idx: c.idx, number: c.number, name: c.name, emoji: c.emoji, keywords: c.keywords, keywordsZh: c.keywordsZh, reversed: c.reversed,
+        idx: c.idx, number: c.number, name: c.name, emoji: c.emoji, image: c.image, keywords: c.keywords, keywordsZh: c.keywordsZh, reversed: c.reversed,
       })),
     },
     portrait: { essenceLine: full.portrait.essenceLine },
