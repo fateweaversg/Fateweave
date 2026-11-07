@@ -83,8 +83,8 @@
     <h2 data-i18n="fullReadingTitle">Your full reading</h2>
     <div id="report"></div>
     <div id="live-reader">
-      <h3 data-i18n="liveReaderTitle">Live Reader</h3>
-      <p data-i18n="liveReaderBody">Ask up to 3 questions, by voice or typing. Answers are grounded in your reading only.</p>
+      <h3 data-i18n="liveReaderTitle">Regular questions (3)</h3>
+      <p data-i18n="liveReaderBody">Ask 3 regular reading questions. Gemini follow-ups have a separate allowance of 5, or 30 total with Extended.</p>
       <p><span data-i18n="questionsUsed">Questions used</span>: <span id="lr-used">0</span> / 3</p>
       <div class="lr-row">
         <input type="text" id="lr-question" data-i18n-ph="askPh" placeholder="Ask a question…">
@@ -98,10 +98,10 @@
 
     <div id="master-chat">
       <h3 data-i18n="masterChatTitle">Ask the Master</h3><span id="mc-ai-badge" class="ai-badge hidden">AI</span>
-      <p data-i18n="masterChatExplainer">Ask the Master — 5 follow-up questions included with your unlock. Ask what a reply means, for an example, or to go deeper.</p>
-      <p><span id="mc-left-label" data-i18n="followupsLeft">Follow-ups left</span>: <span id="mc-left">5</span><span id="mc-left-suffix"> / 5</span></p>
+      <p data-i18n="masterChatExplainer">Your unlock includes 3 regular questions plus 5 Gemini follow-ups. Extended keeps the 3 regular questions and raises Gemini follow-ups to 30 total, including the first 5.</p>
+      <p><span id="mc-left-label" data-i18n="followupsLeft">Gemini follow-ups left</span>: <span id="mc-left">5</span><span id="mc-left-suffix"> / 5</span></p>
       <p id="mc-ai-rest" class="notice hidden"></p>
-      <p class="small" data-i18n="upgradeBody">Upgrade to Extended Master Chat for $3 — 30 Master chats in total, for the same 90 days as your reading.</p>
+      <p class="small" data-i18n="upgradeBody">Extended Master Chat — $3: 3 regular questions plus 30 Gemini follow-ups total, including your original 5, within the same 90-day unlock.</p>
       <button type="button" class="ghost" id="mc-upgrade-btn" data-i18n="upgradeBtn">Upgrade to Extended Master Chat — $3</button>
       <div id="mc-upgrade-offer" class="notice hidden"><strong data-i18n="upgradeTitle">Want more than 5 follow-ups?</strong><br><span data-i18n="upgradeOffer">You have used all 5 follow-ups. Upgrade to Extended Master Chat for $3 — 30 chats in total.</span><br><button type="button" id="mc-upgrade-offer-btn" data-i18n="upgradeBtn">Upgrade to Extended Master Chat — $3</button></div>
       <div id="mc-thread"></div>

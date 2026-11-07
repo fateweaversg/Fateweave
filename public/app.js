@@ -35,7 +35,7 @@ const state = {
   yijingLines: [], yijingCasting: false,
   quiz: { kind: null, questions: null, idx: 0, answers: [], result: null },
   quizCache: null,
-  mcMessages: [], mcLeft: 5, mcSending: false, lrSending: false,
+  mcMessages: [], mcLeft: 5, mcMax: 5, mcSending: false, lrSending: false,
 };
 
 const STR = {
@@ -51,24 +51,24 @@ const STR = {
     unlockTitle: 'Unlock the full reading',
     unlockBody: 'Pay first, then the full details open \u2014 for every system, plus Live Reader (3 questions) and your detailed report by email.',
     emailLabel: 'Email (for your report + daily encouragement)', sameDateNote: 'Use the same birth date as your free glimpse, and the same email to come back later.',
-    fullReadingTitle: 'Your full reading', liveReaderTitle: 'Live Reader',
-    liveReaderBody: 'Ask up to 3 questions, by voice or typing. Answers are grounded in your reading only.',
+    fullReadingTitle: 'Your full reading', liveReaderTitle: 'Regular questions (3)',
+    liveReaderBody: 'Ask 3 regular reading questions. Gemini follow-ups have a separate allowance of 5, or 30 total with Extended.',
     masterChatTitle: 'Ask the Master',
     masterChatBody: 'Still wondering about something in your reading? Ask a follow-up — the Master answers from your own report, and remembers what you asked before.',
-    followupsLeft: 'Follow-ups left',
-    masterChatsLeft: 'Master chats left',
-    aiBadge: 'AI Master',
+    followupsLeft: 'Gemini follow-ups left',
+    masterChatsLeft: 'Gemini follow-ups left',
+    aiBadge: 'Gemini',
     mcRuleBasedTag: 'Summary from your reading',
     chipExplain: 'What does that mean?', chipExample: 'Give me an example', chipDeeper: 'Tell me more about work',
     mcAskPh: 'Ask a follow-up…',
     masterChatNote: 'Follow-ups are answered from your own reading only — no predictions, and no medical, financial or legal advice.',
-    masterChatExplainer: 'Ask the Master — 5 follow-up questions included with your unlock. Ask what a reply means, for an example, or to go deeper.',
+    masterChatExplainer: 'Your unlock includes 3 regular questions plus 5 Gemini follow-ups. Extended keeps the 3 regular questions and raises Gemini follow-ups to 30 total, including the first 5.',
     upgradeTitle: 'Want more than 5 follow-ups?',
-    upgradeBody: 'Upgrade to Extended Master Chat for $3 — 30 Master chats in total, for the same 90 days as your reading.',
+    upgradeBody: 'Extended Master Chat — $3: 3 regular questions plus 30 Gemini follow-ups total, including your original 5, within the same 90-day unlock.',
     upgradeBtn: 'Upgrade to Extended Master Chat — $3',
     upgradeExtended: 'Extended Master Chat',
-    upgradeOffer: 'You have used all 5 follow-ups. Upgrade to Extended Master Chat for $3 — 30 chats in total.',
-    upgradeDone: 'Extended Master Chat unlocked — 30 Master chats in total.',
+    upgradeOffer: 'Your 5 Gemini follow-ups are used. Upgrade for $3 to raise the total to 30, including the first 5.',
+    upgradeDone: 'Extended unlocked — 30 Gemini follow-ups total, including your original 5.',
     upgradeFail: 'Could not start the upgrade checkout. Please try again.',
     upgradePending: 'Your Extended Master Chat is being activated — if the counter still shows a limit, refresh this page in a moment.',
     skipToMaster: 'Skip to Master →',
@@ -106,7 +106,8 @@ const STR = {
     readingGlimpse: 'Reading your glimpse\u2026', enterDateFirst: 'Enter your birth date in the free glimpse form first.',
     couldNotRead: 'Could not read that birth date.', networkError: 'Network error: ',
     masterUnreachable: 'The Master couldn\u2019t be reached just now \u2014 please try again in a moment.',
-    aiRestingNote: 'The AI Master is resting briefly after a hiccup \u2014 answers for now are summaries from your reading. Try again in a few minutes.',
+    extendedLimit: 'All 30 Gemini follow-ups have been used.',
+    aiRestingNote: 'Gemini is temporarily unavailable. Please retry shortly; no follow-up was used.',
     unreachable: 'Couldn\u2019t be reached just now \u2014 please try again in a moment.',
     mcThinking: 'The Master is thinking\u2026',
     lrThinking: 'Thinking\u2026',
@@ -153,24 +154,24 @@ const STR = {
     unlockTitle: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a',
     unlockBody: '\u5148\u4ed8\u6b3e\uff0c\u5b8c\u6574\u5185\u5bb9\u968f\u5373\u5f00\u542f\u2014\u2014\u516d\u4e2a\u7cfb\u7edf\u5168\u90e8\u3001Live Reader\uff083 \u4e2a\u95ee\u9898\uff09\uff0c\u4ee5\u53ca\u8be6\u7ec6\u62a5\u544a\u5bc4\u5230\u4f60\u7684\u4fe1\u7bb1\u3002',
     emailLabel: '\u7535\u90ae\uff08\u63a5\u6536\u62a5\u544a\u4e0e\u6bcf\u65e5\u9f13\u52b1\uff09', sameDateNote: '\u8bf7\u7528\u4e0e\u514d\u8d39\u4e00\u77a5\u76f8\u540c\u7684\u51fa\u751f\u65e5\u671f\uff0c\u4ee5\u53ca\u76f8\u540c\u7684\u7535\u90ae\uff0c\u4ee5\u4fbf\u65e5\u540e\u56de\u6765\u67e5\u770b\u3002',
-    fullReadingTitle: '\u4f60\u7684\u5b8c\u6574\u62a5\u544a', liveReaderTitle: 'Live Reader',
-    liveReaderBody: '\u6700\u591a\u95ee 3 \u4e2a\u95ee\u9898\uff0c\u53ef\u7528\u8bed\u97f3\u6216\u6253\u5b57\u3002\u56de\u7b54\u53ea\u6839\u636e\u4f60\u7684\u62a5\u544a\u5185\u5bb9\u3002',
+    fullReadingTitle: '\u4f60\u7684\u5b8c\u6574\u62a5\u544a', liveReaderTitle: '普通提问（3 次）',
+    liveReaderBody: '可提问 3 次报告问题。Gemini 追问另计：普通版 5 次，加长版共 30 次。',
     masterChatTitle: '\u95ee\u638c\u95e8',
     masterChatBody: '\u62a5\u544a\u91cc\u8fd8\u6709\u4e0d\u660e\u767d\u7684\u5730\u65b9\uff1f\u63a5\u7740\u95ee\u2014\u2014\u638c\u95e8\u53ea\u6839\u636e\u4f60\u81ea\u5df1\u7684\u62a5\u544a\u56de\u7b54\uff0c\u4e5f\u8bb0\u5f97\u4f60\u4e4b\u524d\u95ee\u8fc7\u4ec0\u4e48\u3002',
-    followupsLeft: '\u5269\u4f59\u8ffd\u95ee\u6b21\u6570',
-    masterChatsLeft: '\u638c\u95e8\u8ffd\u95ee\u8fd8\u5269',
-    aiBadge: 'AI \u638c\u95e8',
+    followupsLeft: '剩余 Gemini 追问',
+    masterChatsLeft: '剩余 Gemini 追问',
+    aiBadge: 'Gemini',
     mcRuleBasedTag: '\u6839\u636e\u4f60\u7684\u62a5\u544a\u6574\u7406',
     chipExplain: '\u8fd9\u662f\u4ec0\u4e48\u610f\u601d\uff1f', chipExample: '\u4e3e\u4e2a\u4f8b\u5b50', chipDeeper: '\u591a\u8bf4\u4e00\u70b9\u5de5\u4f5c',
     mcAskPh: '\u95ee\u4e00\u4e2a\u8ffd\u95ee\u2026\u2026',
     masterChatNote: '\u8ffd\u95ee\u53ea\u6839\u636e\u4f60\u81ea\u5df1\u7684\u62a5\u544a\u56de\u7b54\u2014\u2014\u6ca1\u6709\u9884\u6d4b\uff0c\u4e5f\u4e0d\u7ed9\u533b\u7597\u3001\u8d22\u52a1\u6216\u6cd5\u5f8b\u5efa\u8bae\u3002',
-    masterChatExplainer: '\u95ee\u638c\u95e8\u2014\u2014\u89e3\u9501\u5305\u542b 5 \u6b21\u8ffd\u95ee\u3002\u95ee\u95ee\u67d0\u4e2a\u56de\u7b54\u662f\u4ec0\u4e48\u610f\u601d\u3001\u8981\u4e00\u4e2a\u4f8b\u5b50\uff0c\u6216\u8005\u5f80\u6df1\u91cc\u804a\u3002',
+    masterChatExplainer: '解锁包含 3 次普通提问和 5 次 Gemini 追问。加长版保留 3 次普通提问，并将 Gemini 追问提高到共 30 次，包含原来的 5 次。',
     upgradeTitle: '\u60f3\u8981\u8d85\u8fc7 5 \u6b21\u8ffd\u95ee\uff1f',
-    upgradeBody: '\u82b1 $3 \u5347\u7ea7\u4e3a\u52a0\u957f\u638c\u95e8\u8ffd\u95ee\u2014\u201490 \u5929\u5185\u5171 30 \u6b21\u8ffd\u95ee\uff0c\u4e0e\u62a5\u544a\u6709\u6548\u671f\u76f8\u540c\u3002',
+    upgradeBody: '加长掌门聊天 $3：3 次普通提问，加上共 30 次 Gemini 追问，包含原来的 5 次，有效期仍为 90 天。',
     upgradeBtn: '\u5347\u7ea7\u4e3a\u52a0\u957f\u638c\u95e8\u8ffd\u95ee \u2014 $3',
     upgradeExtended: '\u52a0\u957f\u638c\u95e8\u8ffd\u95ee',
-    upgradeOffer: '5 \u6b21\u8ffd\u95ee\u5df2\u7ecf\u7528\u5b8c\u3002\u82b1 $3 \u5347\u7ea7\u4e3a\u52a0\u957f\u638c\u95e8\u8ffd\u95ee\uff0c\u5171 30 \u6b21\uff0c\u7ee7\u7eed\u95ee\u4e0b\u53bb\u3002',
-    upgradeDone: '\u52a0\u957f\u638c\u95e8\u8ffd\u95ee\u5df2\u89e3\u9501\u2014\u2014\u5171 30 \u6b21\u3002',
+    upgradeOffer: '5 次 Gemini 追问已用完。花 $3 升级至共 30 次，包含原来的 5 次。',
+    upgradeDone: '加长版已解锁：共 30 次 Gemini 追问，包含原来的 5 次。',
     upgradeFail: '\u65e0\u6cd5\u5f00\u59cb\u5347\u7ea7\u7ed3\u8d26\uff0c\u8bf7\u518d\u8bd5\u4e00\u6b21\u3002',
     upgradePending: '\u52a0\u957f\u638c\u95e8\u8ffd\u95ee\u6b63\u5728\u5f00\u901a\u4e2d\u2014\u2014\u5982\u679c\u8ba1\u6570\u4ecd\u663e\u793a\u4e0a\u9650\uff0c\u8bf7\u7a0d\u540e\u5237\u65b0\u672c\u9875\u3002',
     skipToMaster: '\u76f4\u63a5\u53bb\u627e\u638c\u95e8 \u2192',
@@ -208,7 +209,8 @@ const STR = {
     readingGlimpse: '\u6b63\u5728\u8bfb\u53d6\u4f60\u7684\u9884\u89c8\u2026\u2026', enterDateFirst: '\u8bf7\u5148\u5728\u514d\u8d39\u4e00\u77a5\u8868\u5355\u8f93\u5165\u51fa\u751f\u65e5\u671f\u3002',
     couldNotRead: '\u65e0\u6cd5\u8bfb\u53d6\u8be5\u51fa\u751f\u65e5\u671f\u3002', networkError: '\u7f51\u7edc\u9519\u8bef\uff1a',
     masterUnreachable: '\u638c\u95e8\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
-    aiRestingNote: 'AI \u638c\u95e8\u521a\u624d\u51fa\u4e86\u4e00\u70b9\u5c0f\u72b6\u51b5\uff0c\u6b63\u5728\u77ed\u6682\u4f11\u606f\u2014\u2014\u4e0b\u9762\u7684\u56de\u7b54\u5148\u662f\u6839\u636e\u4f60\u7684\u62a5\u544a\u6574\u7406\u7684\u6458\u8981\u3002\u51e0\u5206\u949f\u540e\u518d\u8bd5\u3002',
+    extendedLimit: '30 次 Gemini 追问已用完。',
+    aiRestingNote: 'Gemini 暂时无法回答，请稍后重试。追问次数未扣除。',
     unreachable: '\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     mcThinking: '\u638c\u95e8\u6b63\u5728\u601d\u8003\u2026',
     lrThinking: '\u6b63\u5728\u601d\u8003\u2026',
@@ -1290,12 +1292,12 @@ function renderMcCounter() {
   if (label) label.textContent = state.mcExtended ? t('masterChatsLeft') : t('followupsLeft');
   if (state.mcExtended) {
     left.textContent = String(state.mcLeft);
-    if (suffix) suffix.textContent = ' / 30';
+    if (suffix) suffix.textContent = ' / ' + state.mcMax;
     if (btn) { btn.textContent = '✓ ' + t('upgradeExtended'); btn.disabled = true; }
     if (offer) offer.classList.add('hidden');
   } else {
     left.textContent = String(state.mcLeft);
-    if (suffix) suffix.textContent = ' / 5';
+    if (suffix) suffix.textContent = ' / ' + state.mcMax;
     if (btn) { btn.textContent = t('upgradeBtn'); btn.disabled = false; }
   }
 }
@@ -1318,6 +1320,7 @@ async function loadMasterChat() {
     const data = await res.json();
     state.mcMessages = data.messages || [];
     state.mcExtended = !!data.extended;
+    state.mcMax = typeof data.max === 'number' ? data.max : (state.mcExtended ? 30 : 5);
     state.mcLeft = typeof data.questionsRemaining === 'number' ? data.questionsRemaining : 0;
     // AI badge: shown only when the AI Master is actually live (the
     // server sets GEMINI_API_KEY). Rule-based mode shows no badge.
@@ -1364,9 +1367,9 @@ function hideMcThinking() {
 async function sendMasterChat(text) {
   const q = (text || $('mc-question').value || '').trim();
   if (!q || state.mcSending) return;
-  if (!state.mcExtended && state.mcLeft <= 0) {
-    state.mcMessages = [...state.mcMessages, { role: 'master', content: t('upgradeOffer'), lang: state.lang, source: 'master' }];
-    const offer = $('mc-upgrade-offer'); if (offer) offer.classList.remove('hidden');
+  if (state.mcLeft <= 0) {
+    state.mcMessages = [...state.mcMessages, { role: 'master', content: t(state.mcExtended ? 'extendedLimit' : 'upgradeOffer'), lang: state.lang, source: 'master' }];
+    const offer = $('mc-upgrade-offer'); if (offer) offer.classList.toggle('hidden', state.mcExtended);
     renderMcThread();
     return;
   }
@@ -1389,6 +1392,15 @@ async function sendMasterChat(text) {
     let data = null;
     try { data = await res.json(); } catch { data = null; }
     if (!res.ok || !data || typeof data.answer !== 'string') {
+      if (data && data.code === 'gemini_unavailable') {
+        const notice = $('mc-ai-rest');
+        if (notice) { notice.textContent = data.error || t('aiRestingNote'); notice.classList.remove('hidden'); }
+        // Do not turn an outage into a fake answer or append the unanswered question.
+        // Keep the input so Retry sends the same question, with the allowance intact.
+        if (typeof data.questionsRemaining === 'number') state.mcLeft = data.questionsRemaining;
+        renderMcCounter();
+        return;
+      }
       if (!res.ok && data && data.error) {
         // A real server error (e.g. limit reached): keep the existing
         // behaviour — the question did reach the server.
@@ -1399,7 +1411,7 @@ async function sendMasterChat(text) {
         // with code 'master_limit_reached'.
         if (res.status === 429 && data.code === 'master_limit_reached') {
           state.mcLeft = 0; renderMcCounter();
-          const offer = $('mc-upgrade-offer'); if (offer) offer.classList.remove('hidden');
+          const offer = $('mc-upgrade-offer'); if (offer) offer.classList.toggle('hidden', state.mcExtended);
         }
       } else {
         // Non-JSON reply (e.g. a Railway error page) or an empty body:
@@ -1412,6 +1424,7 @@ async function sendMasterChat(text) {
     }
     state.mcMessages = data.messages || state.mcMessages;
     state.mcExtended = !!data.extended;
+    state.mcMax = typeof data.max === 'number' ? data.max : (state.mcExtended ? 30 : 5);
     state.mcLeft = typeof data.questionsRemaining === 'number' ? data.questionsRemaining : 0;
     renderAiRestNote(!!data.aiResting);
     renderMcCounter();
