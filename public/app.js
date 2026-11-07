@@ -35,7 +35,7 @@ const state = {
   yijingLines: [], yijingCasting: false,
   quiz: { kind: null, questions: null, idx: 0, answers: [], result: null },
   quizCache: null,
-  mcMessages: [], mcLeft: 5,
+  mcMessages: [], mcLeft: 5, mcSending: false, lrSending: false,
 };
 
 const STR = {
@@ -108,6 +108,8 @@ const STR = {
     masterUnreachable: 'The Master couldn\u2019t be reached just now \u2014 please try again in a moment.',
     aiRestingNote: 'The AI Master is resting briefly after a hiccup \u2014 answers for now are summaries from your reading. Try again in a few minutes.',
     unreachable: 'Couldn\u2019t be reached just now \u2014 please try again in a moment.',
+    mcThinking: 'The Master is thinking\u2026',
+    lrThinking: 'Thinking\u2026',
     payUnlock: 'Pay & unlock', priceUnavailable: 'Price unavailable \u2014 please try again later.',
     questions: 'questions', questionOf: 'Question', of: 'of', back: '\u2190 Back', restart: 'Restart quiz',
     startQuiz: 'Start the quiz', retake: 'Retake', yourType: 'Your type', fullBreakdownLocked: 'Full breakdown locked \u2014 unlock to read it.',
@@ -208,6 +210,8 @@ const STR = {
     masterUnreachable: '\u638c\u95e8\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     aiRestingNote: 'AI \u638c\u95e8\u521a\u624d\u51fa\u4e86\u4e00\u70b9\u5c0f\u72b6\u51b5\uff0c\u6b63\u5728\u77ed\u6682\u4f11\u606f\u2014\u2014\u4e0b\u9762\u7684\u56de\u7b54\u5148\u662f\u6839\u636e\u4f60\u7684\u62a5\u544a\u6574\u7406\u7684\u6458\u8981\u3002\u51e0\u5206\u949f\u540e\u518d\u8bd5\u3002',
     unreachable: '\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+    mcThinking: '\u638c\u95e8\u6b63\u5728\u601d\u8003\u2026',
+    lrThinking: '\u6b63\u5728\u601d\u8003\u2026',
     payUnlock: '\u4ed8\u6b3e\u5e76\u89e3\u9501', priceUnavailable: '\u6682\u65f6\u65e0\u6cd5\u53d6\u5f97\u4ef7\u683c\u2014\u2014\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     questions: '\u9898', questionOf: '\u7b2c', of: '/', back: '\u2190 \u4e0a\u4e00\u9898', restart: '\u91cd\u65b0\u6d4b\u9a8c',
     startQuiz: '\u5f00\u59cb\u6d4b\u9a8c', retake: '\u91cd\u65b0\u6d4b\u9a8c', yourType: '\u4f60\u7684\u7c7b\u578b', fullBreakdownLocked: '\u5b8c\u6574\u89e3\u6790\u672a\u89e3\u9501\u2014\u2014\u89e3\u9501\u540e\u53ef\u9605\u8bfb\u3002',
@@ -1069,6 +1073,7 @@ async function loadReport(quiet) {
     renderSystems();
     renderReportCard();
     loadMasterChat(); // restore the Ask the Master thread + follow-up counter
+    loadLiveReaderCount(); // show the real Live Reader used count, not 0
     if (!quiet) unlockStoredQuizzes();
     return true;
   } catch { return false; }
@@ -1170,26 +1175,58 @@ $('download-report-btn').addEventListener('click', () => {
 });
 
 /* --- Live Reader — voice in + voice out, typed fallback --- */
+// Load the buyer's REAL used count on init (7 Nov 2026 fix): the page
+// used to show "Questions used: 0 / 3" on load because the count was
+// only updated after a successful answer — so the screen said 0/3
+// while the server refused the question. This fetches the count the
+// server enforces, so the screen can never disagree with it.
+async function loadLiveReaderCount() {
+  if (!state.unlocked) return;
+  try {
+    const p = authParams();
+    const res = await fetch(`/api/live-reader?token=${encodeURIComponent(p.token)}&email=${encodeURIComponent(p.email)}&birthDate=${encodeURIComponent(p.birthDate)}&sessionId=${state.sessionId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (typeof data.questionsUsed === 'number') $('lr-used').textContent = String(data.questionsUsed);
+  } catch {}
+}
+function setLrBusy(busy) {
+  state.lrSending = !!busy;
+  const ask = $('lr-ask'); if (ask) ask.disabled = !!busy;
+}
+function showLrThinking() {
+  const box = $('lr-answers'); if (!box) return;
+  box.innerHTML += `<p class="lr-thinking">${esc(t('lrThinking'))}</p>`;
+  box.scrollTop = box.scrollHeight;
+}
+function hideLrThinking() {
+  const box = $('lr-answers'); if (!box) return;
+  const el = box.querySelector('.lr-thinking'); if (el) el.remove();
+}
 $('lr-ask').addEventListener('click', async () => {
   const q = $('lr-question').value.trim();
-  if (!q) return;
+  if (!q || state.lrSending) return;
   const box = $('lr-answers');
-  let res;
+  setLrBusy(true);
+  showLrThinking();
   try {
-    res = await fetch('/api/live-reader', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...authParams(), sessionId: state.sessionId, question: q, lang: state.lang }) });
-  } catch (err) {
-    // Transport failure: friendly message, never the raw browser error.
-    box.innerHTML += `<p>${esc(t('unreachable'))}</p>`;
-    return;
-  }
-  let data = null;
-  try { data = await res.json(); } catch { data = null; }
-  if (!res.ok || !data || typeof data.answer !== 'string') {
-    box.innerHTML += `<p>${esc((data && data.error) || t('unreachable'))}</p>`;
-    return;
-  }
-  try {
-    $('lr-used').textContent = data.questionsUsed;
+    let res;
+    try {
+      res = await fetch('/api/live-reader', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...authParams(), sessionId: state.sessionId, question: q, lang: state.lang }) });
+    } catch (err) {
+      // Transport failure: friendly message, never the raw browser error.
+      hideLrThinking();
+      box.innerHTML += `<p>${esc(t('unreachable'))}</p>`;
+      return;
+    }
+    let data = null;
+    try { data = await res.json(); } catch { data = null; }
+    hideLrThinking();
+    if (!res.ok || !data || typeof data.answer !== 'string') {
+      box.innerHTML += `<p>${esc((data && data.error) || t('unreachable'))}</p>`;
+      return;
+    }
+    $('lr-used').textContent = String(data.questionsUsed);
     box.innerHTML += `<p><strong>You:</strong> ${esc(q)}</p><p><strong>Live Reader:</strong> ${esc(data.answer)}</p>`;
     $('lr-question').value = '';
     if ($('lr-speak').checked && 'speechSynthesis' in window) {
@@ -1199,7 +1236,8 @@ $('lr-ask').addEventListener('click', async () => {
       speechSynthesis.speak(u);
       $('lr-stop').classList.remove('hidden');
     }
-  } catch (err) { box.innerHTML += `<p>${esc(t('unreachable'))}</p>`; }
+  } catch (err) { hideLrThinking(); box.innerHTML += `<p>${esc(t('unreachable'))}</p>`; }
+  finally { setLrBusy(false); hideLrThinking(); }
 });
 $('lr-voice').addEventListener('click', () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1232,12 +1270,12 @@ function renderMcCounter() {
   // else sees "Follow-ups left: n / 5".
   if (label) label.textContent = state.mcExtended ? t('masterChatsLeft') : t('followupsLeft');
   if (state.mcExtended) {
-    left.textContent = state.mcLeft;
+    left.textContent = String(state.mcLeft);
     if (suffix) suffix.textContent = ' / 30';
     if (btn) { btn.textContent = '✓ ' + t('upgradeExtended'); btn.disabled = true; }
     if (offer) offer.classList.add('hidden');
   } else {
-    left.textContent = state.mcLeft;
+    left.textContent = String(state.mcLeft);
     if (suffix) suffix.textContent = ' / 5';
     if (btn) { btn.textContent = t('upgradeBtn'); btn.disabled = false; }
   }
@@ -1283,49 +1321,76 @@ function mcSpeak(text) {
   u.lang = state.lang === 'zh' ? 'zh-CN' : 'en-US';
   speechSynthesis.speak(u);
 }
+// While a Master question is in flight the Ask button and the chips
+// are disabled and a visible "thinking…" line shows in the thread
+// (7 Nov 2026 fix): the chat must never sit silent while waiting, and
+// a double-tap / Enter+click must not submit the same question twice
+// (the live logs showed 3 identical Gemini calls in one second).
+// The server also collapses concurrent identical requests, but the
+// button is the first line of defence.
+function setMcBusy(busy) {
+  state.mcSending = !!busy;
+  const ask = $('mc-ask'); if (ask) ask.disabled = !!busy;
+  document.querySelectorAll('[data-chip]').forEach((b) => { b.disabled = !!busy; });
+}
+function showMcThinking() {
+  const box = $('mc-thread'); if (!box) return;
+  box.innerHTML += `<p class="mc-thinking">${esc(t('mcThinking'))}</p>`;
+  box.scrollTop = box.scrollHeight;
+}
+function hideMcThinking() {
+  const box = $('mc-thread'); if (!box) return;
+  const el = box.querySelector('.mc-thinking'); if (el) el.remove();
+}
 async function sendMasterChat(text) {
   const q = (text || $('mc-question').value || '').trim();
-  if (!q) return;
+  if (!q || state.mcSending) return;
   if (!state.mcExtended && state.mcLeft <= 0) {
     state.mcMessages = [...state.mcMessages, { role: 'master', content: t('upgradeOffer'), lang: state.lang, source: 'master' }];
     const offer = $('mc-upgrade-offer'); if (offer) offer.classList.remove('hidden');
     renderMcThread();
     return;
   }
-  // Transport failure (offline, Railway incident page, …): show a short
-  // friendly message in the user's language — never the raw browser
-  // error (Safari's "The string did not match the expected pattern" is
-  // what res.json() throws on a non-JSON reply). The question stays in
-  // the box for a retry, nothing is stored, and no AI chat is consumed.
-  let res;
+  setMcBusy(true);
+  showMcThinking();
   try {
-    res = await fetch('/api/master-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...authParams(), sessionId: state.sessionId, message: q, lang: state.lang }) });
-  } catch (err) {
-    state.mcMessages = [...state.mcMessages, { role: 'master', content: t('masterUnreachable'), lang: state.lang, source: 'master' }];
-    renderMcThread();
-    return;
-  }
-  let data = null;
-  try { data = await res.json(); } catch { data = null; }
-  if (!res.ok || !data || typeof data.answer !== 'string') {
-    if (!res.ok && data && data.error) {
-      // A real server error (e.g. limit reached): keep the existing
-      // behaviour — the question did reach the server.
-      state.mcMessages = [...state.mcMessages, { role: 'user', content: q, lang: state.lang, source: 'master' }, { role: 'master', content: data.error, lang: state.lang, source: 'master' }];
-      if (res.status === 429) {
-        state.mcLeft = 0; renderMcCounter();
-        const offer = $('mc-upgrade-offer'); if (offer) offer.classList.remove('hidden');
-      }
-    } else {
-      // Non-JSON reply (e.g. a Railway error page) or an empty body:
-      // friendly message only — the question was never answered, so it
-      // is not stored and no chat is consumed.
+    // Transport failure (offline, Railway incident page, …): show a short
+    // friendly message in the user's language — never the raw browser
+    // error (Safari's "The string did not match the expected pattern" is
+    // what res.json() throws on a non-JSON reply). The question stays in
+    // the box for a retry, nothing is stored, and no AI chat is consumed.
+    let res;
+    try {
+      res = await fetch('/api/master-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...authParams(), sessionId: state.sessionId, message: q, lang: state.lang }) });
+    } catch (err) {
       state.mcMessages = [...state.mcMessages, { role: 'master', content: t('masterUnreachable'), lang: state.lang, source: 'master' }];
+      renderMcThread();
+      return;
     }
-    renderMcThread();
-    return;
-  }
-  try {
+    let data = null;
+    try { data = await res.json(); } catch { data = null; }
+    if (!res.ok || !data || typeof data.answer !== 'string') {
+      if (!res.ok && data && data.error) {
+        // A real server error (e.g. limit reached): keep the existing
+        // behaviour — the question did reach the server.
+        state.mcMessages = [...state.mcMessages, { role: 'user', content: q, lang: state.lang, source: 'master' }, { role: 'master', content: data.error, lang: state.lang, source: 'master' }];
+        // Only the allowance being used up zeroes the counter — a
+        // rate-limiter 429 must not (7 Nov 2026 fix: the old code
+        // zeroed it on ANY 429). The server marks the allowance 429
+        // with code 'master_limit_reached'.
+        if (res.status === 429 && data.code === 'master_limit_reached') {
+          state.mcLeft = 0; renderMcCounter();
+          const offer = $('mc-upgrade-offer'); if (offer) offer.classList.remove('hidden');
+        }
+      } else {
+        // Non-JSON reply (e.g. a Railway error page) or an empty body:
+        // friendly message only — the question was never answered, so it
+        // is not stored and no chat is consumed.
+        state.mcMessages = [...state.mcMessages, { role: 'master', content: t('masterUnreachable'), lang: state.lang, source: 'master' }];
+      }
+      renderMcThread();
+      return;
+    }
     state.mcMessages = data.messages || state.mcMessages;
     state.mcExtended = !!data.extended;
     state.mcLeft = typeof data.questionsRemaining === 'number' ? data.questionsRemaining : 0;
@@ -1337,6 +1402,9 @@ async function sendMasterChat(text) {
   } catch (err) {
     state.mcMessages = [...state.mcMessages, { role: 'master', content: t('masterUnreachable'), lang: state.lang, source: 'master' }];
     renderMcThread();
+  } finally {
+    setMcBusy(false);
+    hideMcThinking();
   }
 }
 $('mc-ask').addEventListener('click', () => sendMasterChat());
