@@ -41,7 +41,7 @@ class El {
 
 const IDS = ['lang-en', 'lang-zh', 'systems', 'sys-hero', 'quiz-list', 'quiz-area', 'hook-card', 'teaser-status', 'birthDate', 'birthTime', 'name', 'email', 'unlocked-banner', 'unlocked-card', 'unlocked-sub', 'unlock-card', 'price-line', 'pay-btn', 'report-card', 'report', 'lr-used', 'lr-question', 'lr-answers', 'lr-speak', 'lr-stop', 'mc-left', 'mc-left-label', 'mc-left-suffix', 'mc-ai-badge', 'mc-upgrade-btn', 'mc-upgrade-offer', 'mc-thread', 'mc-question', 'resend-status', 'view-report-btn', 'resend-btn', 'download-report-btn', 'hook-form', 'checkout-form', 'lr-ask', 'lr-voice', 'mc-ask', 'mc-voice', 'mc-upgrade-offer-btn', 'brand-hero', 'hub-next', 'step-nav', 'daily-card', 'limits-card', 'quiz-card', 'master-locked-card', 'live-reader', 'master-chat'];
 
-async function runCase({ page, unlocked, submitHook, search }) {
+async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
   const els = {};
   for (const id of IDS) els[id] = new El(id);
   els['report-card'].classList.add('hidden');
@@ -62,6 +62,14 @@ async function runCase({ page, unlocked, submitHook, search }) {
   const docEl = new El('html');
   const fetchStub = async (url, opts) => {
     const u = String(url);
+    const isMasterPost = u.startsWith('/api/master-chat') && opts && opts.method === 'POST';
+    // fetchMode 'throw': the master-chat POST throws (offline / Railway
+    // incident). fetchMode 'nonJson': it returns a non-JSON error page
+    // (Safari: res.json() throws "The string did not match the expected
+    // pattern"). Both are the 7 Nov 2026 live failure; GETs still work
+    // so the page itself loads and the counter is set.
+    if (fetchMode === 'throw' && isMasterPost) throw new Error('The string did not match the expected pattern');
+    if (fetchMode === 'nonJson' && isMasterPost) return { ok: false, status: 502, json: async () => { throw new SyntaxError('Unexpected token < in JSON at position 0'); } };
     const json = async () => ({});
     if (u.startsWith('/api/config')) return { ok: true, json: async () => ({ price: { amountCents: 100, currency: 'usd', isPromo: true, promoStart: '2026-11-07', promoEnd: '2026-11-24' } }) };
     if (u.startsWith('/api/hook')) return { ok: true, json: async () => buildTeaser({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' }) };
@@ -104,6 +112,7 @@ async function runCase({ page, unlocked, submitHook, search }) {
     await h({ preventDefault() {} });
     await new Promise((r) => setTimeout(r, 50));
   }
+  els._sandbox = sandbox;
   return els;
 }
 
@@ -174,6 +183,27 @@ function check(name, ok, detail) {
   check('master upgrade return: banner shows Extended Master Chat unlocked', !els['unlocked-banner'].hidden && els['unlocked-banner'].innerHTML.includes('Extended Master Chat unlocked'));
   check('master upgrade return: report card visible, locked prompt hidden, quiz hidden', !els['report-card'].hidden && els['master-locked-card'].hidden && els['quiz-card'].hidden);
   check('master unlocked: no quiz anywhere on the Master page', els['quiz-card'].hidden && !els.systems.innerHTML.includes('quiz'));
+
+  // Master chat transport failure (7 Nov 2026 live bug): the fetch
+  // throws, or the reply is a non-JSON error page. The user must see a
+  // short friendly message — never the raw browser error — the failed
+  // question must not be stored, the input must be kept for a retry,
+  // and the counter must not move.
+  els = await runCase({ page: 'master', unlocked: true, fetchMode: 'throw' });
+  await new Promise((r) => setTimeout(r, 50));
+  els['mc-question'].value = 'How is my career next year?';
+  await els['mc-ask']._handlers.click[0]();
+  await new Promise((r) => setTimeout(r, 50));
+  check('master chat fetch throws: friendly message, no raw browser error', els['mc-thread'].innerHTML.includes('try again in a moment') && !els['mc-thread'].innerHTML.includes('The string did not match') && !els['mc-thread'].innerHTML.includes('Network error'), els['mc-thread'].innerHTML.slice(0, 200));
+  check('master chat fetch throws: question not stored, input kept, counter still 5', !els['mc-thread'].innerHTML.includes('How is my career next year?') && els['mc-question'].value === 'How is my career next year?' && Number(els['mc-left'].textContent) === 5, `thread=${els['mc-thread'].innerHTML.slice(0, 120)} left=${els['mc-left'].textContent}`);
+
+  els = await runCase({ page: 'master', unlocked: true, fetchMode: 'nonJson' });
+  await new Promise((r) => setTimeout(r, 50));
+  els['mc-question'].value = 'How is my career next year?';
+  await els['mc-ask']._handlers.click[0]();
+  await new Promise((r) => setTimeout(r, 50));
+  check('master chat non-JSON reply: friendly message, no raw browser error', els['mc-thread'].innerHTML.includes('try again in a moment') && !els['mc-thread'].innerHTML.includes('Unexpected token') && !els['mc-thread'].innerHTML.includes('Network error'), els['mc-thread'].innerHTML.slice(0, 200));
+  check('master chat non-JSON reply: question not stored, counter still 5', !els['mc-thread'].innerHTML.includes('How is my career next year?') && Number(els['mc-left'].textContent) === 5, `left=${els['mc-left'].textContent}`);
 
   console.log(`\nDOM check: ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);
