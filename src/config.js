@@ -75,6 +75,17 @@ const config = {
     maxOutputTokens: intEnv('AI_MAX_OUTPUT_TOKENS', 350),
     temperature: 0.7,
     historyMessages: 6,
+    // Hard per-attempt deadline for the Gemini call (8 Nov 2026 fix 4):
+    // a single attempt may never hang longer than this — the deadline
+    // covers the fetch AND the response-body read (res.json/res.text),
+    // not just time-to-first-byte. The old 20 s AbortController only
+    // guarded the fetch itself: once headers arrived, a stalled body
+    // could hang res.json() forever, and a fetch that ignores the
+    // abort signal could hang the whole Master POST with no log line
+    // at all (live 8 Nov 00:37–00:40 SGT: two POSTs hung 10 min / 90 s
+    // with zero server log lines). Worst case per question is now
+    // 2 attempts x this deadline + ~1 s retry + up to 10 s 429 backoff.
+    geminiTimeoutMs: intEnv('AI_GEMINI_TIMEOUT_MS', 25000),
     // Gemini 3.5 Flash PAID tier, verified Nov 2026 (multiple sources):
     // $1.50 / 1M input tokens, $9.00 / 1M output tokens. One reply costs
     // 2,000 x $1.50/1M + 350 x $9.00/1M = $0.003 + $0.00315
