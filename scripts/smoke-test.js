@@ -393,6 +393,8 @@ async function main() {
     data = await res.json();
     check('master-chat non-upgraded still 429 on 6th, with upgrade price', res.status === 429 && data.upgradePriceCents === 300, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
     check('frontend explains the 5 limit + shows the upgrade offer', html.includes('id="mc-upgrade-btn"') && html.includes('id="mc-upgrade-offer"') && appJs.includes('buyMasterUpgrade') && appJs.includes('/api/checkout-upgrade') && appJs.includes('masterChatExplainer') && appJs.includes('upgradeOffer'), 'upgrade UI missing');
+    const successHtml = fs.readFileSync(path.join(pub, 'success.html'), 'utf8');
+    check('success page keeps ?upgraded=1 on the upgrade redirect', successHtml.includes('data.upgrade') && successHtml.includes("/?upgraded=1&session_id="), 'upgrade return params dropped');
 
     // 22. Real tarot pictures (7 Nov 2026): Rider-Waite, local files only.
     const tarotDir = path.join(pub, 'tarot');
