@@ -67,6 +67,8 @@ const STR = {
     upgradeOffer: 'You have used all 5 follow-ups. Upgrade to Unlimited Master Chat for $3 and keep asking.',
     upgradeDone: 'Unlimited Master Chat unlocked — ask as many follow-ups as you like.',
     upgradeFail: 'Could not start the upgrade checkout. Please try again.',
+    upgradePending: 'Your Unlimited Master Chat is being activated — if the counter still shows a limit, refresh this page in a moment.',
+    skipToMaster: 'Skip to Master →',
     sysOpen: 'Open the full page',
     backToHub: '← All six systems',
     nextSystem: 'Next',
@@ -159,6 +161,8 @@ const STR = {
     upgradeOffer: '5 \u6b21\u8ffd\u95ee\u5df2\u7ecf\u7528\u5b8c\u3002\u82b1 $3 \u5347\u7ea7\u4e3a\u65e0\u9650\u8ffd\u95ee\u638c\u95e8\uff0c\u7ee7\u7eed\u95ee\u4e0b\u53bb\u3002',
     upgradeDone: '\u65e0\u9650\u8ffd\u95ee\u638c\u95e8\u5df2\u89e3\u9501\u2014\u2014\u60f3\u95ee\u591a\u5c11\u5c31\u95ee\u591a\u5c11\u3002',
     upgradeFail: '\u65e0\u6cd5\u5f00\u59cb\u5347\u7ea7\u7ed3\u8d26\uff0c\u8bf7\u518d\u8bd5\u4e00\u6b21\u3002',
+    upgradePending: '\u65e0\u9650\u8ffd\u95ee\u6b63\u5728\u5f00\u901a\u4e2d\u2014\u2014\u5982\u679c\u8ba1\u6570\u4ecd\u663e\u793a\u4e0a\u9650\uff0c\u8bf7\u7a0d\u540e\u5237\u65b0\u672c\u9875\u3002',
+    skipToMaster: '\u76f4\u63a5\u53bb\u627e\u638c\u95e8 \u2192',
     sysOpen: '打开完整页面',
     backToHub: '← 回到六个系统',
     nextSystem: '下一个',
@@ -469,7 +473,13 @@ function stepNavHTML() {
 }
 function hubNextHTML() {
   if (pageSystem || (!state.teaser && !state.report)) return '';
-  return `<a class="hub-next-btn" href="/bazi">${esc(t('hubNext'))}</a>`;
+  // Unlocked users get a "Skip to Master" shortcut as well (7 Nov 2026):
+  // after paying for Unlimited Master Chat they land straight on /master,
+  // and an unlocked user on the hub must never have to walk the whole
+  // step flow — least of all the Portrait quizzes — to reach the chat.
+  // Quizzes are optional content on the Portrait page only, never a gate.
+  const skip = state.unlocked ? ` <a class="hub-master-btn" href="/master">${esc(t('skipToMaster'))}</a>` : '';
+  return `<a class="hub-next-btn" href="/bazi">${esc(t('hubNext'))}</a>${skip}`;
 }
 function applyPageLayout() {
   const show = (id, on) => { const el = $(id); if (el) el.classList.toggle('hidden', !on); };
@@ -1268,8 +1278,9 @@ document.querySelectorAll('[data-chip]').forEach((b) => {
 });
 /* --- Unlimited Master Chat upgrade ($3) ------------------------------------
    Paid token only (the server checks the token and the Stripe payment).
-   On success Stripe returns to /success.html?upgrade=1, which verifies the
-   session and sends the buyer back here — the counter then reads Unlimited. */
+   On success Stripe lands the buyer DIRECTLY on /master?upgraded=1 —
+   checkUpgradeReturn() there verifies the session and the counter then
+   reads Unlimited. No hub detour, no step flow, no quiz in the way. */
 async function buyMasterUpgrade() {
   const btn = $('mc-upgrade-btn');
   if (btn) btn.disabled = true;
@@ -1292,10 +1303,15 @@ $('mc-voice').addEventListener('click', () => {
   rec.start();
 });
 
-/* --- Upgrade return: after Stripe, /success.html?upgrade=1 verifies the
-   session and sends the buyer back here with ?upgraded=1. Confirm the
-   upgrade on the server (the webhook may not have landed yet) and refresh
-   the Master counter so it reads Unlimited. */
+/* --- Upgrade return: after Stripe, the upgrade now lands DIRECTLY on
+   /master?upgraded=1&session_id=… (7 Nov 2026 fix — the old hub landing
+   forced the buyer through the whole guided flow, quizzes included, to
+   reach the chat). Confirm the upgrade on the server (the webhook may not
+   have landed yet) and refresh the Master counter so it reads Unlimited.
+   Runs at init on every page, after loadReport() restores the token —
+   /master works standalone: no re-entry, no quiz required. If the session
+   cannot be verified yet (payment still settling), say so plainly instead
+   of silently dropping the params. */
 async function checkUpgradeReturn() {
   const params = new URLSearchParams(location.search);
   if (params.get('upgraded') !== '1' || !params.get('session_id')) return;
@@ -1308,6 +1324,13 @@ async function checkUpgradeReturn() {
       banner.innerHTML = `${esc(t('upgradeDone'))}`;
       banner.classList.remove('hidden');
       await loadMasterChat();
+    } else if (state.unlocked) {
+      // Paid session not verifiable yet — the webhook usually lands
+      // within moments. Never strand the buyer silently on a 5-limit
+      // counter they just paid to remove.
+      const banner = $('unlocked-banner');
+      banner.innerHTML = `${esc(t('upgradePending'))}`;
+      banner.classList.remove('hidden');
     }
   } catch {}
   history.replaceState(null, '', location.pathname);
