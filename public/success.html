@@ -19,14 +19,19 @@
     if (data.upgrade) {
       // Unlimited Master Chat upgrade: no new token — the buyer already
       // holds one. The server (and webhook) granted the unlimited flag.
-      // Keep ?upgraded=1&session_id=… on the redirect: the hub confirms
-      // the upgrade on the server and flips the counter to Unlimited.
-      // (A plain '/' redirect would drop those params and the hub could
+      // Land DIRECTLY on /master?upgraded=1&session_id=… (7 Nov 2026
+      // fix): the old '/?upgraded=1' redirect forced the buyer to walk
+      // the whole guided flow — including the Portrait quizzes — just to
+      // reach the chat they had just paid for. /master restores the
+      // reading from the stored token and confirms the upgrade itself.
+      // (A plain '/' redirect would drop those params and the page could
       // never tell the upgrade had happened.)
       heading.textContent = '✓ Unlimited Master Chat unlocked';
-      status.textContent = 'Ask the Master as many times as you like, for the same 90 days as your reading. Taking you back to your reading now…';
+      status.textContent = 'Ask the Master as many times as you like, for the same 90 days as your reading. Taking you straight to Ask the Master now…';
       actions.classList.remove('hidden');
-      setTimeout(() => { location.href = '/?upgraded=1&session_id=' + encodeURIComponent(sessionId); }, 2200);
+      actions.querySelector('a').href = '/master?upgraded=1&session_id=' + encodeURIComponent(sessionId);
+      actions.querySelector('button').textContent = 'Ask the Master →';
+      setTimeout(() => { location.href = '/master?upgraded=1&session_id=' + encodeURIComponent(sessionId); }, 2200);
       return;
     }
     if (data.token) {
