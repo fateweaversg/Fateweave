@@ -987,9 +987,26 @@ function masterChatAnswerRaw(reading, message, lang, history, personality) {
   const horizon = hasTimeHorizon(msg) || (lastUser && hasTimeHorizon(lastUser.content));
   const timing = horizon ? timingLine(reading, lang) : '';
 
-  // Safety guard: medical / financial / legal questions get a short
-  // refusal + a redirect to the reading — never advice on those topics.
+  // Past lives are not in the reading: say so plainly instead of
+  // pivoting to an unrelated term (stress tests, 8 Nov 2026: "What was
+  // I in my past life?" fell through to the Zi Wei Life Palace, because
+  // "life" matched it and the question is under 30 chars).
+  if (/past life|previous life|前世/i.test(msg)) {
+    return zh
+      ? '你的报告里没有前世——我只能说你这一生的命盘。如果你愿意，可以问我这一生的内容，比如：我的生命灵数是什么意思？'
+      : "Your reading doesn't cover past lives — it only describes this life's chart. Ask me about this life instead — for example, what does your Life Path mean?";
+  }
+
+  // Safety guard: medical / financial / legal / lottery questions get a
+  // short refusal + a redirect to the reading — never advice on those
+  // topics. A guard entry with msg/msgZh returns its own wording
+  // instead of the generic "talk to a professional" line.
   const guard = [
+    // Lottery first: "Should I buy Toto?" also matches the money guard,
+    // but the lottery wording is the precise one.
+    { re: /lottery|toto|jackpot|winning numbers|\b4d\b/i, zhRe: /彩票|万字|买多多|中奖|买彩票|买万字|赌博|赌钱/, kind: 'lottery',
+      msg: "I can't predict lottery numbers — no chart can, and the numbers are random. Ask me what your reading says about money and timing instead.",
+      msgZh: '我不能预测彩票号码——没有任何命盘能预测，号码是随机的。可以问我报告里关于财运和时机的内容。' },
     // Symptom language (10-profile stress test, 8 Nov 2026): "I have
     // chest pain" and "My knees hurt" missed the old list (no "pain" /
     // "hurt" keyword) and got a reading answer instead of a doctor
@@ -1007,6 +1024,7 @@ function masterChatAnswerRaw(reading, message, lang, history, personality) {
   ];
   for (const g of guard) {
     if (g.re.test(msg) || (g.re2 && g.re2.test(msg)) || g.zhRe.test(msg)) {
+      if (g.msg) return zh ? g.msgZh : g.msg;
       if (zh) {
         const what = g.kind === 'medical' ? '医疗' : g.kind === 'money' ? '财务' : '法律';
         return '这个问题我不能回答——这是' + what + '问题，这份报告只供自我反思。如果你需要专业意见，请找相应的专业人士。你可以问我报告里的内容，比如：我的生命灵数是什么意思？';
