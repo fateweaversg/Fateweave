@@ -217,6 +217,61 @@ async function main() {
     // `css` is already loaded above (section 15, Ambience) — reuse it.
     check('styles include hexagram diagram + attention highlight', css.includes('.hex-diagram') && css.includes('.hex-bar.yang') && css.includes('.card.attention'), 'hexagram/attention CSS missing');
 
+    // 17. Amendments (7 Nov 2026): Simplified Chinese, real tarot cards,
+    // topic-aware Live Reader, and timely (not pre-calculated) content.
+    const { liveReaderAnswer } = require('../src/server');
+    const { buildDailyMessage } = require('../src/readings');
+    const lrReading = buildFullReading({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' });
+    // (a) Live Reader: career vs love answers differ and are topic-relevant.
+    const lrCareerEn = liveReaderAnswer(lrReading, 'Should I change jobs this year?', 'en');
+    const lrLoveEn = liveReaderAnswer(lrReading, 'Will I find love soon?', 'en');
+    check('live-reader career vs love differ (en)', lrCareerEn !== lrLoveEn, 'identical answers');
+    check('live-reader career answer is about work', /work|job|career/i.test(lrCareerEn) && lrCareerEn.length < 1200, lrCareerEn.slice(0, 120));
+    check('live-reader love answer is about relationships', /Moon|relationship|partner|safe/i.test(lrLoveEn) && lrLoveEn.length < 1200, lrLoveEn.slice(0, 120));
+    check('live-reader answers use plain words, no jargon (en)', !/Day Master|useful god|luck pillar/.test(lrCareerEn) && !/Day Master|useful god|luck pillar/.test(lrLoveEn), 'jargon present');
+    const lrCareerZh = liveReaderAnswer(lrReading, '我今年应该换工作吗？', 'zh');
+    const lrLoveZh = liveReaderAnswer(lrReading, '我的感情什么时候会有进展？', 'zh');
+    check('live-reader career vs love differ (zh)', lrCareerZh !== lrLoveZh, 'identical answers');
+    check('live-reader career answer is about work (zh)', /工作|事业/.test(lrCareerZh), lrCareerZh.slice(0, 60));
+    check('live-reader love answer is about relationships (zh)', /感情|月亮/.test(lrLoveZh), lrLoveZh.slice(0, 60));
+    check('live-reader answers use plain words, no jargon (zh)', !/用神|大运/.test(lrCareerZh) && !/用神|大运/.test(lrLoveZh), 'jargon present');
+    // (b) Daily message: timely, computed from profile + date — never generic.
+    const d1 = buildDailyMessage({ birthDate: '1990-05-14', birthTime: null, name: 'Test' }, '2026-11-07');
+    const d2 = buildDailyMessage({ birthDate: '1990-05-14', birthTime: null, name: 'Test' }, '2026-11-08');
+    const d3 = buildDailyMessage({ birthDate: '1985-03-02', birthTime: null, name: 'Other' }, '2026-11-07');
+    check('daily message differs across dates (same profile)', d1.en !== d2.en && d1.zh !== d2.zh, 'same text on two days');
+    check('daily message differs across profiles (same day)', d1.en !== d3.en && d1.zh !== d3.zh, 'same text for two profiles');
+    check('daily message names its date and card', d1.en.includes('2026-11-07') && d1.card?.name?.en && d1.hexagram?.number >= 1 && d1.hexagram?.number <= 64, JSON.stringify(d1).slice(0, 120));
+    // (c) Timing is date-derived: no hardcoded 2026 / fixed month windows.
+    const thisYear = String(new Date().getFullYear());
+    const fullText = JSON.stringify(lrReading);
+    check('timing has no fixed month windows', !fullText.includes('months 3–4') && !fullText.includes('month 9') && !fullText.includes('第 3–4 月'), 'fixed month window present');
+    check('timing uses the current year', lrReading.bazi.sections.timing.en.includes(thisYear) && lrReading.numerology.sections.timing.en.includes(thisYear), lrReading.bazi.sections.timing.en.slice(0, 100));
+    check('personal year uses the current year', lrReading.numerology.personalYearText.en && buildFullReading({ birthDate: '1990-05-14', birthTime: null, name: null }).bazi.currentYear.en.startsWith(thisYear), 'currentYear label is hardcoded');
+    // (d) Tarot: only the 22 major arcana, with Simplified keywords + numbers.
+    const D = require('../src/original-data.js');
+    const tarotOk = lrReading.tarot.cardsDetailed.length === 3
+      && lrReading.tarot.cardsDetailed.every((c) => c.idx >= 0 && c.idx < 22 && c.number === D.TAROT[c.idx][0] && c.keywordsZh && c.keywordsZh !== c.keywords);
+    check('tarot draw uses only the 22 major arcana, with zh keywords', tarotOk, JSON.stringify(lrReading.tarot.cardsDetailed.map((c) => [c.idx, c.number])));
+    const tz2 = buildTeaser({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' });
+    check('teaser tarot cards carry number + idx + zh keywords', tz2.tarot.cards.every((c) => c.number && typeof c.idx === 'number' && c.keywordsZh), JSON.stringify(tz2.tarot.cards[0]));
+    // (e) Simplified Chinese: no Traditional-only characters in user-visible
+    // zh strings; zh-CN (not zh-TW) in the frontend; 简中 button label.
+    const tradOnly = ['還', '嗎', '會', '讓', '學', '數', '塔羅', '龍', '機', '匯', '個', '這', '說', '對', '關', '實', '進', '過', '頭', '為', '無', '與', '長', '後', '裏', '發'];
+    const decodeEsc = (s) => s.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+    const tradFound = [];
+    for (const f of ['src/readings.js', 'src/original-data.js', 'src/i18n.js', 'src/server.js', 'src/email.js', 'public/index.html', 'public/success.html']) {
+      const txt = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+      for (const ch of tradOnly) if (txt.includes(ch)) tradFound.push(`${f}:${ch}`);
+    }
+    const appDecoded = decodeEsc(fs.readFileSync(path.join(pub, 'app.js'), 'utf8'));
+    for (const ch of tradOnly) if (appDecoded.includes(ch)) tradFound.push(`public/app.js:${ch}`);
+    check('no Traditional-only characters in zh strings', tradFound.length === 0, tradFound.slice(0, 8).join(', '));
+    check('frontend uses zh-CN, not zh-TW', appJs.includes('zh-CN') && !appJs.includes('zh-TW'), 'zh-TW still present');
+    check('language button is 简中', html.includes('简中') && !html.includes('繁中'), 'button label not Simplified');
+    check('frontend has details-collapse + glance + bignum + real-card CSS', css.includes('details.more') && css.includes('.glance') && css.includes('.bignum-row') && css.includes('.card-art') && css.includes('.rev-banner'), 'visual CSS missing');
+    check('frontend sectionHTML collapses extra sections', appJs.includes('<details class="more"') && appJs.includes("t('moreDetail')"), 'details collapse missing');
+
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
   } finally {
