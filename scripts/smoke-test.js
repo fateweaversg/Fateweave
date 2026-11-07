@@ -272,8 +272,18 @@ async function main() {
     check('frontend has details-collapse + glance + bignum + real-card CSS', css.includes('details.more') && css.includes('.glance') && css.includes('.bignum-row') && css.includes('.card-art') && css.includes('.rev-banner'), 'visual CSS missing');
     check('frontend sectionHTML collapses extra sections', appJs.includes('<details class="more"') && appJs.includes("t('moreDetail')"), 'details collapse missing');
 
-    // 18. Ask the Master (7 Nov 2026): paid-only follow-up chat, 5 per
-    // BUYER, with conversation memory of the Live Reader Q&A.
+    // 18. Ask the Master (7 Nov 2026): paid-only follow-up chat, 5 AI
+    // chats per BUYER, with conversation memory of the Live Reader Q&A.
+    // The 5 count AI REPLIES received, not questions asked (7 Nov 2026
+    // fix 3): with no Gemini key in this suite every reply here is
+    // rule-based, so the counter stays 0 used / 5 left through all
+    // five — rule-based replies never consume a chat. The 5-limit
+    // itself (a 6th AI reply is blocked) is covered by the
+    // limit5 buyer in section 26, which pre-stores 5 AI replies, and by
+    // the 6th-question checks in section 21 — so this section stops
+    // after the 5 follow-ups. (Rate-limit budget: POST /api/master-chat
+    // allows 30 / 15 min across the whole suite; sections 18+21+26
+    // must leave exactly 30 used before section 27(f) trips it.)
     // Fresh buyer for this thread: buyer@example.com already used all
     // 3 Live Reader questions in section 7, and both counts are now
     // per buyer (7 Nov 2026 fix) — this thread needs its own buyer.
@@ -294,31 +304,28 @@ async function main() {
     check('master-chat setup: live-reader career answer stored', res.ok && lrCareerAnswer.length > 50, `got ${res.status}`);
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('What does that mean?') });
     data = await res.json();
-    check('master-chat explain references the previous answer topic', res.ok && data.questionsUsed === 1 && data.answer.includes('Your core:'), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    check('master-chat explain references the previous answer topic', res.ok && data.questionsUsed === 0 && data.questionsRemaining === 5 && data.answer.includes('Your core:'), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('Give me an example') });
     data = await res.json();
-    check('master-chat example returns an everyday example tied to the reading', res.ok && data.questionsUsed === 2 && data.answer.includes('everyday life') && /strongest element|Moon|hexagram|Life Path/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    check('master-chat example returns an everyday example tied to the reading', res.ok && data.questionsUsed === 0 && data.answer.includes('everyday life') && /strongest element|Moon|hexagram|Life Path/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('Tell me more about work') });
     data = await res.json();
-    check('master-chat deeper gives a different layer, never the live-reader text', res.ok && data.questionsUsed === 3 && data.answer.includes('next layer') && data.answer !== lrCareerAnswer, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    check('master-chat deeper gives a different layer, never the live-reader text', res.ok && data.questionsUsed === 0 && data.answer.includes('next layer') && data.answer !== lrCareerAnswer, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     // Repeat-topic follow-up references the earlier conversation.
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('What about my career?') });
     data = await res.json();
-    check('master-chat repeat topic references earlier question', res.ok && data.questionsUsed === 4 && /asked about work earlier/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    check('master-chat repeat topic references earlier question', res.ok && data.questionsUsed === 0 && /asked about work earlier/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('What does my Life Path mean?') });
     data = await res.json();
-    check('master-chat 5th follow-up ok', res.ok && data.questionsUsed === 5 && data.questionsRemaining === 0 && /Life Path/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
-    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mcBody('One more question?') });
-    data = await res.json();
-    check('master-chat 6th follow-up rejected (429)', res.status === 429 && data.questionsUsed === 5 && data.questionsRemaining === 0, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
+    check('master-chat 5th follow-up ok, counter still 0 used / 5 left (rule-based replies do not consume)', res.ok && data.questionsUsed === 0 && data.questionsRemaining === 5 && /Life Path/.test(data.answer), `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
     res = await fetch(`${BASE}/api/master-chat?token=${mcToken}&email=mc@example.com&birthDate=1990-05-14&sessionId=${mcSession}`);
     data = await res.json();
-    check('master-chat history returns the full thread on load', res.ok && Array.isArray(data.messages) && data.messages.length === 12 && data.messages[0].source === 'live-reader' && data.messages[data.messages.length - 1].role === 'master' && data.questionsRemaining === 0, `got ${res.status} len=${data.messages?.length}`);
+    check('master-chat history returns the full thread on load', res.ok && Array.isArray(data.messages) && data.messages.length === 12 && data.messages[0].source === 'live-reader' && data.messages[data.messages.length - 1].role === 'master' && data.questionsRemaining === 5, `got ${res.status} len=${data.messages?.length}`);
     // A different sessionId for the same buyer: the thread is keyed by
     // buyer, not by session — a reload must return the SAME thread.
     res = await fetch(`${BASE}/api/master-chat?token=${mcToken}&email=mc@example.com&birthDate=1990-05-14&sessionId=smoke-mc-reload`);
     data = await res.json();
-    check('master-chat history survives a new sessionId (reload)', res.ok && Array.isArray(data.messages) && data.messages.length === 12 && data.questionsUsed === 5 && data.questionsRemaining === 0, `got ${res.status} len=${data.messages?.length} used=${data.questionsUsed}`);
+    check('master-chat history survives a new sessionId (reload)', res.ok && Array.isArray(data.messages) && data.messages.length === 12 && data.questionsUsed === 0 && data.questionsRemaining === 5, `got ${res.status} len=${data.messages?.length} used=${data.questionsUsed}`);
     // Separate buyer: zh term explanation + safety guard (the limit is
     // per buyer, so the 5-question buyer above cannot ask more).
     const mcZhOrder = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('mczh@example.com', '1990-05-14', 'Master Chat Zh');
@@ -379,15 +386,20 @@ async function main() {
     data = await res.json();
     check('master-chat GET reports extended after upgrade (30 chats, none used yet)', res.ok && data.extended === true && data.questionsRemaining === 30 && data.questionsUsed === 0 && data.max === 30, JSON.stringify(data).slice(0, 120));
     let upOk = true;
-    for (let i = 1; i <= 7; i++) {
+    for (let i = 1; i <= 3; i++) {
       res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14', sessionId: upSession, message: `Follow-up ${i} about work?`, lang: 'en' }) });
       data = await res.json();
-      // No GEMINI_API_KEY in this suite, so these 7 are rule-based —
-      // but the counter counts QUESTIONS asked, not AI calls (7 Nov
-      // 2026 fix), so it must drop 30 → 23 even though no AI replied.
-      if (!res.ok || data.extended !== true || data.questionsUsed !== i || data.questionsRemaining !== 30 - i) { upOk = false; break; }
+      // No GEMINI_API_KEY in this suite, so these 3 are rule-based —
+      // and rule-based replies do NOT consume the 30 (7 Nov 2026
+      // fix 3), so the counter stays 0 used / 30 left even though
+      // the buyer asked 3 questions. Only AI replies consume.
+      // (3, not 7: the suite-wide 30-POST rate-limit budget — see the
+      // section 18 header — leaves no room for 4 more here; the
+      // 6th-question behaviour is covered by the expired/non-upgraded
+      // buyers below and the limit5 buyer in section 26.)
+      if (!res.ok || data.extended !== true || data.questionsUsed !== 0 || data.questionsRemaining !== 30) { upOk = false; break; }
     }
-    check('master-chat extended: 7 rule-based follow-ups all succeed, counter drops per question (30 → 23)', upOk, 'upgrade did not lift the limit, or the counter did not drop');
+    check('master-chat extended: 3 rule-based follow-ups all succeed, counter stays 0 used / 30 left (rule-based replies do not consume)', upOk, 'upgrade did not lift the limit, or the counter moved on rule-based replies');
     // Expired upgrade + another buyer without one: the limit still applies.
     const order2 = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('other@example.com', '1985-03-02', 'Other');
     const { token: token2 } = issueAccessToken('other@example.com', '1985-03-02', order2.lastInsertRowid);
@@ -397,7 +409,7 @@ async function main() {
       await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token2, email: 'other@example.com', birthDate: '1985-03-02', sessionId: expSession, message: `Question ${i}?`, lang: 'en' }) });
     }
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token2, email: 'other@example.com', birthDate: '1985-03-02', sessionId: expSession, message: 'Question 6?', lang: 'en' }) });
-    check('master-chat expired upgrade still hits 429 on 6th', res.status === 429, `got ${res.status}`);
+    check('master-chat expired upgrade: 6th rule-based follow-up still succeeds (rule-based replies do not consume the 5 AI chats)', res.status === 200, `got ${res.status}`);
     // Non-upgraded users still hit the limit (fresh session, buyer 2, no upgrade row for a new birth date).
     const order3 = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('third@example.com', '1992-07-07', 'Third');
     const { token: token3 } = issueAccessToken('third@example.com', '1992-07-07', order3.lastInsertRowid);
@@ -407,7 +419,7 @@ async function main() {
     }
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token3, email: 'third@example.com', birthDate: '1992-07-07', sessionId: limSession, message: 'Question 6?', lang: 'en' }) });
     data = await res.json();
-    check('master-chat non-upgraded still 429 on 6th, with upgrade price', res.status === 429 && data.upgradePriceCents === 300, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
+    check('master-chat non-upgraded: 6th rule-based follow-up still succeeds, counter 0 used / 5 left (the 429 fires only after 5 AI replies — see the limit5 buyer in section 26)', res.status === 200 && data.questionsUsed === 0 && data.questionsRemaining === 5, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
     check('frontend explains the 5 limit + shows the upgrade offer', html.includes('id="mc-upgrade-btn"') && html.includes('id="mc-upgrade-offer"') && appJs.includes('buyMasterUpgrade') && appJs.includes('/api/checkout-upgrade') && appJs.includes('masterChatExplainer') && appJs.includes('upgradeOffer'), 'upgrade UI missing');
     const successHtml = fs.readFileSync(path.join(pub, 'success.html'), 'utf8');
     check('upgrade return lands DIRECTLY on /master (not the hub)', successHtml.includes('data.upgrade') && successHtml.includes('/master?upgraded=1&session_id=') && !successHtml.includes("/?upgraded=1&session_id=") && successHtml.includes('Ask the Master →'), 'upgrade redirect still points at the hub');
@@ -534,9 +546,11 @@ async function main() {
 
     // 26. AI Master (Gemini) + Extended 30-chat cap (7 Nov 2026).
     // NOTE on the rate limit: POST /api/master-chat allows 30 calls /
-    // 15 min and sections 18+21 already used 29 — so this section makes
-    // exactly ONE more HTTP master-chat POST (the mocked-AI end-to-end
-    // test below). Everything else AI is tested in-process via
+    // 15 min across the whole suite. Sections 18 (9) + 21 (15) already
+    // used 24, so this section makes exactly 6 HTTP master-chat POSTs
+    // (26c mocked-AI end-to-end: 1; dedupe: 4; 5-limit: 1) — bringing
+    // the total to 30, so section 27(f) is the 31st and trips the
+    // limiter. Everything else AI is tested in-process via
     // resolveAiMaster with a mock fetch — no real network calls.
     const ai = require('../src/ai-master');
     const { aiCostUsd, config: cfg } = require('../src/config');
@@ -588,7 +602,7 @@ async function main() {
     // …while the test's own HTTP calls keep using the real fetch.
     res = await realFetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14', sessionId: aiSession, message: 'What does my Day Master mean for work?', lang: 'en' }) });
     data = await res.json();
-    check('ai master HTTP: mocked Gemini answer returned, labelled ai, counter drops to 22/30', res.ok && data.ai === true && data.source === 'ai' && /Mocked AI answer/.test(data.answer) && mockCalls === 1 && data.questionsUsed === 8 && data.questionsRemaining === 22 && data.extended === true, `got ${res.status} ${JSON.stringify(data).slice(0, 200)}`);
+    check('ai master HTTP: mocked Gemini answer returned, labelled ai, counter shows 1 used / 29 left (only the AI reply counts)', res.ok && data.ai === true && data.source === 'ai' && /Mocked AI answer/.test(data.answer) && mockCalls === 1 && data.questionsUsed === 1 && data.questionsRemaining === 29 && data.extended === true, `got ${res.status} ${JSON.stringify(data).slice(0, 200)}`);
     res = await realFetch(`${BASE}/api/master-chat?token=${token}&email=buyer@example.com&birthDate=1990-05-14&sessionId=${aiSession}`);
     data = await res.json();
     check('ai master HTTP: stored history labels the AI reply source ai', res.ok && data.messages[data.messages.length - 1].source === 'ai', `last source: ${data.messages[data.messages.length - 1]?.source}`);
@@ -609,9 +623,9 @@ async function main() {
     let calls429 = 0;
     const mock429 = async () => { calls429++; return { ok: false, status: 429, json: async () => ({}) }; };
     r = await ai.resolveAiMaster({ email: 'ai3@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mock429 });
-    check('ai resolve: Gemini 429 → quota fallback + cooldown', r.status === 'fallback' && r.reason === 'quota' && calls429 === 1, JSON.stringify(r));
+    check('ai resolve: Gemini 429 is retried once, then quota fallback + cooldown', r.status === 'fallback' && r.reason === 'quota' && calls429 === 2, JSON.stringify(r));
     r = await ai.resolveAiMaster({ email: 'ai3@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello again?', lang: 'en', history: [], personality: null, fetchImpl: mock429 });
-    check('ai resolve: cooldown holds — second call never reaches Gemini', r.status === 'fallback' && r.reason === 'cooldown' && calls429 === 1, JSON.stringify(r));
+    check('ai resolve: cooldown holds — second call never reaches Gemini', r.status === 'fallback' && r.reason === 'cooldown' && calls429 === 2, JSON.stringify(r));
     ai.resetAiCooldownForTests();
     // 5xx → unavailable fallback after exactly one retry.
     let calls500 = 0;
@@ -646,9 +660,9 @@ async function main() {
     // (d2) AI resilience (7 Nov 2026 fix): one transient Google 503
     // must never silence the AI for an hour. The Gemini call retries
     // ONCE after ~1s; a 5xx/timeout then rests the AI for 5 minutes
-    // (not 1 hour), a 429 for 15 minutes; every attempt outcome is
-    // logged. These run BEFORE the global-cap top-up below, so the
-    // global limit does not mask them.
+    // (not 1 hour), a 429 for 3 minutes (after one retry, not 15);
+    // every attempt outcome is logged. These run BEFORE the
+    // global-cap top-up below, so the global limit does not mask them.
     ai.setGeminiApiKeyForTests('test-key-not-real');
     ai.resetAiCooldownForTests();
     let calls503 = 0;
@@ -675,14 +689,122 @@ async function main() {
     check('ai resilience: an expired cooldown no longer blocks', ai.aiCooldownState().active === false, JSON.stringify(ai.aiCooldownState()));
     r = await ai.resolveAiMaster({ email: 'cool@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello a third time?', lang: 'en', history: [], personality: null, fetchImpl: mockOk });
     check('ai resilience: after the cooldown expires the AI answers again', r.status === 'ai' && callsCool === 2, JSON.stringify(r).slice(0, 160));
-    // 429 → quota fallback, 15-minute cooldown, NO retry.
+    // 429 → retried once, then quota fallback with a 3-MINUTE
+    // cooldown (7 Nov 2026 fix 1: one transient per-minute 429 at
+    // 22:41 SGT silenced the AI for 15 min although the same key
+    // worked seconds later — a 429 is retried once after a 5–10 s
+    // backoff, and only two consecutive 429s rest the AI, for 3 min).
     let calls429b = 0;
     const mock429b = async () => { calls429b++; return { ok: false, status: 429, json: async () => ({}) }; };
     r = await ai.resolveAiMaster({ email: 'cool429@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mock429b });
     const cool429State = ai.aiCooldownState();
-    check('ai resilience: 429 → quota fallback, 15-min cooldown, no retry', r.status === 'fallback' && r.reason === 'quota' && calls429b === 1 && cool429State.active === true && cool429State.reason === 'quota' && cool429State.msLeft > 14 * 60 * 1000 && cool429State.msLeft <= 15 * 60 * 1000, JSON.stringify({ r, cool429State, calls429b }));
+    check('ai resilience: 429 → retried once, then quota fallback with a 3-min cooldown', r.status === 'fallback' && r.reason === 'quota' && calls429b === 2 && cool429State.active === true && cool429State.reason === 'quota' && cool429State.msLeft > 2 * 60 * 1000 && cool429State.msLeft <= 3 * 60 * 1000, JSON.stringify({ r, cool429State, calls429b }));
     check('ai resilience: cooldown fallback note is honest, EN + zh', /resting for a few minutes/.test(ai.fallbackNote('cooldown', 'en')) && /短暂休息/.test(ai.fallbackNote('cooldown', 'zh')), ai.fallbackNote('cooldown', 'en'));
     ai.resetAiCooldownForTests();
+    // (d3) 429 retry success (7 Nov 2026 fix 1): a 429 with a
+    // Retry-After header and a JSON quota body is retried once after
+    // the backoff — and the retry succeeds, so there is no fallback
+    // and no cooldown at all. The 6 s Retry-After is honoured
+    // (elapsed >= 5.5 s proves the header, not the 5 s default).
+    let calls429c = 0;
+    const mock429thenOk = async () => {
+      calls429c++;
+      if (calls429c === 1) {
+        return { ok: false, status: 429, headers: { get: (n) => (String(n).toLowerCase() === 'retry-after' ? '6' : null) }, text: async () => JSON.stringify({ error: { message: 'Quota exceeded for metric generativelanguage.googleapis.com/generate_content_requests', status: 'RESOURCE_EXHAUSTED' } }), json: async () => ({}) };
+      }
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'Recovered after 429.' }] } }], usageMetadata: { promptTokenCount: 1800, candidatesTokenCount: 120 } }) };
+    };
+    const t429start = Date.now();
+    r = await ai.resolveAiMaster({ email: 'retry429@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mock429thenOk });
+    const t429elapsed = Date.now() - t429start;
+    check('ai resilience: 429 with Retry-After is retried once and the retry succeeds (no fallback, no cooldown)', r.status === 'ai' && /Recovered after 429/.test(r.answer) && calls429c === 2 && t429elapsed >= 5500 && ai.aiCooldownState().active === false, JSON.stringify({ r, calls429c, t429elapsed }));
+    // (d4) Duplicate submissions (7 Nov 2026 fix 2): the live logs
+    // showed 3 identical Gemini calls in the same second — a
+    // double-tap / Enter+click with no in-flight guard. The server
+    // now collapses identical questions from the same buyer: a
+    // sequential resubmit within 5 s returns the stored answer, and
+    // concurrent identical requests share one Gemini call. These run
+    // over HTTP with a mocked Gemini (global.fetch override, as in
+    // 26c) and BEFORE the global-cap top-up below.
+    const realFetch2 = global.fetch;
+    let dupCalls = 0;
+    const mockDup = async () => {
+      dupCalls++;
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'Mocked AI answer for the duplicate test.' }] } }], usageMetadata: { promptTokenCount: 1800, candidatesTokenCount: 120 } }) };
+    };
+    ai.setGeminiApiKeyForTests('test-key-not-real');
+    global.fetch = mockDup;
+    const dupOrder = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('dup@example.com', '1990-05-14', 'Dup');
+    const { token: dupToken } = issueAccessToken('dup@example.com', '1990-05-14', dupOrder.lastInsertRowid);
+    const dupPost = (message) => realFetch2(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: dupToken, email: 'dup@example.com', birthDate: '1990-05-14', sessionId: 'smoke-dup-1', message, lang: 'en' }) });
+    res = await dupPost('What does my Day Master mean for work?');
+    data = await res.json();
+    check('dedupe: first identical question calls Gemini once and is stored', res.ok && data.ai === true && dupCalls === 1 && data.questionsUsed === 1, `got ${res.status} calls=${dupCalls} ${JSON.stringify(data).slice(0, 120)}`);
+    res = await dupPost('What does my Day Master mean for work?');
+    data = await res.json();
+    check('dedupe: immediate resubmit returns the stored answer, no second Gemini call, no chat consumed', res.ok && data.duplicate === true && data.ai === true && dupCalls === 1 && data.questionsUsed === 1 && /Mocked AI answer for the duplicate test/.test(data.answer), `got ${res.status} calls=${dupCalls} ${JSON.stringify(data).slice(0, 120)}`);
+    check('dedupe: sequential resubmit stored no duplicate rows', db.prepare("SELECT COUNT(*) c FROM master_chat_messages WHERE email = 'dup@example.com' AND role = 'user' AND source = 'master'").get().c === 1 && db.prepare("SELECT COUNT(*) c FROM master_chat_messages WHERE email = 'dup@example.com' AND role = 'master' AND source = 'ai'").get().c === 1, 'duplicate rows stored');
+    // Concurrent identical questions share one Gemini call.
+    const dup2Order = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('dup2@example.com', '1990-05-14', 'Dup2');
+    const { token: dup2Token } = issueAccessToken('dup2@example.com', '1990-05-14', dup2Order.lastInsertRowid);
+    dupCalls = 0;
+    const dup2Post = () => realFetch2(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: dup2Token, email: 'dup2@example.com', birthDate: '1990-05-14', sessionId: 'smoke-dup-2', message: 'Concurrent question about work?', lang: 'en' }) });
+    const [cRes1, cRes2] = await Promise.all([dup2Post(), dup2Post()]);
+    const cData1 = await cRes1.json();
+    const cData2 = await cRes2.json();
+    check('dedupe: two concurrent identical questions share one Gemini call, same answer, one marked duplicate', cRes1.ok && cRes2.ok && dupCalls === 1 && cData1.answer === cData2.answer && (cData1.duplicate === true || cData2.duplicate === true), `calls=${dupCalls} dup1=${cData1.duplicate} dup2=${cData2.duplicate}`);
+    check('dedupe: concurrent pair stored exactly one user + one AI row', db.prepare("SELECT COUNT(*) c FROM master_chat_messages WHERE email = 'dup2@example.com' AND role = 'user' AND source = 'master'").get().c === 1 && db.prepare("SELECT COUNT(*) c FROM master_chat_messages WHERE email = 'dup2@example.com' AND role = 'master' AND source = 'ai'").get().c === 1, 'concurrent duplicate rows stored');
+    global.fetch = realFetch2;
+    // (d5) The 5-AI-chat limit (7 Nov 2026 fix 3): a buyer who already
+    // received 5 AI replies is blocked on the next question (429 with
+    // the upgrade price and code 'master_limit_reached'), and the
+    // counter reads 5 used / 0 left. Rule-based replies never counted,
+    // so this buyer is built from pre-stored AI rows.
+    const lim5Order = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('limit5@example.com', '1990-05-14', 'Limit5');
+    const { token: lim5Token } = issueAccessToken('limit5@example.com', '1990-05-14', lim5Order.lastInsertRowid);
+    for (let i = 1; i <= 5; i++) {
+      db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'user', ?, 'en', 'master')").run('test-hash', 'smoke-lim5', 'limit5@example.com', '1990-05-14', `Stored question ${i}?`);
+      db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'master', ?, 'en', 'ai')").run('test-hash', 'smoke-lim5', 'limit5@example.com', '1990-05-14', `Stored AI answer ${i}.`);
+    }
+    res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: lim5Token, email: 'limit5@example.com', birthDate: '1990-05-14', sessionId: 'smoke-lim5', message: 'One more AI question?', lang: 'en' }) });
+    data = await res.json();
+    check('master-chat 5 AI chats used: 6th question is blocked (429, code master_limit_reached, upgrade $3)', res.status === 429 && data.code === 'master_limit_reached' && data.questionsUsed === 5 && data.questionsRemaining === 0 && data.upgradePriceCents === 300, `got ${res.status} ${JSON.stringify(data).slice(0, 160)}`);
+    res = await fetch(`${BASE}/api/master-chat?token=${lim5Token}&email=limit5@example.com&birthDate=1990-05-14&sessionId=smoke-lim5`);
+    data = await res.json();
+    check('master-chat 5 AI chats used: GET reads 5 used / 0 left', res.ok && data.questionsUsed === 5 && data.questionsRemaining === 0 && data.max === 5, JSON.stringify(data).slice(0, 120));
+    // (d6) Live Reader dedupe (7 Nov 2026 fix 2): the same double-tap
+    // path existed for Live Reader, where each question costs 1 of
+    // only 3. An immediate identical resubmit returns the stored
+    // answer and consumes nothing.
+    const lrDupOrder = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('lrdup@example.com', '1990-05-14', 'LrDup');
+    const { token: lrDupToken } = issueAccessToken('lrdup@example.com', '1990-05-14', lrDupOrder.lastInsertRowid);
+    const lrDupPost = () => fetch(`${BASE}/api/live-reader`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: lrDupToken, email: 'lrdup@example.com', birthDate: '1990-05-14', sessionId: 'smoke-lrdup', question: 'Should I change jobs this year?', lang: 'en' }) });
+    res = await lrDupPost();
+    data = await res.json();
+    check('live-reader dedupe: first identical question succeeds, 1 used', res.ok && data.questionsUsed === 1 && data.answer?.length > 50, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
+    res = await lrDupPost();
+    data = await res.json();
+    check('live-reader dedupe: immediate resubmit returns the stored answer, still 1 used, marked duplicate', res.ok && data.duplicate === true && data.questionsUsed === 1 && data.questionsRemaining === 2 && data.answer?.length > 50, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
+    check('live-reader dedupe: resubmit stored no duplicate rows', db.prepare("SELECT COUNT(*) c FROM master_chat_messages WHERE email = 'lrdup@example.com' AND role = 'user' AND source = 'live-reader'").get().c === 1, 'duplicate LR rows stored');
+    // (d7) The counter counts AI replies only (7 Nov 2026 fix 3):
+    // a buyer with 3 rule-based + 2 AI replies reads 2 used.
+    const cntOrder = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('count@example.com', '1990-05-14', 'Count');
+    const { token: cntToken } = issueAccessToken('count@example.com', '1990-05-14', cntOrder.lastInsertRowid);
+    db.prepare("INSERT INTO chat_upgrades (email, birth_date, order_id, expires_at) VALUES (?, ?, ?, datetime('now', '+90 days'))").run('count@example.com', '1990-05-14', cntOrder.lastInsertRowid);
+    for (let i = 1; i <= 3; i++) {
+      db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'user', ?, 'en', 'master')").run('test-hash', 'smoke-cnt', 'count@example.com', '1990-05-14', `Rule-based question ${i}?`);
+      db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'master', ?, 'en', 'rule-based')").run('test-hash', 'smoke-cnt', 'count@example.com', '1990-05-14', `Rule-based answer ${i}.`);
+    }
+    for (let i = 1; i <= 2; i++) {
+      db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'user', ?, 'en', 'master')").run('test-hash', 'smoke-cnt', 'count@example.com', '1990-05-14', `AI question ${i}?`);
+      db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'master', ?, 'en', 'ai')").run('test-hash', 'smoke-cnt', 'count@example.com', '1990-05-14', `AI answer ${i}.`);
+    }
+    res = await fetch(`${BASE}/api/master-chat?token=${cntToken}&email=count@example.com&birthDate=1990-05-14&sessionId=smoke-cnt`);
+    data = await res.json();
+    check('counter counts AI replies only: 3 rule-based + 2 AI reads 2 used / 28 left (Extended)', res.ok && data.extended === true && data.questionsUsed === 2 && data.questionsRemaining === 28 && data.max === 30, JSON.stringify(data).slice(0, 160));
+    // NOTE: the test Gemini key stays set for the global-cap test
+    // below — do NOT clear it here (resolveAiMaster answers 'no-key'
+    // before it ever checks the cap).
     // Global daily cap: top the ledger up to 100 calls, then AI stops for everyone.
     const todaySgt = ai.sgtToday();
     const usedSoFar = ai.globalAiCallsToday(todaySgt);
@@ -715,7 +837,10 @@ async function main() {
     // not match the expected pattern" is what Safari's res.json()
     // throws on an HTML error page). The failed question must not be
     // stored and must not consume a chat.
-    const mcFn = appJs.slice(appJs.indexOf('async function sendMasterChat'), appJs.indexOf("document.querySelectorAll('[data-chip]')"));
+    const mcStart = appJs.indexOf('async function sendMasterChat');
+    // NB: search the end marker FROM mcStart — 'document.querySelectorAll'
+    // also occurs earlier, inside setMcBusy just above sendMasterChat.
+    const mcFn = appJs.slice(mcStart, appJs.indexOf("document.querySelectorAll('[data-chip]')", mcStart));
     check('frontend master chat: transport failure shows the friendly message, never the raw error', mcFn.includes("t('masterUnreachable')") && !mcFn.includes('err.message') && !mcFn.includes("t('networkError')"), 'sendMasterChat still leaks raw errors');
     check('frontend master chat: non-JSON reply is caught before parsing', mcFn.includes('try { data = await res.json(); } catch { data = null; }'), 'res.json() still unguarded in sendMasterChat');
     check('frontend master chat: friendly message keys exist in EN + Simplified Chinese', appJs.includes('masterUnreachable') && /masterUnreachable: '\\u638c\\u95e8/.test(appJs), 'masterUnreachable key missing in one language');
@@ -723,17 +848,20 @@ async function main() {
     check('frontend live reader: transport failure shows the friendly message, never the raw error', lrFn.includes("t('unreachable')") && !lrFn.includes('err.message') && !lrFn.includes('Error: '), 'live reader still leaks raw errors');
 
     // 27. Buyer-keyed history + counters + JSON rate limit (7 Nov 2026 fix).
-    // (c) The counter counts QUESTIONS asked, not AI calls: buyer@example.com
-    // asked 7 rule-based follow-ups (section 21) + 1 AI follow-up (section
-    // 26c) = 8 used / 22 left, even though only 1 of those was an AI reply.
+    // (c) The counter counts AI REPLIES, not questions asked (7 Nov
+    // 2026 fix 3): buyer@example.com asked 3 rule-based follow-ups
+    // (section 21) + 1 AI follow-up (section 26c) = 1 used / 29 left
+    // — the 3 rule-based replies never consumed a chat. The thread
+    // holds 14 messages: 3 Live Reader pairs + 3 follow-up pairs +
+    // 1 AI pair.
     // (d) The thread survives a fresh sessionId (reload / Stripe return):
     // a GET with a never-used sessionId returns the SAME full thread.
     res = await fetch(`${BASE}/api/master-chat?token=${token}&email=buyer@example.com&birthDate=1990-05-14&sessionId=smoke-fresh-session-1`);
     data = await res.json();
-    check('buyer-keyed counter + history: fresh sessionId returns the full thread, 8 used / 22 left', res.ok && data.extended === true && data.questionsUsed === 8 && data.questionsRemaining === 22 && data.max === 30 && Array.isArray(data.messages) && data.messages.length === 22 && data.messages[0].source === 'live-reader' && data.messages[data.messages.length - 1].source === 'ai', `got ${res.status} used=${data.questionsUsed} left=${data.questionsRemaining} len=${data.messages?.length} last=${data.messages?.[data.messages.length - 1]?.source}`);
+    check('buyer-keyed counter + history: fresh sessionId returns the full thread, 1 used / 29 left', res.ok && data.extended === true && data.questionsUsed === 1 && data.questionsRemaining === 29 && data.max === 30 && Array.isArray(data.messages) && data.messages.length === 14 && data.messages[0].source === 'live-reader' && data.messages[data.messages.length - 1].source === 'ai', `got ${res.status} used=${data.questionsUsed} left=${data.questionsRemaining} len=${data.messages?.length} last=${data.messages?.[data.messages.length - 1]?.source}`);
     res = await fetch(`${BASE}/api/master-chat?token=${token}&email=buyer@example.com&birthDate=1990-05-14&sessionId=smoke-fresh-session-2`);
     data = await res.json();
-    check('buyer-keyed history: a second fresh sessionId returns the same thread again', res.ok && Array.isArray(data.messages) && data.messages.length === 22 && data.questionsUsed === 8, `got ${res.status} len=${data.messages?.length}`);
+    check('buyer-keyed history: a second fresh sessionId returns the same thread again', res.ok && Array.isArray(data.messages) && data.messages.length === 14 && data.questionsUsed === 1, `got ${res.status} len=${data.messages?.length}`);
     // The AI-resting flag is exposed (false here — no cooldown is active).
     check('master-chat GET exposes aiResting (false when no cooldown)', data.aiResting === false, `aiResting=${data.aiResting}`);
     // (e) Live Reader count persists across sessions: buyer@example.com
@@ -751,8 +879,9 @@ async function main() {
     // (f) The rate limiter answers in JSON, not plain text — the
     // frontend calls res.json() on every reply, and the old plain-text
     // 429 surfaced as the generic "unreachable" message. The suite has
-    // already made exactly 30 POST /api/master-chat calls (sections
-    // 18 + 21 + 26c), so this 31st call trips masterChatLimiter.
+    // already made 30 POST /api/master-chat calls (sections 18: 9,
+    // 21: 15, 26c: 1, 26 d4: 4, 26 d5: 1), so this 31st call trips
+    // masterChatLimiter (30 / 15 min).
     res = await fetch(`${BASE}/api/master-chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, email: 'buyer@example.com', birthDate: '1990-05-14', sessionId: 'smoke-limiter-1', message: 'Should be rate-limited?', lang: 'en' }) });
     const limiterCtype = res.headers.get('content-type') || '';
     let limiterData = null;
@@ -761,7 +890,7 @@ async function main() {
     // …and the tripped limiter consumed no chat: the counter is unchanged.
     res = await fetch(`${BASE}/api/master-chat?token=${token}&email=buyer@example.com&birthDate=1990-05-14&sessionId=smoke-limiter-2`);
     data = await res.json();
-    check('rate limiter trip consumes no chat (counter unchanged at 8 used / 22 left)', res.ok && data.questionsUsed === 8 && data.questionsRemaining === 22, `got ${res.status} used=${data.questionsUsed} left=${data.questionsRemaining}`);
+    check('rate limiter trip consumes no chat (counter unchanged at 1 used / 29 left)', res.ok && data.questionsUsed === 1 && data.questionsRemaining === 29, `got ${res.status} used=${data.questionsUsed} left=${data.questionsRemaining}`);
     // Frontend: the AI-resting note exists (EN + Simplified Chinese) and
     // is wired into loadMasterChat / sendMasterChat.
     check('frontend shows an honest AI-resting note when the AI is cooling down', appJs.includes('function renderAiRestNote') && appJs.includes("t('aiRestingNote')") && appJs.includes('aiRestingNote:') && /aiRestingNote: 'AI \\u638c\\u95e8/.test(appJs) && html.includes('id="mc-ai-rest"'), 'ai-resting note missing from the frontend');
@@ -786,6 +915,12 @@ async function main() {
       odb.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, source) VALUES (?, 'old-sess-2', 'master', 'Summary reply.', 'master')").run(mth);
       odb.prepare('INSERT INTO live_reader_usage (token_hash, session_id, question_count) VALUES (?, ?, ?)').run(mth, 'old-sess-1', 2);
       odb.prepare('INSERT INTO live_reader_usage (token_hash, session_id, question_count) VALUES (?, ?, ?)').run(mth, 'old-sess-2', 1);
+      // Two stored Live Reader questions straddling the buyer-rule
+      // cutoff (d7eb7336 deploy, 2026-11-07 14:19:31 UTC): one asked
+      // under the old per-session rule (must NOT count after the
+      // repair) and one under the buyer-keyed rule (must count).
+      odb.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, source, created_at) VALUES (?, 'old-sess-1', 'user', 'Pre-cutoff LR question?', 'live-reader', '2026-11-07 14:00:00')").run(mth);
+      odb.prepare("INSERT INTO master_chat_messages (token_hash, session_id, role, content, source, created_at) VALUES (?, 'old-sess-1', 'user', 'Post-cutoff LR question?', 'live-reader', '2026-11-07 14:30:00')").run(mth);
       odb.close();
     }
     process.env.DATABASE_PATH = migPath;
@@ -796,16 +931,34 @@ async function main() {
       const backfilled = migDb.prepare("SELECT COUNT(*) c FROM master_chat_messages WHERE email = 'mig@example.com' AND birth_date = '1973-07-20'").get().c;
       const lrMig = migDb.prepare("SELECT question_count FROM live_reader_usage_by_buyer WHERE email = 'mig@example.com'").get();
       const oldGone = !migDb.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='live_reader_usage'").get();
-      check('migration: old-schema DB starts cleanly and backfills buyer keys (2 chat rows, LR 2+1=3)', backfilled === 2 && lrMig?.question_count === 3 && oldGone, `backfilled=${backfilled} lr=${lrMig?.question_count} oldGone=${oldGone}`);
+      check('migration: old-schema DB starts cleanly and backfills buyer keys (4 chat rows; LR repaired to 1 — only the post-cutoff question counts, not the 2+1 backfill)', backfilled === 4 && lrMig?.question_count === 1 && oldGone, `backfilled=${backfilled} lr=${lrMig?.question_count} oldGone=${oldGone}`);
       // Second load: idempotent, no double-counting.
       delete require.cache[require.resolve('../src/config')];
       delete require.cache[require.resolve('../src/db')];
       const migDb2 = require('../src/db').db;
       const lrMig2 = migDb2.prepare("SELECT question_count FROM live_reader_usage_by_buyer WHERE email = 'mig@example.com'").get();
-      check('migration: second load is idempotent (LR count still 3, chat rows still 2)', lrMig2?.question_count === 3 && migDb2.prepare('SELECT COUNT(*) c FROM master_chat_messages').get().c === 2, `lr=${lrMig2?.question_count}`);
+      check('migration: second load is idempotent (LR count still 1, chat rows still 4)', lrMig2?.question_count === 1 && migDb2.prepare('SELECT COUNT(*) c FROM master_chat_messages').get().c === 4, `lr=${lrMig2?.question_count}`);
     } catch (e) {
-      check('migration: old-schema DB starts cleanly and backfills buyer keys (2 chat rows, LR 2+1=3)', false, e.message);
+      check('migration: old-schema DB starts cleanly and backfills buyer keys (4 chat rows; LR repaired to 1)', false, e.message);
     }
+
+    // 29. Live Reader used-count endpoint (7 Nov 2026 fix 4): the
+    // page used to show "0 / 3" on load because it never fetched the
+    // buyer's real count. GET /api/live-reader returns it, so the
+    // screen can never say 0/3 when the server will reject.
+    res = await fetch(`${BASE}/api/live-reader?token=${token}&email=buyer@example.com&birthDate=1990-05-14&sessionId=smoke-lr-get-1`);
+    data = await res.json();
+    check('live-reader GET: buyer who used all 3 reads 3 used / 0 left', res.ok && data.questionsUsed === 3 && data.questionsRemaining === 0 && data.max === 3, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
+    res = await fetch(`${BASE}/api/live-reader?token=${mcToken}&email=mc@example.com&birthDate=1990-05-14&sessionId=smoke-lr-get-2`);
+    data = await res.json();
+    check('live-reader GET: buyer with 2 used reads 2 used / 1 left', res.ok && data.questionsUsed === 2 && data.questionsRemaining === 1 && data.max === 3, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
+    res = await fetch(`${BASE}/api/live-reader?email=fresh-lr@example.com&birthDate=1990-05-14&sessionId=smoke-lr-get-3`);
+    check('live-reader GET: 403 without token', res.status === 403, `got ${res.status}`);
+    const freshLrOrder = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('fresh-lr@example.com', '1990-05-14', 'FreshLr');
+    const { token: freshLrToken } = issueAccessToken('fresh-lr@example.com', '1990-05-14', freshLrOrder.lastInsertRowid);
+    res = await fetch(`${BASE}/api/live-reader?token=${freshLrToken}&email=fresh-lr@example.com&birthDate=1990-05-14&sessionId=smoke-lr-get-4`);
+    data = await res.json();
+    check('live-reader GET: fresh buyer reads 0 used / 3 left', res.ok && data.questionsUsed === 0 && data.questionsRemaining === 3 && data.max === 3, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
 
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
