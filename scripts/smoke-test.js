@@ -160,6 +160,63 @@ async function main() {
     check('numerology: no "undefined" in any full reading (all life paths)', badDates.length === 0, badDates.slice(0, 5).join(', '));
     check('numerology sweep covered life paths 1-9 + masters', [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 22, 33].every((n) => seenLp.has(n)), `seen: ${[...seenLp].sort((a, b) => a - b).join(',')}`);
 
+    // 15. Ambience (7 Nov 2026): music toggle + animations exist, music
+    // never autoplays. The toggle must be in the page, music.js must be
+    // loaded, and the module must only start audio from a user gesture
+    // (click handler / first pointerdown or keydown), never on load.
+    const pub = path.join(__dirname, '..', 'public');
+    const html = fs.readFileSync(path.join(pub, 'index.html'), 'utf8');
+    const musicJs = fs.readFileSync(path.join(pub, 'music.js'), 'utf8');
+    const css = fs.readFileSync(path.join(pub, 'styles.css'), 'utf8');
+    check('music toggle present and off by default', html.includes('id="music-toggle"') && html.includes('aria-pressed="false"') && html.includes('src="/music.js"'), 'toggle or script tag missing');
+    check('music never autoplays', !/^startMusic\(\);/m.test(musicJs) && musicJs.includes("addEventListener('click'") && musicJs.includes("addEventListener('pointerdown'"), 'music starts without a gesture');
+    check('music remembers toggle in localStorage', musicJs.includes("localStorage.getItem(KEY)") && musicJs.includes("localStorage.setItem(KEY"), 'no localStorage persistence');
+    check('hero animation + reduced-motion guard present', css.includes('@keyframes spinSlow') && css.includes('@keyframes twinkle') && css.includes('prefers-reduced-motion'), 'spin/twinkle/reduced-motion CSS missing');
+
+    // 15. Regression (7 Nov 2026): pre-paid page must show all six systems
+    // before any birth date is entered, and Yi-Jing must cast 6 lines.
+    // (a) The teaser now carries the six coin-toss lines, and they must be
+    // exactly the full reading's lines — same order, same sums, same
+    // solid/broken + changing flags — so the hexagram the client animates
+    // is the hexagram the server computed. No line interpretation text
+    // may leak into the teaser.
+    const { buildTeaser } = require('../src/readings');
+    let yiBad = [];
+    for (const bd of ['1990-05-14', '1983-05-21', '2000-06-15', '1975-12-31', '1999-02-28']) {
+      const tz = buildTeaser({ birthDate: bd, birthTime: '08:30', name: 'Test' });
+      const full = buildFullReading({ birthDate: bd, birthTime: '08:30', name: 'Test' });
+      const tl = tz.yijing.lines;
+      if (!Array.isArray(tl) || tl.length !== 6) { yiBad.push(`${bd}: lines=${tl?.length}`); continue; }
+      for (let i = 0; i < 6; i++) {
+        const fl = full.yijing.lines[i];
+        if (tl[i].line !== i + 1 || tl[i].sum !== fl.sum || tl[i].yang !== fl.yang || tl[i].changing !== fl.changing) yiBad.push(`${bd}: line ${i + 1} mismatch`);
+        if (tl[i].sum < 6 || tl[i].sum > 9 || typeof tl[i].yang !== 'boolean' || typeof tl[i].changing !== 'boolean') yiBad.push(`${bd}: line ${i + 1} bad values`);
+        if ('text' in tl[i]) yiBad.push(`${bd}: line ${i + 1} leaks interpretation text`);
+      }
+      if (tz.yijing.hexagram !== full.yijing.hexagram) yiBad.push(`${bd}: hexagram mismatch ${tz.yijing.hexagram} vs ${full.yijing.hexagram}`);
+      // Lines must actually build the hexagram: yang bits of lines 1-3 =
+      // lower trigram, lines 4-6 = upper trigram. Recompute from the lines
+      // and check the hexagram number matches the full reading's.
+      const bits = tl.map((l) => (l.yang ? 1 : 0));
+      if (bits.filter((b) => b).length === 0 && full.yijing.hexagramNumber !== 2) yiBad.push(`${bd}: all-yin lines but hexagram is not 2`);
+      if (bits.filter((b) => b).length === 6 && full.yijing.hexagramNumber !== 1) yiBad.push(`${bd}: all-yang lines but hexagram is not 1`);
+    }
+    check('yijing teaser carries 6 server lines matching the full reading', yiBad.length === 0, yiBad.slice(0, 5).join('; '));
+    // (b) Frontend: the six system sections render on load with no teaser
+    // (preview path), and the Yi-Jing cast animates the server lines one
+    // toss at a time instead of a single blind animation.
+    const appJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+    const previewOk = appJs.includes('function previewSystemsHTML') && appJs.includes('function promptBirthDate')
+      && ['sys-bazi', 'sys-ziwei', 'sys-horo', 'sys-yijing', 'sys-tarot', 'sys-num'].every((id) => appJs.includes(`id="${id}"`) || appJs.includes(`id="sys-`))
+      && appJs.includes("if (!src) { box.innerHTML = previewSystemsHTML(); bindPreviewEvents(); return; }")
+      && !appJs.includes("if (!src) { box.innerHTML = ''; return; }");
+    check('frontend renders six-system preview with no teaser', previewOk, 'preview path missing or empty-preview early return still present');
+    const castOk = appJs.includes('yijingLinesOf()') && appJs.includes('hexagramDiagramHTML') && appJs.includes('castingLine')
+      && appJs.includes('step(i + 1)') && appJs.includes('i >= 6');
+    check('frontend Yi-Jing casts 6 sequential lines from server data', castOk, 'sequential 6-line cast not found in app.js');
+    const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+    check('styles include hexagram diagram + attention highlight', css.includes('.hex-diagram') && css.includes('.hex-bar.yang') && css.includes('.card.attention'), 'hexagram/attention CSS missing');
+
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
   } finally {
