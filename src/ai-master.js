@@ -46,7 +46,12 @@
  *    (honouring Retry-After) before any cooldown starts, so one
  *    transient 429 never silences the AI. The Gemini call itself
  *    retries ONCE after ~1s on 5xx / timeout / network errors before
- *    falling back at all.
+ *    falling back at all. Every attempt has a HARD deadline
+ *    (config.ai.geminiTimeoutMs, default 25 s) covering the fetch AND
+ *    the response-body read — a stalled body or a signal-ignoring
+ *    fetch can never hang the Master POST (8 Nov 2026 fix 4: two live
+ *    POSTs hung 10 min / 90 s with zero log lines because the old
+ *    AbortController guarded only time-to-first-byte).
  *  - usage ledger (ai_usage table): every AI call + every fallback is
  *    recorded per buyer per SGT day; no message text is ever logged.
  *    The ledger is the COST record only — the Master chat counter
@@ -66,6 +71,31 @@ const { db } = require('./db');
 // and a mock fetch instead of touching the environment or the network.
 let testKeyOverride = null;
 function setGeminiApiKeyForTests(key) { testKeyOverride = key || null; }
+// Per-attempt hard deadline (8 Nov 2026 fix 4) — see withDeadline below.
+// Tests override it so the timeout regression test runs in under a second.
+let testTimeoutOverride = null;
+function setGeminiTimeoutForTests(ms) { testTimeoutOverride = ms == null ? null : Number(ms); }
+function geminiTimeoutMs() {
+  if (testTimeoutOverride !== null && Number.isFinite(testTimeoutOverride) && testTimeoutOverride > 0) return testTimeoutOverride;
+  return (config.ai && config.ai.geminiTimeoutMs) || 25000;
+}
+/** Race any promise against a hard deadline. On timeout the returned
+ * promise rejects with a 504 TimeoutError naming the phase ('fetch' /
+ * 'response body' / 'error body') — the caller treats it like a 5xx:
+ * log, retry once, then fall back + cooldown. The deadline timer is
+ * always cleared when the race settles, so it never leaks. */
+function withDeadline(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const e = new Error(`Gemini timed out (${label} after ${ms}ms)`);
+      e.status = 504;
+      e.name = 'TimeoutError';
+      reject(e);
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 // Cooldown after a Gemini failure (7 Nov 2026 fix): short, and split by
 // cause — a transient 5xx / timeout / network error rests the AI for
 // 5 minutes, a 429 quota error for 3 minutes (was 15 min: one transient
@@ -294,15 +324,25 @@ async function callGemini({ systemInstruction, contents, fetchImpl }) {
     }
   }
   for (let attempt = 0; attempt < 2; attempt++) {
+    // Hard deadline for this whole attempt (8 Nov 2026 fix 4): the old
+    // 20 s AbortController guarded only the fetch — once headers arrived
+    // a stalled body could hang res.json()/res.text() forever, and a
+    // fetch that ignores the abort signal could hang the Master POST
+    // with no log line at all (live 8 Nov 00:37–00:40 SGT: two POSTs hung
+    // 10 min / 90 s, zero server log lines). The AbortController stays
+    // as the first line of defence; withDeadline is the guarantee — the
+    // fetch AND each body read race the same deadline, so the attempt
+    // can never run longer than geminiTimeoutMs.
+    const timeoutMs = geminiTimeoutMs();
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 20000);
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await fetchFn(url, {
+      const res = await withDeadline(fetchFn(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': getGeminiApiKey() },
         body: JSON.stringify(body),
         signal: ctrl.signal,
-      });
+      }), timeoutMs, 'fetch');
       clearTimeout(timer);
       if (res.status === 429) {
         // Read the error body for the quota detail (it is the only
@@ -311,8 +351,10 @@ async function callGemini({ systemInstruction, contents, fetchImpl }) {
         // backoff — Retry-After when present, clamped to 5–10 s —
         // before falling back. Only a second consecutive 429 starts
         // the (short, 3-min) cooldown. Mocks in the smoke test have
-        // no res.text / res.headers — both are optional here.
-        const bodyText = typeof res.text === 'function' ? await res.text().catch(() => '') : '';
+        // no res.text / res.headers — both are optional here. The body
+        // read races the same deadline: a stalled error body must not
+        // hang the attempt either.
+        const bodyText = typeof res.text === 'function' ? await withDeadline(res.text().catch(() => ''), timeoutMs, 'error body').catch(() => '') : '';
         const retryAfterRaw = res.headers && typeof res.headers.get === 'function' ? res.headers.get('retry-after') : null;
         const retryAfterSecs = retryAfterRaw !== null && retryAfterRaw !== undefined ? parseInt(String(retryAfterRaw), 10) : NaN;
         const detail = extract429Detail(bodyText);
@@ -338,7 +380,7 @@ async function callGemini({ systemInstruction, contents, fetchImpl }) {
         e.status = res.status;
         throw e;
       }
-      const data = await res.json();
+      const data = await withDeadline(res.json(), timeoutMs, 'response body');
       const text = (data?.candidates?.[0]?.content?.parts || [])
         .map((p) => p.text || '').join('').trim();
       if (!text) {
@@ -477,7 +519,15 @@ function fallbackNote(reason, lang) {
 // buyer hitting a limit.
 async function resolveAiMaster({ email, birthDate, extended, reading, message, lang = 'en', history = [], personality = null, fetchImpl, questionsAsked = 0 }) {
   if (!aiMasterLive()) return { status: 'fallback', reason: 'no-key' };
-  if (Date.now() < cooldownUntil) return { status: 'fallback', reason: 'cooldown' };
+  if (Date.now() < cooldownUntil) {
+    // One log line per cooldown-served request (8 Nov 2026 fix 4): the
+    // old silence here made the logs show NOTHING for 6 straight Master
+    // questions during the 8 Nov 00:33–00:36 live run, so the outage
+    // looked like no traffic at all. Short, no user text, no birth dates.
+    const left = Math.ceil((cooldownUntil - Date.now()) / 1000);
+    console.log(`AI Master: cooldown skip (${cooldownReason || 'unavailable'}) — resting ${left}s more, serving rule-based`);
+    return { status: 'fallback', reason: 'cooldown' };
+  }
   const day = sgtToday();
   if (extended && (buyerAiCallsTotal(email, birthDate) >= config.ai.extendedChatTotalMax || questionsAsked >= config.ai.extendedChatTotalMax)) {
     recordAiFallback(email, birthDate);
@@ -526,4 +576,5 @@ module.exports = {
   aiUsageSummary, fallbackNote, resolveAiMaster, aiCooldownState,
   COOLDOWN_5XX_MS, COOLDOWN_429_MS,
   setGeminiApiKeyForTests, resetAiCooldownForTests, setAiCooldownForTests,
+  setGeminiTimeoutForTests, geminiTimeoutMs,
 };
