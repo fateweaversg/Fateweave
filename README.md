@@ -1,9 +1,9 @@
 # FateWeave 天机汇 — Pay-First Server Build
 
 Deployable Node.js + SQLite codebase for the FateWeave pay-first model.
-**This is not a Muse artifact and has no public link here** — it is meant to be
-hosted publicly on Railway / Render (or similar), where a real server can verify
-payments, store access tokens, and send emails.
+The handover identifies the existing Railway deployment at
+https://fateweave-production.up.railway.app. This folder is a local continuation
+of the supplied source; local changes are not deployed automatically.
 
 ## Model (decided 7 Nov 2026 — supersedes pick-1-system + unlock code)
 
@@ -15,9 +15,13 @@ payments, store access tokens, and send emails.
   then $8 full unlock. Stripe Checkout is primary; HitPay is an optional
   alternative (stubbed — see below).
 - **After verified payment:** full details open on the site for that email +
-  birth date, Live Reader opens (voice in/out, 3 questions max per session,
-  server-enforced), a detailed report is emailed, and free daily encouragement
-  at 7:00am SGT starts (unsubscribe anytime).
+  birth date, Live Reader opens (voice in/out, 3 questions per buyer,
+  server-enforced), and the detailed report can be downloaded. Email is
+  attempted, but the Resend sandbox rejects non-owner recipients. Daily
+  encouragement requires working email and a separately configured schedule.
+- **Ask the Master:** 5 AI replies included; the $3 Extended upgrade allows
+  30 total during the 90-day unlock. Only AI replies consume the allowance.
+  History and usage are keyed by email + birth date and survive reloads.
 - **No unlock codes.** No deterministic code generator. No secrets in the
   browser. No visible owner-preview link. Access tokens are random
   (`crypto.randomBytes`), stored hashed, bound to email + birth date, 90-day expiry.
@@ -37,6 +41,8 @@ npm install
 npm run hash-owner-password "a-strong-password-at-least-10-chars"
 # put the printed hash in .env as OWNER_PASSWORD_HASH
 npm test                    # smoke test, no real keys needed
+node scripts/dom-check.js    # guided-flow DOM checks
+node scripts/success-check.js # checkout-return checks
 npm start                   # http://localhost:3000
 ```
 
@@ -53,15 +59,22 @@ node src/jobs/daily.js
 | GET | `/api/config` | public | Price in force (server-side date logic), Stripe publishable key |
 | POST | `/api/hook` | public | Teaser only — never full details |
 | POST | `/api/checkout` | public | Creates a Stripe Checkout Session; price decided server-side |
+| POST | `/api/checkout-upgrade` | paid token | Extended Master Chat checkout |
 | GET | `/api/checkout-session/:sessionId` | public | Exchanges a *paid* Checkout Session for a random access token; emails the report |
 | POST | `/api/webhook/stripe` | Stripe signature | `STRIPE_WEBHOOK_SECRET` verified; marks order paid |
 | POST | `/api/webhook/hitpay` | — | **Stub (501)** until HitPay signature verification is implemented |
 | GET | `/api/report?token=&email=&birthDate=` | paid token | Full details, 403 otherwise |
-| POST | `/api/live-reader` | paid token | 3 questions max per session, server-enforced |
+| POST | `/api/resend-report` | paid token | Attempts report email; reports provider errors |
+| GET | `/api/live-reader` | paid token | Buyer usage and remaining questions |
+| POST | `/api/live-reader` | paid token | 3 questions per buyer, server-enforced |
+| GET | `/api/master-chat` | paid token | Persistent history and AI allowance |
+| POST | `/api/master-chat` | paid token | Gemini answer with rule-based fallback |
+| GET | `/api/personality/questions` | public | Optional Enneagram / MBTI quizzes |
 | POST | `/api/personality` | paid token | Brief Enneagram / MBTI scoring |
 | POST | `/api/owner/login` | password | Server-checked bcrypt hash; returns a 24h owner token |
 | POST | `/api/owner/issue-access` | owner token | Manually issue access for an email + birth date |
 | GET | `/api/owner/report` | owner token | Owner preview of a full reading |
+| GET | `/api/owner/ai-usage` | owner token | AI usage ledger |
 | GET | `/api/unsubscribe?email=` | — | Opt out of daily encouragement |
 
 ## Project layout
@@ -76,7 +89,8 @@ server-build/
     db.js           SQLite (node:sqlite) schema: orders, access_tokens,
                     live_reader_usage, owner_tokens, email_subscribers, daily_sends
     readings.js     Seeded rule-based reading engine (teaser vs full)
-    i18n.js         EN / Traditional Chinese strings + daily encouragements
+    i18n.js         EN / Simplified Chinese strings
+    ai-master.js    Gemini provider, guardrails, daily cap and fallback
     email.js        Resend → SMTP → console log fallback (dev only)
     auth.js         Random hashed tokens, owner bcrypt check
     jobs/daily.js   07:00 SGT daily encouragement sender
@@ -101,7 +115,8 @@ server-build/
    `checkout.session.completed`, and copy the signing secret into
    `STRIPE_WEBHOOK_SECRET`.
 6. Set `BASE_URL` to your Railway domain.
-7. Deploy. Test with Stripe **test** keys first, then switch to live keys.
+7. Deploy. Test with Stripe **test** keys first. The owner must complete live
+   verification and one real $1 payment before any public launch offer.
 8. Daily job: Railway → Cron (or a separate service) running
    `node src/jobs/daily.js` at 07:00 Asia/Singapore daily.
 
@@ -143,8 +158,10 @@ killed the static-page code.
 ## What this build does NOT do
 
 - No real payment is taken until Stripe live keys + a live webhook are configured.
-- Live Reader answers are rule-based and grounded in the buyer's reading
-  (no LLM call yet). A model-backed Live Reader is a Phase 2 option.
+- Live Reader answers are rule-based and grounded in the buyer's reading.
+  Ask the Master uses Gemini when available and falls back without consuming
+  the buyer's AI allowance when unavailable.
 - HitPay auto-unlock is **not** wired — the webhook is a stub that refuses to
   mark orders paid until its signature check is implemented.
-- No daily email is actually sent until Resend or SMTP is configured.
+- Daily email requires a working sender and a scheduled job. The supplied
+  handover reports that the live daily schedule is not configured.

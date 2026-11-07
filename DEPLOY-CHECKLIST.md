@@ -1,7 +1,14 @@
 # FateWeave — Deploy Checklist (what Jason must provide)
 
-Nothing below has been created or deployed. No accounts were opened, no live
-payment was taken, nothing was posted. Work through this list in order.
+The supplied 8 November handover reports an existing Railway deployment,
+GitHub repository, persistent SQLite volume, and working Stripe TEST payments.
+The checkboxes below are a verification checklist, not a record that setup
+has never happened. This local continuation has not been deployed.
+
+Remaining launch blockers reported in the handover: owner password reset,
+working email beyond the Resend sandbox, owner-only Stripe live verification
+and one real $1 test, and the owner's website approval before social posting.
+Paid Gemini billing and domain purchases require the owner's decision.
 
 ## 1. Code & hosting account
 - [ ] Push `server-build/` to a GitHub repo (private is fine).
