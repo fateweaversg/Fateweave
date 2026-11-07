@@ -541,6 +541,26 @@ function topicWord(topic, lang) {
   return (words[topic] || words.general)[lang === 'zh' ? 'zh' : 'en'];
 }
 
+/* Time-horizon questions ("next year", "明年", "next month", "this year",
+   "soon" ...) must blend timing content — Yi-Jing timing, Personal Year
+   and the hexagram — into the answer, not only the generic topic section.
+   (Fix, 7 Nov 2026: a "next year" career question used to get only the
+   generic career section, with no timing at all.) */
+function hasTimeHorizon(question) {
+  const q = String(question || '');
+  return /next year|next month|next week|this year|this month|coming year|coming month|soon|in the future/i.test(q)
+    || /明年|今年|下个月|下周|这个月|很快|不久|未来/.test(q);
+}
+function timingLine(reading, lang) {
+  const zh = lang === 'zh';
+  const L = (o) => (o && typeof o === 'object' ? (zh ? o.zh || o.en : o.en || o.zh) : o);
+  const sentYi = zh ? plainZH(firstSentence(reading.yijing.sections.timing.zh)) : plainEN(firstSentence(reading.yijing.sections.timing.en));
+  const pyFull = L(reading.numerology.personalYearText);
+  return zh
+    ? `时机：${sentYi} 今年是${pyFull} 你的卦是第 ${reading.yijing.hexagramNumber} 卦「${reading.yijing.hexagramZh}」。`
+    : `Timing: ${sentYi} This is ${pyFull} Your hexagram is ${reading.yijing.hexagramNumber} · ${reading.yijing.hexagramEn}.`;
+}
+
 function liveReaderAnswer(reading, question, lang = 'en') {
   const topic = classifyTopic(question);
   const L = (o) => (o && typeof o === 'object' ? (lang === 'zh' ? o.zh || o.en : o.en || o.zh) : o);
@@ -555,9 +575,10 @@ function liveReaderAnswer(reading, question, lang = 'en') {
   const sampleNote = (s1[0] === 'Zi Wei' || s2[0] === 'Zi Wei')
     ? (lang === 'zh' ? '（紫微为样本内容，仅供参考。）' : ' (Zi Wei is sample content, for reflection only.)')
     : '';
+  const timing = hasTimeHorizon(question) ? timingLine(reading, lang) : '';
   return lang === 'zh'
-    ? `${sysName(s1[0])}：${sent(s1[1])}\n\n${core} ${sysName(s2[0])}也这么说：${sent(s2[1])}${sampleNote}\n\n本周一件事：${action}`
-    : `${sysName(s1[0])}: ${sent(s1[1])}\n\n${core} ${sysName(s2[0])} says the same: ${sent(s2[1])}${sampleNote}\n\nOne thing this week: ${action}`;
+    ? `${sysName(s1[0])}：${sent(s1[1])}\n\n${core} ${sysName(s2[0])}也这么说：${sent(s2[1])}${sampleNote}${timing ? `\n\n${timing}` : ''}\n\n本周一件事：${action}`
+    : `${sysName(s1[0])}: ${sent(s1[1])}\n\n${core} ${sysName(s2[0])} says the same: ${sent(s2[1])}${sampleNote}${timing ? `\n\n${timing}` : ''}\n\nOne thing this week: ${action}`;
 }
 
 
@@ -571,7 +592,179 @@ function liveReaderAnswer(reading, question, lang = 'en') {
    Never invents a prediction, never claims the Zi Wei sample is
    computed, never gives medical / financial / legal advice, never
    touches another buyer's data (only this token's reading is loaded). */
-function masterChatAnswer(reading, message, lang, history, personality) {
+/* Ask the Master — never repeat an answer (fix, 7 Nov 2026).
+   The old explain/example branches reused topicCore() + topicPick()[0] —
+   the same core + first section Live Reader had just used — so "What does
+   that mean?" and "Give me an example" returned essentially the Live
+   Reader answer three times. Now:
+   - explain identifies the SPECIFIC term present in the immediately
+     preceding Master answer (findTermInLastAnswer) and explains THAT term;
+   - example rotates through at least 3 distinct everyday scenarios per
+     topic, never repeating one already used in this session;
+   - a final de-duplication guard (masterChatAnswer wrapper below) compares
+     normalised text + first 100 chars against every previous Master answer
+     in the session and falls back to an unused section if a candidate
+     still duplicates one. */
+function normalizeDup(s) {
+  return String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+function isDupAnswer(candidate, prevAnswers) {
+  const n = normalizeDup(candidate);
+  if (!n) return false;
+  const head = n.slice(0, 100);
+  for (const p of prevAnswers || []) {
+    const pn = normalizeDup(p);
+    if (!pn) continue;
+    if (n === pn || pn.includes(n) || n.includes(pn)) return true;
+    if (head && pn.slice(0, 100) === head) return true;
+  }
+  return false;
+}
+/* The specific term named in the last Master answer — the term an explain
+   follow-up ("What does that mean?") is actually asking about. Detected
+   from the answer's own words, using this buyer's computed values, never
+   from a generic template. Returns the same shape findTerm() returns,
+   plus kind/body/corePrefix for the explanation. */
+function findTermInLastAnswer(reading, text, lang, personality) {
+  const zh = lang === 'zh';
+  const t = String(text || '');
+  const tl = t.toLowerCase();
+  const L = (o) => (o && typeof o === 'object' ? (zh ? o.zh || o.en : o.en || o.zh) : o);
+  const elTerm = (key, isDom) => ({
+    label: zh ? elName(key, 'zh') + '的能量' : elName(key, 'en') + ' energy',
+    gloss: elementMeaning(key, lang),
+    text: reading.bazi.elementBalance,
+    body: key === reading.bazi.dominant ? reading.bazi.dayMasterText
+      : key === reading.bazi.weakest ? reading.bazi.sections.challenges
+        : reading.bazi.elementBalance,
+    kind: isDom ? 'element-dom' : 'element',
+    corePrefix: !!isDom,
+  });
+  const dom = reading.bazi.dominant, weak = reading.bazi.weakest;
+  if (t.includes(`strongest element is ${elName(dom, 'en')}`) || t.includes(`最旺的五行是${elName(dom, 'zh')}`)) return elTerm(dom, true);
+  if (t.includes(`lightest element is ${elName(weak, 'en')}`) || t.includes(`最弱的五行是${elName(weak, 'zh')}`)) return elTerm(weak, false);
+  if (t.includes(`Sun is ${reading.horoscope.sun.en}`) || t.includes(`太阳在${reading.horoscope.sun.zh}`)) {
+    return { label: zh ? '太阳星座' : 'Sun sign', gloss: zh ? '你的太阳星座——你是谁、什么给你动力的核心' : 'your Sun sign — the core of who you are and what fuels you', text: reading.horoscope.sections.sun, kind: 'sun' };
+  }
+  if (tl.includes(`moon is ${reading.horoscope.moon.en.toLowerCase()}`) || tl.includes(`moon is in ${reading.horoscope.moon.en.toLowerCase()}`) || t.includes(`月亮在${reading.horoscope.moon.zh}`)) {
+    return { label: zh ? '月亮星座' : 'Moon sign', gloss: zh ? '你的月亮星座——你私下需要什么，才感到安全、才能充电' : 'your Moon sign — what you privately need to feel safe and recharge', text: reading.horoscope.sections.moon, kind: 'moon' };
+  }
+  if (t.includes(`Rising ${reading.horoscope.rising.en}`) || t.includes(`上升${reading.horoscope.rising.zh}`)) {
+    return { label: zh ? '上升星座' : 'Rising sign', gloss: zh ? '你的上升星座——别人最先遇到的你的样子' : 'your Rising sign — the style people meet first', text: reading.horoscope.sections.rising, kind: 'rising' };
+  }
+  let m = t.match(/Life Path (?:is )?(\d+)/) || t.match(/生命灵数(?:是| )(\d+)/);
+  if (m) return { label: zh ? '生命灵数' : 'Life Path', gloss: zh ? '生命灵数——你的人生不断重复的那一课' : 'your Life Path number — the lesson your life keeps teaching you', text: reading.numerology.lifePathText, kind: 'lifepath' };
+  m = t.match(/Personal Year (?:is )?(\d+)/) || t.match(/个人年(?:是| )(\d+)/);
+  if (m) return { label: zh ? '个人年' : 'Personal Year', gloss: zh ? '个人年——今年属于你的主题' : 'your Personal Year number — the theme of this year for you', text: reading.numerology.personalYearText, kind: 'personalyear' };
+  m = t.match(/Destiny (?:number )?(?:is )?(\d+)/) || t.match(/命运数(?:是| )(\d+)/);
+  if (m && reading.numerology.destinyText) return { label: zh ? '命运数' : 'Destiny number', gloss: zh ? '命运数——世界不断要求你练习的方向' : 'your Destiny number — the direction the world keeps asking you to practise', text: reading.numerology.destinyText, kind: 'destiny' };
+  m = t.match(/hexagram (?:is )?(\d+)/i) || t.match(/第 ?(\d+) 卦/);
+  if (m) return { label: zh ? '你的卦象' : 'Your hexagram', gloss: zh ? '你的卦象——你现在处境的一幅图，由六爻组成' : 'your hexagram — a picture of your situation right now, built from six lines', text: reading.yijing.theme, kind: 'hexagram' };
+  m = t.match(/chart's core is ([A-Za-z ]+?)(?:\.|,| and)/) || t.match(/命盘核心是(\S+?)(?:。|，|、)/);
+  if (m) return { label: zh ? '命盘核心' : "Your chart's core", gloss: zh ? '命盘核心——你出生时在中心的那一个五行' : "your chart's core — the element you were born with at the centre", text: reading.bazi.dayMasterText, kind: 'daymaster' };
+  for (const c of reading.tarot.cardsDetailed) {
+    if (tl.includes(L(c.name).toLowerCase()) || (c.name.zh && t.includes(c.name.zh))) {
+      return { label: L(c.name), gloss: zh ? '这张牌在' + L(c.position) + '位置——它指出的那一部分，要先看' : 'this card in the ' + L(c.position) + ' position — what it names is the part to look at first', text: c.meaning, kind: 'tarot' };
+    }
+  }
+  if (/enneagram|九型/i.test(t)) {
+    const e = personality && personality.enneagram;
+    return { label: zh ? '九型人格' : 'Enneagram', gloss: zh ? '你的九型人格类型——你最想要什么、又在躲什么的模式' : 'your Enneagram type — the pattern of what you want most, and what you avoid', text: e ? { en: firstSentence(e.interpretation.core.en), zh: firstSentence(e.interpretation.core.zh) } : (zh ? '你还没有做九型测验——先在报告上方的测验区做完它，这里就会有你的类型。' : 'You have not taken the Enneagram quiz yet — take it in the quiz section above and your type will appear here.'), kind: 'enneagram' };
+  }
+  if (/mbti/i.test(t)) {
+    const mb = personality && personality.mbti;
+    return { label: 'MBTI', gloss: zh ? '你的 MBTI 类型——你天生如何接收信息、如何做决定' : 'your MBTI type — how you naturally take in information and make decisions', text: mb ? { en: firstSentence(mb.interpretation.en), zh: firstSentence(mb.interpretation.zh) } : (zh ? '你还没有做 MBTI 测验——先在报告上方的测验区做完它，这里就会有你的类型。' : 'You have not taken the MBTI quiz yet — take it in the quiz section above and your type will appear here.'), kind: 'mbti' };
+  }
+  for (const key of ['wood', 'fire', 'earth', 'metal', 'water']) {
+    if (tl.includes(`${key} energy`) || t.includes(`${elName(key, 'zh')}的能量`) || t.includes(`${elName(key, 'zh')}能量`)) return elTerm(key, key === dom);
+  }
+  return null;
+}
+/* Explain one term in plain words, naming the buyer's actual values.
+   For the dominant element (the core claim of a career answer) the
+   explanation keeps the "Your core:" line the Live Reader answer opened
+   with, then explains the term itself — it never reuses the Live Reader
+   answer's body. */
+function explainTerm(reading, term, lang, lastTopic) {
+  const zh = lang === 'zh';
+  const sent = (sec) => {
+    const o = sec && typeof sec === 'object' ? (zh ? sec.zh || sec.en : sec.en || sec.zh) : sec;
+    return zh ? plainZH(firstSentence(o)) : plainEN(firstSentence(o));
+  };
+  const head = term.gloss.toLowerCase().startsWith(term.label.toLowerCase()) ? term.gloss : term.label + (zh ? '——' : ' — ') + term.gloss;
+  const headCap = !zh ? head.charAt(0).toUpperCase() + head.slice(1) : head;
+  const prefix = term.corePrefix ? topicCore(reading, lastTopic === 'general' ? 'general' : lastTopic, lang) + ' ' : '';
+  const action = zh ? '这周留意一次，你在自己身上看到它的时候，用一行字记下来。' : 'This week, notice one moment when you see it in yourself, and write down one line about it.';
+  return zh ? prefix + headCap + '。' + sent(term.body || term.text) + (term.ziwei ? '（紫微为样本内容，仅供参考。）' : '') + '\n\n一小步：' + action
+    : prefix + headCap + '. ' + sent(term.body || term.text) + (term.ziwei ? ' (Zi Wei is sample content, for reflection only.)' : '') + '\n\nOne small step: ' + action;
+}
+/* Everyday scenarios, 3 distinct variants per topic, each tied to the
+   buyer's actual reading (Day Master, Sun / Moon / Rising, Life Path,
+   Personal Year, hexagram, Present tarot card). Variant 0 is the original
+   example text; variants 1–2 draw on different values, so a second or
+   third "Give me an example" never repeats the first. */
+function exampleScenarios(reading, topic, lang, personality) {
+  const zh = lang === 'zh';
+  const L = (o) => (o && typeof o === 'object' ? (zh ? o.zh || o.en : o.en || o.zh) : o);
+  const dom = reading.bazi.dominant, weak = reading.bazi.weakest;
+  const sun = reading.horoscope.sun, moon = reading.horoscope.moon, rising = reading.horoscope.rising;
+  const lp = reading.numerology.lifePath, py = reading.numerology.personalYear;
+  const hexN = reading.yijing.hexagramNumber, hexEn = reading.yijing.hexagramEn, hexZh = reading.yijing.hexagramZh;
+  const present = reading.tarot.cardsDetailed[1];
+  const hexRef = zh ? `第 ${hexN} 卦「${hexZh}」` : `${hexN} · ${hexEn}`;
+  const S = {
+    career: [
+      zh ? '举个例子：你最旺的五行是' + elName(dom, 'zh') + '。这周工作上遇到卡住的事，先做' + elName(dom, 'zh') + '的那一部分——' + firstSentence(elementMeaning(dom, 'zh')) + '；' + elName(weak, 'zh') + '的那一部分，交给清单或同事。'
+        : 'Here is one from everyday life: your strongest element is ' + elName(dom, 'en') + '. At work this week, when a task feels stuck, do the ' + elName(dom, 'en') + ' part first — ' + firstSentence(elementMeaning(dom, 'en')) + ' — and leave the ' + elName(weak, 'en') + ' part to a checklist or a colleague.',
+      zh ? '举个例子：你的太阳在' + sun.zh + '。这周工作中遇到需要深度而不是速度的决定时，先安静十分钟，看清楚底下是什么——那就是你的太阳最擅长的事——然后把决定清楚地说一次。'
+        : 'Here is one from everyday life: your Sun is ' + sun.en + '. At work this week, when a decision needs depth rather than speed, take ten quiet minutes to look underneath it first — that is your Sun doing its best work — then say the decision out loud once, plainly.',
+      zh ? '举个例子：你的生命灵数是 ' + lp + '，你的卦是' + hexRef + '。这周自己先开始一件小事，不要等别人批准——先写一稿，先打一个电话——让这一周告诉你它会变成什么。'
+        : 'Here is one from everyday life: your Life Path is ' + lp + ', and your hexagram is ' + hexRef + '. This week, start one small thing yourself instead of waiting for permission — a first draft, a first call — and let the week show you what it becomes.',
+    ],
+    love: [
+      zh ? '举个例子：你的月亮在' + moon.zh + '。今晚不要只暗示，直接说出一个需要——比如“我需要早点休息”——看看会发生什么。'
+        : "Here is one from everyday life: your Moon is in " + moon.en + ". Tonight, instead of hinting, say one plain need — 'I need an early night' — and see what happens.",
+      zh ? '举个例子：你的上升星座是' + rising.zh + '。这周遇到新的人，留意你给别人的第一印象——温暖、开放、带一点梦幻——就让它是这样，不要急着纠正它。'
+        : 'Here is one from everyday life: your Rising is ' + rising.en + '. When you meet someone new this week, notice the first impression you give — warm, open, a little dreamy — and let it be that, instead of correcting it.',
+      zh ? '举个例子：你现在的塔罗牌是' + L(present.name) + '。今晚不要问别人感情该怎么办，先静下来听一听你心里已经有的答案——相信它一个晚上。'
+        : 'Here is one from everyday life: your Present card is ' + L(present.name) + '. Tonight, instead of asking someone else what to do about a relationship, sit with the quiet answer you already have — and trust it for one evening.',
+    ],
+    money: [
+      zh ? '举个例子：这周写下两个数字——进了多少，出了多少。你最弱的五行是' + elName(weak, 'zh') + '，数字会告诉你，缺口在哪里。'
+        : 'Here is one from everyday life: this week, write down two numbers — what came in, and what went out. Your lightest element is ' + elName(weak, 'en') + ', and the numbers will show you where the gap is.',
+      zh ? '举个例子：你最弱的五行是' + elName(weak, 'zh') + '。这周觉得钱紧的时候，看看' + elName(weak, 'zh') + '的那一部分——你一直省掉的小快乐或小庆祝——给它留一个小小的、有计划的位置，不要让它在没计划的时候漏出去。'
+        : 'Here is one from everyday life: your lightest element is ' + elName(weak, 'en') + '. When money feels tight this week, look for the ' + elName(weak, 'en') + ' part — the small pleasure or celebration you keep skipping — and give it a tiny, planned place instead of letting it leak out unplanned.',
+      zh ? '举个例子：你的个人年是 ' + py + '——新的开始。这周为你想开始的新事存一小笔钱，并且说清楚它是用来做什么的。'
+        : 'Here is one from everyday life: your Personal Year is ' + py + ' — new beginnings. This week, put one small amount aside for the new thing you want to start, and name what it is for.',
+    ],
+    health: [
+      zh ? '举个例子：这周留出一段固定的休息时间——每天同一时间，手机放一边。你最弱的五行是' + elName(weak, 'zh') + '，休息不是奖励，是燃料。'
+        : 'Here is one from everyday life: protect one rest window this week — same time every day, phone aside. Your lightest element is ' + elName(weak, 'en') + ', so rest is not a reward, it is fuel.',
+      zh ? '举个例子：你的月亮在' + moon.zh + '。这周觉得累的时候，回到能让你恢复的东西那里——一顿熟悉的饭、一个早睡的夜晚——不要硬撑。'
+        : 'Here is one from everyday life: your Moon is ' + moon.en + '. When you feel drained this week, go back to the thing that restores you — a familiar meal, an early night — instead of pushing through.',
+      zh ? '举个例子：你的卦是' + hexRef + '。这周精力掉下来的时候，干净利落地结束一件拖着你的事——然后感受第二天轻了多少。'
+        : 'Here is one from everyday life: your hexagram is ' + hexRef + '. When your energy dips this week, make one clean break — end the thing that is dragging, clearly — and feel how much lighter the next day is.',
+    ],
+    timing: [
+      zh ? '举个例子：你的卦是' + hexRef + '。这周先准备好一件事，等窗口打开时，你就能直接行动。'
+        : 'Here is one from everyday life: your hexagram is ' + hexRef + '. This week, prepare one thing now, so when the window opens you can move at once.',
+      zh ? '举个例子：你的个人年是 ' + py + '。这周种下一颗种子——一个电话、一张纸条、第一步——不要每天挖出来看它长了没有。'
+        : 'Here is one from everyday life: your Personal Year is ' + py + '. This week, plant one seed — a call, a note, a first step — and do not dig it up to check it every day.',
+      zh ? '举个例子：今年与你的' + elName(dom, 'zh') + '相生。这周先做生长的事——计划、初稿——再做紧急的事。'
+        : 'Here is one from everyday life: this year feeds your ' + elName(dom, 'en') + '. This week, do the growing thing first — the plan, the first draft — before the urgent thing.',
+    ],
+    general: [
+      zh ? '举个例子：你的命盘核心是' + reading.bazi.dayMaster.zh + '。在平常的一天里，它看起来是这样的——' + firstSentence(reading.bazi.dayMasterText.zh) + '。今天留意一次，你在哪里看到了它。'
+        : "Here is one from everyday life: your chart's core is " + reading.bazi.dayMaster.en + '. In a normal day it looks like this — ' + firstSentence(reading.bazi.dayMasterText.en) + ' — notice it once today, and write down where you saw it.',
+      zh ? '举个例子：你的生命灵数是 ' + lp + '。今天自己先开始一件小事，不要等别人先动——哪怕很小——然后留意那是什么感觉。'
+        : 'Here is one from everyday life: your Life Path is ' + lp + '. Today, start one thing without waiting for someone else to start it — even a small one — and notice how that feels.',
+      zh ? '举个例子：你的完整肖像一句话是：' + firstSentence(L(reading.portrait.essenceLine)) + '今天留意一次，它在哪里出现了——用一行字记下来。'
+        : 'Here is one from everyday life: your portrait says — ' + firstSentence(L(reading.portrait.essenceLine)) + ' Today, notice one moment when that shows up, and write down where you saw it.',
+    ],
+  };
+  return S[topic] || S.general;
+}
+function masterChatAnswerRaw(reading, message, lang, history, personality) {
   const msg = String(message || '');
   const q = msg.toLowerCase();
   const zh = lang === 'zh';
@@ -584,6 +777,10 @@ function masterChatAnswer(reading, message, lang, history, personality) {
   const topic = classifyTopic(msg);
   const pick = topicPick(reading, topic === 'general' ? lastTopic : topic);
   const smallStep = (t) => topicAction(t, lang);
+  // A time-horizon question ("next year", "明年", ...) — in this message
+  // or in the question it follows up — also draws on timing content.
+  const horizon = hasTimeHorizon(msg) || (lastUser && hasTimeHorizon(lastUser.content));
+  const timing = horizon ? timingLine(reading, lang) : '';
 
   // Safety guard: medical / financial / legal questions get a short
   // refusal + a redirect to the reading — never advice on those topics.
@@ -662,6 +859,13 @@ function masterChatAnswer(reading, message, lang, history, personality) {
       : "I don't have that in your reading — I can only explain words from your own report. Try: Day Master, Life Path, your hexagram, a tarot card, Enneagram or MBTI.";
   }
   if (isExplain && !term) {
+    // Bare "What does that mean?" — explain the SPECIFIC term named in
+    // the immediately preceding Master answer, not a generic template.
+    // (Old code reused topicCore() + topicPick()[0] here, i.e. the Live
+    // Reader answer itself, three times over.)
+    const lastMaster = [...(history || [])].reverse().find((m) => m.role === 'master');
+    const term2 = lastMaster ? findTermInLastAnswer(reading, lastMaster.content, lang, personality) : null;
+    if (term2) return explainTerm(reading, term2, lang, lastTopic);
     const t2 = lastTopic === 'general' ? 'general' : lastTopic;
     const core = topicCore(reading, t2, lang);
     const p2 = topicPick(reading, t2);
@@ -669,29 +873,15 @@ function masterChatAnswer(reading, message, lang, history, personality) {
   }
 
   // (b) Example — a concrete everyday example tied to their reading.
+  // Rotates through 3 distinct scenarios per topic; a scenario already
+  // used in this session is skipped, so a second "Give me an example"
+  // never repeats the first.
   if (isExample) {
     const t2 = topic === 'general' ? lastTopic : topic;
-    const dom = reading.bazi.dominant, weak = reading.bazi.weakest;
-    if (zh) {
-      const ex = {
-        career: '举个例子：你最旺的五行是' + elName(dom, 'zh') + '。这周工作上遇到卡住的事，先做' + elName(dom, 'zh') + '的那一部分——' + firstSentence(elementMeaning(dom, 'zh')) + '；' + elName(weak, 'zh') + '的那一部分，交给清单或同事。',
-        love: '举个例子：你的月亮在' + reading.horoscope.moon.zh + '。今晚不要只暗示，直接说出一个需要——比如“我需要早点休息”——看看会发生什么。',
-        money: '举个例子：这周写下两个数字——进了多少，出了多少。你最弱的五行是' + elName(weak, 'zh') + '，数字会告诉你，缺口在哪里。',
-        health: '举个例子：这周留出一段固定的休息时间——每天同一时间，手机放一边。你最弱的五行是' + elName(weak, 'zh') + '，休息不是奖励，是燃料。',
-        timing: '举个例子：你的卦是第 ' + reading.yijing.hexagramNumber + ' 卦「' + reading.yijing.hexagramZh + '」。这周先准备好一件事，等窗口打开时，你就能直接行动。',
-        general: '举个例子：你的命盘核心是' + reading.bazi.dayMaster.zh + '。在平常的一天里，它看起来是这样的——' + firstSentence(reading.bazi.dayMasterText.zh) + '。今天留意一次，你在哪里看到了它。',
-      }[t2] || '';
-      return ex;
-    }
-    const ex = {
-      career: 'Here is one from everyday life: your strongest element is ' + elName(dom, 'en') + '. At work this week, when a task feels stuck, do the ' + elName(dom, 'en') + ' part first — ' + firstSentence(elementMeaning(dom, 'en')) + ' — and leave the ' + elName(weak, 'en') + ' part to a checklist or a colleague.',
-      love: "Here is one from everyday life: your Moon is in " + reading.horoscope.moon.en + ". Tonight, instead of hinting, say one plain need — 'I need an early night' — and see what happens.",
-      money: 'Here is one from everyday life: this week, write down two numbers — what came in, and what went out. Your lightest element is ' + elName(weak, 'en') + ', and the numbers will show you where the gap is.',
-      health: 'Here is one from everyday life: protect one rest window this week — same time every day, phone aside. Your lightest element is ' + elName(weak, 'en') + ', so rest is not a reward, it is fuel.',
-      timing: 'Here is one from everyday life: your hexagram is ' + reading.yijing.hexagramNumber + ' · ' + reading.yijing.hexagramEn + '. This week, prepare one thing now, so when the window opens you can move at once.',
-      general: "Here is one from everyday life: your chart's core is " + reading.bazi.dayMaster.en + '. In a normal day it looks like this — ' + firstSentence(reading.bazi.dayMasterText.en) + ' — notice it once today, and write down where you saw it.',
-    }[t2] || '';
-    return ex;
+    const prevMaster = (history || []).filter((m) => m.role === 'master').map((m) => m.content);
+    const scenarios = exampleScenarios(reading, t2, lang, personality);
+    for (const s of scenarios) { if (!isDupAnswer(s, prevMaster)) return s; }
+    return scenarios[scenarios.length - 1];
   }
 
   // (c) Deeper — a second, different layer on the same topic: pairs 2-3
@@ -701,8 +891,8 @@ function masterChatAnswer(reading, message, lang, history, personality) {
     const p2 = topicPick(reading, t2);
     const s2 = p2[2], s3 = p2[3];
     return zh
-      ? '再往深一层。' + sysName(s2[0]) + '：' + sent(s2[1]) + ' ' + sysName(s3[0]) + '补充：' + sent(s3[1]) + sampleNote(s2[0]) + sampleNote(s3[0]) + '\n\n一小步：' + smallStep(t2)
-      : 'Here is the next layer. ' + sysName(s2[0]) + ': ' + sent(s2[1]) + ' ' + sysName(s3[0]) + ' adds: ' + sent(s3[1]) + sampleNote(s2[0]) + sampleNote(s3[0]) + '\n\nOne small step: ' + smallStep(t2);
+      ? '再往深一层。' + sysName(s2[0]) + '：' + sent(s2[1]) + ' ' + sysName(s3[0]) + '补充：' + sent(s3[1]) + sampleNote(s2[0]) + sampleNote(s3[0]) + (timing ? '\n\n' + timing : '') + '\n\n一小步：' + smallStep(t2)
+      : 'Here is the next layer. ' + sysName(s2[0]) + ': ' + sent(s2[1]) + ' ' + sysName(s3[0]) + ' adds: ' + sent(s3[1]) + sampleNote(s2[0]) + sampleNote(s3[0]) + (timing ? '\n\n' + timing : '') + '\n\nOne small step: ' + smallStep(t2);
   }
 
   // (d) Specific area as a follow-up. If this topic was already covered
@@ -715,14 +905,62 @@ function masterChatAnswer(reading, message, lang, history, personality) {
     const lead = already
       ? (zh ? '你刚才问了' + topicWord(topic, 'zh') + '——这是同一份报告里的下一层。' : 'You asked about ' + topicWord(topic, 'en') + ' earlier — here is the next layer from that same reading.')
       : (zh ? '你的报告对' + topicWord(topic, 'zh') + '是这样说的：' : "Here's what your reading says about " + topicWord(topic, 'en') + ':');
-    return lead + ' ' + sysName(p2[0][0]) + (zh ? '：' : ': ') + sent(p2[0][1]) + ' ' + sysName(p2[1][0]) + (zh ? '也这么说：' : ' says the same: ') + sent(p2[1][1]) + sampleNote(p2[0][0]) + sampleNote(p2[1][0]) + (zh ? '\n\n一小步：' : '\n\nOne small step: ') + smallStep(topic);
+    // Name the question back to the buyer, and ground a time-horizon
+    // question in timing content as well as the topic section.
+    const asked = zh ? `你问的是“${msg.trim()}”。` : `You asked about "${msg.trim()}".`;
+    return lead + ' ' + asked + ' ' + sysName(p2[0][0]) + (zh ? '：' : ': ') + sent(p2[0][1]) + ' ' + sysName(p2[1][0]) + (zh ? '也这么说：' : ' says the same: ') + sent(p2[1][1]) + sampleNote(p2[0][0]) + sampleNote(p2[1][0]) + (timing ? '\n\n' + timing : '') + (zh ? '\n\n一小步：' : '\n\nOne small step: ') + smallStep(topic);
   }
 
   // Default: one-line portrait + an invitation to dig in.
   const essence = firstSentence(L(reading.portrait.essenceLine));
   return zh
-    ? '你的报告一句话：' + essence + '。你可以问我某个词是什么意思——比如“我的生命灵数是什么意思？”——或者要一个例子，比如“举个例子。”'
-    : 'Your reading in one line: ' + essence + ". Ask me what a word means — for example, 'What does my Life Path mean?' — or ask for an example, like 'Give me an example.'";
+    ? '你的报告一句话：' + essence + '。' + (timing ? ' ' + timing + ' ' : '') + '你可以问我某个词是什么意思——比如“我的生命灵数是什么意思？”——或者要一个例子，比如“举个例子。”'
+    : 'Your reading in one line: ' + essence + '. ' + (timing ? timing + ' ' : '') + "Ask me what a word means — for example, 'What does my Life Path mean?' — or ask for an example, like 'Give me an example.'";
+}
+
+/* Final de-duplication guard (7 Nov 2026): if the composed answer still
+   duplicates a previous Master answer in this session — same normalised
+   text, contained in one, or the same first 100 characters — fall back to
+   a different, unused section (another system's section for the topic, or
+   the portrait) and compose from that instead. The guard keeps the
+   5-follow-up limit and the Unlimited flag untouched; it only changes
+   WHICH unused material an answer is built from. */
+function dedupFallback(reading, message, lang, history, personality, prevMaster) {
+  const zh = lang === 'zh';
+  const lastUser = [...(history || [])].reverse().find((m) => m.role === 'user');
+  const lastTopic = lastUser ? classifyTopic(lastUser.content) : 'general';
+  const topic = classifyTopic(message);
+  const t2 = topic === 'general' ? lastTopic : topic;
+  const L = (o) => (o && typeof o === 'object' ? (zh ? o.zh || o.en : o.en || o.zh) : o);
+  const sent = (sec) => (zh ? plainZH(firstSentence(L(sec))) : plainEN(firstSentence(L(sec))));
+  const sysName = (name) => (zh ? { Bazi: '八字', Horoscope: '星座', Tarot: '塔罗', Numerology: '数字命理', 'Yi-Jing': '易经', 'Zi Wei': '紫微' }[name] || name : name);
+  const sample = (sys) => (sys === 'Zi Wei' ? (zh ? '（紫微为样本内容，仅供参考。）' : ' (Zi Wei is sample content, for reflection only.)') : '');
+  const candidates = [];
+  for (const [sys, sec] of topicPick(reading, t2)) {
+    candidates.push(zh
+      ? `换一个角度，${sysName(sys)}说：${sent(sec)}${sample(sys)}\n\n一小步：${topicAction(t2, lang)}`
+      : `Here is another angle, from ${sysName(sys)}: ${sent(sec)}${sample(sys)}\n\nOne small step: ${topicAction(t2, lang)}`);
+  }
+  for (const other of ['career', 'love', 'money', 'health', 'timing', 'general']) {
+    if (other === t2) continue;
+    for (const [sys, sec] of topicPick(reading, other)) {
+      candidates.push(zh
+        ? `换一个角度，${sysName(sys)}说：${sent(sec)}${sample(sys)}\n\n一小步：${topicAction(other, lang)}`
+        : `Here is another angle, from ${sysName(sys)}: ${sent(sec)}${sample(sys)}\n\nOne small step: ${topicAction(other, lang)}`);
+    }
+  }
+  candidates.push(zh
+    ? '你的完整肖像一句话：' + firstSentence(L(reading.portrait.essenceLine)) + '。' + firstSentence(L(reading.portrait.developmentFocus[0]))
+    : 'Your portrait in one line: ' + firstSentence(L(reading.portrait.essenceLine)) + ' ' + firstSentence(L(reading.portrait.developmentFocus[0])));
+  if (hasTimeHorizon(message) || (lastUser && hasTimeHorizon(lastUser.content))) candidates.push(timingLine(reading, lang));
+  for (const c of candidates) { if (c && !isDupAnswer(c, prevMaster)) return c; }
+  return null;
+}
+function masterChatAnswer(reading, message, lang, history, personality) {
+  const prevMaster = (history || []).filter((m) => m.role === 'master').map((m) => m.content);
+  const ans = masterChatAnswerRaw(reading, message, lang, history, personality);
+  if (!isDupAnswer(ans, prevMaster)) return ans;
+  return dedupFallback(reading, message, lang, history, personality, prevMaster) || ans;
 }
 
 // --- Enneagram / MBTI ---------------------------------------------------------
