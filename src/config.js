@@ -146,7 +146,7 @@ function currentPrice(now = new Date()) {
 module.exports = { config, currentPrice, aiCostUsd };
 
 /** Estimated AI cost (USD) for one Master exchange, from the Gemini
- * 2.5 Flash paid-tier prices in config.ai. Used for the usage ledger
+ * paid-tier prices in config.ai. Used for the usage ledger
  * and the owner usage view; the real bill is whatever Google charges. */
 function aiCostUsd(inputTokens, outputTokens) {
   const inCost = (inputTokens || 0) * config.ai.inputPricePerMillionUsd / 1e6;
