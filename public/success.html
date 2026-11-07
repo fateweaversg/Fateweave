@@ -49,7 +49,7 @@
       // so a buyer on another address may never get it. The reading is
       // open below regardless, and Download my report on the unlocked
       // page always works.
-      status.textContent = 'Your full reading is open. Your detailed report was emailed to ' + data.email + ' — if it never arrives, use Download my report on the unlocked page. Taking you there now…';
+      status.textContent = 'Your full reading is open. You can use Download my report on the unlocked page to save a copy. Email delivery may be unavailable. Taking you there now…';
       goHome(2200);
     } else if (localStorage.getItem('fateweave_token')) {
       // Server could not issue a new token, but this device already holds one.
@@ -58,7 +58,7 @@
       goHome(2200);
     } else {
       heading.textContent = 'Payment confirmed';
-      status.textContent = (data.message || 'Payment confirmed. Check your email for your report link.') + ' Tap below to open your reading.';
+      status.textContent = (data.message || 'Payment confirmed.') + ' Tap below to open your reading.';
       goHome(6000);
     }
   } catch (e) {
