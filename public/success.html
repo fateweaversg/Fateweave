@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payment — FateWeave 天機匯</title><link rel="stylesheet" href="/styles.css"></head>
+<body><main><section class="card"><h1>Checking your payment…</h1><p id="status">Please wait — we are verifying your payment with Stripe.</p><p><a href="/">Back to FateWeave</a></p></section></main>
+<script>
+(async () => {
+  const params = new URLSearchParams(location.search);
+  const sessionId = params.get('session_id');
+  const status = document.getElementById('status');
+  if (!sessionId) { status.textContent = 'No checkout session found.'; return; }
+  try {
+    const res = await fetch('/api/checkout-session/' + encodeURIComponent(sessionId));
+    const data = await res.json();
+    if (!res.ok) { status.textContent = data.error || 'Payment could not be verified yet.'; return; }
+    if (data.token) {
+      localStorage.setItem('fateweave_token', data.token);
+      localStorage.setItem('fateweave_email', data.email);
+      localStorage.setItem('fateweave_birthDate', data.birthDate);
+      status.textContent = 'Payment confirmed. Your full reading is unlocked — your detailed report has been emailed to ' + data.email + '. Returning to your reading…';
+      setTimeout(() => location.href = '/', 2500);
+    } else {
+      status.textContent = data.message || 'Payment confirmed. Check your email for your report link, then return here.';
+    }
+  } catch (e) { status.textContent = 'Could not verify payment: ' + e.message; }
+})();
+</script>
+</body>
+</html>
