@@ -960,6 +960,57 @@ async function main() {
     data = await res.json();
     check('live-reader GET: fresh buyer reads 0 used / 3 left', res.ok && data.questionsUsed === 0 && data.questionsRemaining === 3 && data.max === 3, `got ${res.status} ${JSON.stringify(data).slice(0, 120)}`);
 
+    // 30. Synthesis varies per profile + rule-based grammar fixes
+    // (7 Nov 2026 comparison findings): the Complete Portrait synthesis
+    // gave the SAME year-prediction ("consolidating, not expanding" /
+    // "boundaries before commitments") to all 10 test profiles. It now
+    // derives from each profile's Personal Year, hexagram and Path card.
+    // Also: "Your your chart's core" (plainEN), missing stop before
+    // "Lower", truncated zh money answer (firstSentence inside 「」),
+    // "does not switch on by itself" grammar, "Moon sign — your Moon
+    // sign —" stutter.
+    // (buildFullReading / liveReaderAnswer already required above.)
+    const { masterChatAnswer: mcAns } = require('../src/server');
+    const TEN = [
+      ['Mei Ling 陈美玲', '1998-03-14', '09:15'],
+      ['Raj Kumar', '1991-07-22', '14:40'],
+      ['Aisha Rahman', '1985-11-05', '06:30'],
+      ['Wei Chen 伟成', '1974-01-18', '23:20'],
+      ['Grace Tan', '2003-08-30', '11:05'],
+      ['Daniel Ong', '1979-12-09', '03:45'],
+      ['Hui Min 慧敏', '1995-05-27', '18:25'],
+      ['Arun Nair', '1966-02-12', '08:00'],
+      ['Xiao Yu 小雨', '2007-10-08', '15:30'],
+      ['Marcus Lee', '1988-04-25', '20:10'],
+    ];
+    const tenReadings = TEN.map(([name, birthDate, birthTime]) => buildFullReading({ birthDate, birthTime, name }, null));
+    const fullEn = tenReadings.map((r) => r.synthesis.full.en);
+    const fullZh = tenReadings.map((r) => r.synthesis.full.zh);
+    check('synthesis.full.en differs across all 10 test profiles', new Set(fullEn).size === 10, `distinct=${new Set(fullEn).size}`);
+    check('synthesis.full.zh differs across all 10 test profiles', new Set(fullZh).size === 10, `distinct=${new Set(fullZh).size}`);
+    check('synthesis.full has no universal year-prediction claims', !fullEn.some((f) => f.includes('consolidating, not expanding') || f.includes('boundaries before commitments')) && !fullZh.some((f) => f.includes('整固，而非扩张') || f.includes('先定界线，后谈承诺')), '');
+    check('synthesis.full names each profile’s own Personal Year + hexagram + Path card', tenReadings.every((r) => r.synthesis.full.en.includes(`Personal Year ${r.numerology.personalYear}`) && r.synthesis.full.en.includes(`${r.yijing.hexagramNumber} ·`) && r.synthesis.full.en.includes(r.tarot.cards[2])), '');
+    check('synthesis.full has no doubled punctuation from theme text', !fullEn.some((f) => f.includes('..') || f.includes('.,')) && !fullZh.some((f) => f.includes('。。') || f.includes('。，')), '');
+    check('bazi timing has no universal consolidating claim', tenReadings.every((r) => !r.bazi.sections.timing.en.includes('consolidating, not expanding') && !r.bazi.sections.timing.zh.includes('整固，而非扩张')), '');
+    check('bazi career has a full stop before "Lower"', tenReadings.every((r) => r.bazi.sections.career.en.includes('. Lower your reliance')), '');
+    check('bazi challenges: no "starts does not switch" pile-up', tenReadings.every((r) => !r.bazi.sections.challenges.en.includes('starts does not switch') && r.bazi.sections.challenges.en.includes('It does not switch on by itself')), '');
+    const rajR = tenReadings[1], weiR = tenReadings[3], danR = tenReadings[5];
+    const rajMoney = liveReaderAnswer(rajR, 'How will my money luck be next year?', 'en');
+    check('live-reader: no "Your your chart\'s core"', !rajMoney.includes('Your your') && !rajMoney.includes('your your'), rajMoney.slice(0, 160));
+    const weiMoneyZh = liveReaderAnswer(weiR, '我的财运在2027年怎么样？', 'zh');
+    check('live-reader zh money answer is not truncated inside 「」', weiMoneyZh.includes('累积感'), weiMoneyZh.slice(0, 200));
+    const moonHist = [{ role: 'master', content: 'Your core: your Moon is Scorpio — that is what you privately need to feel safe.' }];
+    const moonAns = mcAns(rajR, 'What does that mean?', 'en', moonHist, null);
+    check('master explain: no "Moon sign — your Moon sign —" stutter', !moonAns.includes('Moon sign — your Moon sign') && moonAns.includes('Your Moon sign —'), moonAns.slice(0, 200));
+    const weakHist = [{ role: 'master', content: 'Your core: your lightest element is Wood — feeding it matters more than chasing luck.' }];
+    const weakAns = mcAns(danR, 'What does that mean?', 'en', weakHist, null);
+    const woodPhrase = (weakAns.match(/Wood is growth, planning and new starts/g) || []).length;
+    check('master explain weakest element: element phrase appears once, grammar clean', woodPhrase === 1 && !weakAns.includes('starts does not switch'), `occurrences=${woodPhrase} :: ${weakAns.slice(0, 200)}`);
+    const weakHistZh = [{ role: 'master', content: '你的核心：最弱的五行是木，补它比追运气更实在。' }];
+    const weakAnsZh = mcAns(danR, '这是什么意思？', 'zh', weakHistZh, null);
+    const woodZh = (weakAnsZh.match(/木主生长、规划与新开始/g) || []).length;
+    check('master explain weakest element (zh): element phrase appears once', woodZh === 1, `occurrences=${woodZh} :: ${weakAnsZh.slice(0, 160)}`);
+
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
   } finally {
