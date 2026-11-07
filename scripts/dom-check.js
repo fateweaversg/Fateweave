@@ -60,19 +60,28 @@ async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
   const body = new El('body');
   body.dataset.system = page || '';
   const docEl = new El('html');
+  const fetchCalls = { masterPost: 0, lrPost: 0 };
   const fetchStub = async (url, opts) => {
     const u = String(url);
     const isMasterPost = u.startsWith('/api/master-chat') && opts && opts.method === 'POST';
+    const isLrPost = u.startsWith('/api/live-reader') && opts && opts.method === 'POST';
+    if (isMasterPost) fetchCalls.masterPost++;
+    if (isLrPost) fetchCalls.lrPost++;
     // fetchMode 'throw': the master-chat POST throws (offline / Railway
     // incident). fetchMode 'nonJson': it returns a non-JSON error page
     // (Safari: res.json() throws "The string did not match the expected
     // pattern"). Both are the 7 Nov 2026 live failure; GETs still work
     // so the page itself loads and the counter is set.
+    // fetchMode 'hang' (7 Nov 2026 fix 5): the POST never resolves —
+    // the long silent stretches Jason saw on video. The page must show
+    // a thinking bubble and disable Ask while it waits.
     if (fetchMode === 'throw' && isMasterPost) throw new Error('The string did not match the expected pattern');
     if (fetchMode === 'nonJson' && isMasterPost) return { ok: false, status: 502, json: async () => { throw new SyntaxError('Unexpected token < in JSON at position 0'); } };
+    if (fetchMode === 'hang' && (isMasterPost || isLrPost)) return new Promise(() => {});
     const json = async () => ({});
     if (u.startsWith('/api/config')) return { ok: true, json: async () => ({ price: { amountCents: 100, currency: 'usd', isPromo: true, promoStart: '2026-11-07', promoEnd: '2026-11-24' } }) };
     if (u.startsWith('/api/hook')) return { ok: true, json: async () => buildTeaser({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' }) };
+    if (u.startsWith('/api/live-reader')) return { ok: true, json: async () => ({ questionsUsed: 1, questionsRemaining: 2, max: 3 }) };
     if (u.startsWith('/api/report')) return unlocked
       ? { ok: true, json: async () => buildFullReading({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' }) }
       : { ok: false, status: 403, json };
@@ -113,6 +122,7 @@ async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
     await new Promise((r) => setTimeout(r, 50));
   }
   els._sandbox = sandbox;
+  els._fetchCalls = fetchCalls;
   return els;
 }
 
@@ -196,6 +206,7 @@ function check(name, ok, detail) {
   await new Promise((r) => setTimeout(r, 50));
   check('master chat fetch throws: friendly message, no raw browser error', els['mc-thread'].innerHTML.includes('try again in a moment') && !els['mc-thread'].innerHTML.includes('The string did not match') && !els['mc-thread'].innerHTML.includes('Network error'), els['mc-thread'].innerHTML.slice(0, 200));
   check('master chat fetch throws: question not stored, input kept, counter still 5', !els['mc-thread'].innerHTML.includes('How is my career next year?') && els['mc-question'].value === 'How is my career next year?' && Number(els['mc-left'].textContent) === 5, `thread=${els['mc-thread'].innerHTML.slice(0, 120)} left=${els['mc-left'].textContent}`);
+  check('master chat fetch throws: Ask button is re-enabled after the failure (never stuck disabled)', els['mc-ask'].disabled === false, `disabled=${els['mc-ask'].disabled}`);
 
   els = await runCase({ page: 'master', unlocked: true, fetchMode: 'nonJson' });
   await new Promise((r) => setTimeout(r, 50));
@@ -204,6 +215,38 @@ function check(name, ok, detail) {
   await new Promise((r) => setTimeout(r, 50));
   check('master chat non-JSON reply: friendly message, no raw browser error', els['mc-thread'].innerHTML.includes('try again in a moment') && !els['mc-thread'].innerHTML.includes('Unexpected token') && !els['mc-thread'].innerHTML.includes('Network error'), els['mc-thread'].innerHTML.slice(0, 200));
   check('master chat non-JSON reply: question not stored, counter still 5', !els['mc-thread'].innerHTML.includes('How is my career next year?') && Number(els['mc-left'].textContent) === 5, `left=${els['mc-left'].textContent}`);
+
+  // Fix 4: the Live Reader count is loaded from the server on page init
+  // (GET /api/live-reader), so the screen shows the real used count.
+  els = await runCase({ page: 'master', unlocked: true });
+  await new Promise((r) => setTimeout(r, 50));
+  check('live-reader count loads the real used count on page init (not 0)', els['lr-used'].textContent === '1', `lr-used=${els['lr-used'].textContent}`);
+
+  // Fix 5 + Fix 2 (client guard): while a Master request hangs, the Ask
+  // button is disabled, a thinking bubble is visible in the thread, and
+  // a second click (double-tap / Enter+click) sends no second request.
+  els = await runCase({ page: 'master', unlocked: true, fetchMode: 'hang' });
+  await new Promise((r) => setTimeout(r, 50));
+  els['mc-question'].value = 'How is my career next year?';
+  els['mc-ask']._handlers.click[0]();
+  await new Promise((r) => setTimeout(r, 50));
+  check('master chat hang: Ask button disabled + thinking bubble visible while waiting', els['mc-ask'].disabled === true && els['mc-thread'].innerHTML.includes('mc-thinking') && /thinking/i.test(els['mc-thread'].innerHTML), `disabled=${els['mc-ask'].disabled} thread=${els['mc-thread'].innerHTML.slice(0, 160)}`);
+  els['mc-question'].value = 'A second question while the first is in flight?';
+  els['mc-ask']._handlers.click[0]();
+  await new Promise((r) => setTimeout(r, 50));
+  check('master chat hang: second click while sending fires no second request (in-flight guard)', els._fetchCalls.masterPost === 1, `masterPost=${els._fetchCalls.masterPost}`);
+
+  // Same for Live Reader: thinking bubble + disabled Ask while hanging.
+  els = await runCase({ page: 'master', unlocked: true, fetchMode: 'hang' });
+  await new Promise((r) => setTimeout(r, 50));
+  els['lr-question'].value = 'Should I change jobs this year?';
+  els['lr-ask']._handlers.click[0]();
+  await new Promise((r) => setTimeout(r, 50));
+  check('live-reader hang: Ask button disabled + thinking bubble visible while waiting', els['lr-ask'].disabled === true && els['lr-answers'].innerHTML.includes('lr-thinking') && /Thinking/.test(els['lr-answers'].innerHTML), `disabled=${els['lr-ask'].disabled} answers=${els['lr-answers'].innerHTML.slice(0, 160)}`);
+  els['lr-question'].value = 'A second Live Reader question while the first is in flight?';
+  els['lr-ask']._handlers.click[0]();
+  await new Promise((r) => setTimeout(r, 50));
+  check('live-reader hang: second click while sending fires no second request (in-flight guard)', els._fetchCalls.lrPost === 1, `lrPost=${els._fetchCalls.lrPost}`);
 
   console.log(`\nDOM check: ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);
