@@ -64,7 +64,9 @@ const config = {
   // (e.g. to a Flash-Lite or a newer Flash) without a code change.
   ai: {
     provider: (process.env.AI_PROVIDER || 'gemini').toLowerCase(),
-    model: process.env.AI_MODEL || 'gemini-2.5-flash',
+    // Default model gemini-3.5-flash (NOT gemini-2.5-flash — see note
+    // below). AI_MODEL env var still overrides it.
+    model: process.env.AI_MODEL || 'gemini-3.5-flash',
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     // Per-message limit (also enforced in src/ai-master.js).
     maxQuestionChars: 500,
@@ -73,23 +75,35 @@ const config = {
     maxOutputTokens: intEnv('AI_MAX_OUTPUT_TOKENS', 350),
     temperature: 0.7,
     historyMessages: 6,
-    // Gemini 2.5 Flash PAID tier, verified Nov 2026 (multiple sources):
-    // $0.30 / 1M input tokens, $2.50 / 1M output tokens. One reply costs
-    // 2,000 x $0.30/1M + 350 x $2.50/1M = $0.0006 + $0.000875
-    // ≈ $0.0015 (about 0.15 US cents).
-    //   $1 unlock with 5 AI chats ≈ $0.0074 cost vs $1.00 revenue.
-    //   $3 Extended upgrade, 30 chats total: 30 x $0.0015 ≈ $0.044 cost
-    //   vs $3.00 revenue — a ~68x margin on AI cost, so the fee covers
+    // Gemini 3.5 Flash PAID tier, verified Nov 2026 (multiple sources):
+    // $1.50 / 1M input tokens, $9.00 / 1M output tokens. One reply costs
+    // 2,000 x $1.50/1M + 350 x $9.00/1M = $0.003 + $0.00315
+    // ≈ $0.0062 (about 0.6 US cents).
+    //   $1 unlock with 5 AI chats ≈ $0.031 cost vs $1.00 revenue.
+    //   $3 Extended upgrade, 30 chats total: 30 x $0.0062 ≈ $0.19 cost
+    //   vs $3.00 revenue — a ~16x margin on AI cost, so the fee covers
     //   the AI many times over and leaves a decent profit.
-    //   Break-even: $1 covers ~680 replies, $3 covers ~2,030 replies.
+    //   Break-even: $1 covers ~160 replies, $3 covers ~490 replies.
     //   A normal user is far below these caps.
     // NOTE (7 Nov 2026): the original brief quoted ~$0.0012/reply,
     // $0.036 for 30 chats and break-evens of 830 / 2,500 — that
     // arithmetic was wrong (it under-counted the output leg). The
     // correct figures above come from aiCostUsd; the conclusion is
     // unchanged — the $3 fee still covers the AI many times over.
-    inputPricePerMillionUsd: 0.30,
-    outputPricePerMillionUsd: 2.50,
+    // NOTE (7 Nov 2026, live failure): gemini-2.5-flash and
+    // gemini-2.5-flash-lite return HTTP 404 on generateContent for
+    // this key — verified by direct API test, even though ListModels
+    // lists them. The live server started on the old 2.5-flash
+    // default (AI_MODEL was never set in Railway, only the key was),
+    // the first AI call failed "Gemini error (404)", the 1-hour
+    // cooldown kept every later Master question rule-based, and the
+    // owner saw only rule-based replies. Do NOT revert this default
+    // to gemini-2.5-flash. Verified working on this key:
+    // gemini-3.5-flash (default), gemini-3.5-flash-lite ($0.30/$2.50
+    // per 1M — the cheap fallback, one env var away) and
+    // gemini-3.8-flash ($0.75/$3.75 intro until 31 Dec 2026).
+    inputPricePerMillionUsd: 1.50,
+    outputPricePerMillionUsd: 9.00,
     // Extended Master Chat total (7 Nov 2026 20:04 SGT — replaces the
     // old 20/day fair-use cap): max AI Master replies per upgrade
     // purchase, counted in the ai_usage ledger
@@ -106,8 +120,8 @@ const config = {
     // number; treat the free quota as unknown). When this cap is hit,
     // Master falls back to rule-based replies for the rest of the day.
     // Raise it (or set it very high) when moving to paid Gemini, where
-    // the binding constraint is money, not requests: at $0.0012/reply,
-    // 1,000 AI calls/day costs ~$1.20.
+    // the binding constraint is money, not requests: at ~$0.006/reply,
+    // 1,000 AI calls/day costs ~$6.
     globalDailyMax: intEnv('AI_GLOBAL_DAILY_MAX', 100),
   },
 };
