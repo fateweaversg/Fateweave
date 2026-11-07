@@ -564,6 +564,25 @@ app.post('/api/master-chat', masterChatLimiter, async (req, res) => {
   inflightMaster.set(dupKey, work);
   try {
     return res.json(await work);
+  } catch (e) {
+    // Safety net (8 Nov 2026 fix 4): Express 4 does not forward async
+    // handler rejections to error middleware, so an unexpected throw
+    // inside work() (reading build, DB write) would hang the request
+    // forever with no response — the silent-hang shape seen live.
+    // Never a dead chat: fall back to the rule-based answer, and if
+    // even that cannot be built, answer with a friendly 500 JSON.
+    console.error('Master chat work failed:', e && e.message);
+    try {
+      const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
+      const personality = loadPersonality(access.email, access.birth_date);
+      const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
+      const history = masterChatHistory(access.email, access.birth_date);
+      const answer = masterChatAnswer(reading, valid.text, lang === 'zh' ? 'zh' : 'en', history, personality);
+      return res.json({ answer, questionsUsed: used, questionsRemaining: Math.max(0, max - used), max, extended, extendedTotal: config.ai.extendedChatTotalMax, messages: masterChatHistory(access.email, access.birth_date), ai: false, source: 'rule-based', aiResting: aiCooldownState().active });
+    } catch (e2) {
+      console.error('Master chat rule-based fallback failed:', e2 && e2.message);
+      return res.status(500).json({ error: lang === 'zh' ? '掌门刚才出了一点小状况，请稍后再试。' : 'The Master hit a brief hiccup — please try again in a moment.' });
+    }
   } finally {
     if (inflightMaster.get(dupKey) === work) inflightMaster.delete(dupKey);
   }
@@ -580,7 +599,7 @@ app.post('/api/master-chat', masterChatLimiter, async (req, res) => {
    thing to do this week. Technical terms are glossed in plain words. */
 const TOPICS = [
   { id: 'career', en: ['career', 'job', 'work', 'promotion', 'boss', 'business', 'study', 'exam', 'school', 'interview'], zh: ['事业', '工作', '职业', '升职', '老板', '生意', '学习', '考试', '学业', '面试'] },
-  { id: 'love', en: ['love', 'relationship', 'marriage', 'partner', 'boyfriend', 'girlfriend', 'wife', 'husband', 'dating', 'crush'], zh: ['感情', '爱情', '婚姻', '伴侣', '男友', '女友', '老公', '老婆', '对象', '喜欢'] },
+  { id: 'love', en: ['love', 'relationship', 'marriage', 'partner', 'boyfriend', 'girlfriend', 'wife', 'husband', 'dating', 'crush', 'meet someone', 'someone new', 'find love', 'find someone'], zh: ['感情', '爱情', '婚姻', '伴侣', '男友', '女友', '老公', '老婆', '对象', '喜欢', '脱单'] },
   { id: 'money', en: ['money', 'wealth', 'finance', 'salary', 'income', 'invest', 'debt', 'buy', 'house', 'price', 'rich'], zh: ['财运', '钱', '财富', '工资', '收入', '投资', '买房', '债务', '赚钱'] },
   { id: 'health', en: ['health', 'body', 'sleep', 'tired', 'sick', 'energy', 'exercise', 'rest'], zh: ['健康', '身体', '睡眠', '累', '生病', '精力', '运动', '休息'] },
   { id: 'timing', en: ['when', 'timing', 'next month', 'this year', 'soon', 'should i'], zh: ['什么时候', '时机', '何时', '今年', '下个月', '该不该'] },
@@ -704,8 +723,8 @@ function topicCore(reading, topic, lang) {
       ? `你的核心：你的卦是第 ${reading.yijing.hexagramNumber} 卦「${reading.yijing.hexagramZh}」，个人年是 ${reading.numerology.personalYear}。`
       : `Your core: your hexagram is ${reading.yijing.hexagramNumber} · ${reading.yijing.hexagramEn}, and your Personal Year is ${reading.numerology.personalYear}.`,
     general: lang === 'zh'
-      ? `你的核心：命盘核心是${reading.bazi.dayMaster.zh}，生命灵数是 ${reading.numerology.lifePath}。`
-      : `Your core: your chart's core is ${reading.bazi.dayMaster.en}, and your Life Path is ${reading.numerology.lifePath}.`,
+      ? `你的核心：${reading.bazi.dayMaster.zh}，生命灵数是 ${reading.numerology.lifePath}。`
+      : `Your core: ${reading.bazi.dayMaster.en}, and your Life Path is ${reading.numerology.lifePath}.`,
   }[topic];
 }
 function topicAction(topic, lang) {
