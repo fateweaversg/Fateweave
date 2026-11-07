@@ -426,6 +426,78 @@ async function main() {
     }
     check('tarot text has no "the The " doubled article', theTheBad.length === 0, theTheBad.join(', '));
 
+    // 23. Guided step flow (7 Nov 2026): each page shows ONLY its slice.
+    // The shell still carries every section (static HTML), so isolation is
+    // enforced by applyPageLayout() in app.js — these checks assert the
+    // layout rules at the level this suite tests at (served HTML/JS text).
+    check('step flow: shell has layout hooks (hero/daily/limits/hub-next/step-nav/master-locked ids)', html.includes('id="brand-hero"') && html.includes('id="hub-next"') && html.includes('id="step-nav"') && html.includes('id="daily-card"') && html.includes('id="limits-card"') && html.includes('id="master-locked-card"'), 'layout hook ids missing from index.html');
+    const sysBlock = appJs.match(/const SYSTEMS = \[([\s\S]*?)\];/);
+    const sysKeys = sysBlock ? [...sysBlock[1].matchAll(/key: '(\w+)'/g)].map((m) => m[1]) : [];
+    check('step flow: step order is Bazi → Zi Wei → Horoscope → Yi-Jing → Tarot → Numerology → Portrait → Master', JSON.stringify(sysKeys) === JSON.stringify(['bazi', 'ziwei', 'horoscope', 'yijing', 'tarot', 'numerology', 'portrait']) && appJs.includes('const STEP_ORDER = [') && appJs.includes("...SYSTEMS,") && appJs.includes("{ key: 'master', route: '/master'"), `SYSTEMS order: ${sysKeys.join(',')}`);
+    check('step flow: applyPageLayout exists and runs from renderSystems + init', appJs.includes('function applyPageLayout()') && (appJs.match(/applyPageLayout\(\);/g) || []).length >= 4 && appJs.includes('renderSystems(); // pre-glimpse preview'), 'applyPageLayout missing or not wired in');
+    check('step flow: hub shows no quizzes / no full reading / no Live Reader or Master', appJs.includes("show('quiz-card', onPortrait)") && appJs.includes("show('report-card', onMaster && state.unlocked)") && !appJs.includes("if (!pageSystem || pageSystem === 'master') $('report-card')"), 'hub isolation rules missing (or the old hub report-card unhide is still there)');
+    check('step flow: system pages hide hero/hook/daily/limits, unlock card only while locked, unlocked card hub-only', appJs.includes("show('brand-hero', onHub)") && appJs.includes("show('hook-card', onHub)") && appJs.includes("show('daily-card', onHub)") && appJs.includes("show('limits-card', onHub)") && appJs.includes("show('unlock-card', !onMaster && !state.unlocked)") && appJs.includes("show('unlocked-card', onHub && state.unlocked)"), 'system-page isolation rules missing');
+    check('step flow: Master shows only Live Reader + Master chat, locked prompt while locked', appJs.includes("reportDiv.classList.toggle('hidden', onMaster)") && appJs.includes("show('master-locked-card', onMaster && !state.unlocked)") && appJs.includes('masterLockedTitle') && appJs.includes('masterLockedBody'), 'master isolation rules missing');
+    check('step flow: step nav has Step N of 8 + Previous/Next/Done + All six systems', appJs.includes("t('stepOf')") && appJs.includes("'Step {n} of 8") && appJs.includes("t('prevStep')") && appJs.includes("t('nextStep')") && appJs.includes("t('doneHub')") && appJs.includes("'Done — back to hub'") && appJs.includes("t('allSystems')") && appJs.includes('function stepNavHTML()'), 'step nav labels missing');
+    check('step flow: hub shows Start-your-reading button after a glimpse, linking to /bazi', appJs.includes('function hubNextHTML()') && appJs.includes("if (pageSystem || (!state.teaser && !state.report)) return '';") && appJs.includes('href="/bazi"') && appJs.includes("'Start your reading — Next: Bazi →'"), 'hub-next button missing');
+    check('step flow: step-nav + hub-next styles exist', css.includes('#step-nav') && css.includes('.step-btn') && css.includes('.step-progress') && css.includes('.hub-next-btn'), 'step-nav CSS missing');
+    check('step flow: View-my-full-reading starts the guided reading at /bazi', appJs.includes("if (!pageSystem) { location.href = '/bazi'; return; }"), 'view-report still scrolls to a hidden card on the hub');
+
+    // 24. Ask the Master never repeats itself (7 Nov 2026) + timing blend.
+    // Regression case from the owner's report: birth profile 1963-11-07
+    // (Jia Wood Day Master, Sun Scorpio, Life Path 1). Live Reader career
+    // "next year" → explain → example → example again → deeper must be
+    // FIVE distinct answers, none repeating a previous one.
+    // The Master thread is tested with in-process masterChatAnswer calls
+    // (the level sections 14/17 test at): the HTTP path + the 5-per-session
+    // limit are already covered by sections 18/21, and the POST
+    // /api/master-chat rate limit (30/15 min) is already spent by them —
+    // routing this thread over HTTP too would trip it.
+    const { masterChatAnswer } = require('../src/server');
+    const evOrder = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 100, 'usd', 'promo', 'stripe', 'paid', datetime('now'))").run('evidence@example.com', '1963-11-07', 'Evidence');
+    const { token: evToken } = issueAccessToken('evidence@example.com', '1963-11-07', evOrder.lastInsertRowid);
+    const evReading = buildFullReading({ birthDate: '1963-11-07', birthTime: null, name: null });
+    const normAns = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '');
+    const isDistinct = (a, b) => normAns(a) !== normAns(b) && !normAns(a).includes(normAns(b)) && !normAns(b).includes(normAns(a));
+    const allDistinct = (arr) => arr.every((a, i) => arr.slice(i + 1).every((b) => isDistinct(a, b)));
+    const evSession = 'smoke-mc-p2a';
+    const evPost = (path, body) => fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    res = await evPost('/api/live-reader', { token: evToken, email: 'evidence@example.com', birthDate: '1963-11-07', sessionId: evSession, question: 'How is my career in the next year?', lang: 'en' });
+    data = await res.json();
+    const evLr = data.answer || '';
+    check('master p2: next-year career Live Reader blends timing (Personal Year / hexagram)', res.ok && /Personal Year|hexagram|Timing/i.test(evLr) && /work|career/i.test(evLr) && evLr.length < 1200, `got ${res.status} ${evLr.slice(0, 120)}`);
+    const evHist = [
+      { role: 'user', content: 'How is my career in the next year?', source: 'live-reader' },
+      { role: 'master', content: evLr, source: 'live-reader' },
+    ];
+    const evExplain = masterChatAnswer(evReading, 'What does that mean?', 'en', evHist, null);
+    evHist.push({ role: 'user', content: 'What does that mean?', source: 'master' }, { role: 'master', content: evExplain, source: 'master' });
+    check('master p2: explain names the specific term from the Live Reader answer (Wood)', isDistinct(evExplain, evLr) && /Wood energy|strongest element is Wood/.test(evExplain) && evExplain.includes('Your core:'), evExplain.slice(0, 160));
+    const evEx1 = masterChatAnswer(evReading, 'Give me an example', 'en', evHist, null);
+    evHist.push({ role: 'user', content: 'Give me an example', source: 'master' }, { role: 'master', content: evEx1, source: 'master' });
+    check('master p2: first example is distinct and everyday', isDistinct(evEx1, evLr) && isDistinct(evEx1, evExplain) && evEx1.includes('everyday life'), evEx1.slice(0, 160));
+    const evEx2 = masterChatAnswer(evReading, 'Give me an example', 'en', evHist, null);
+    evHist.push({ role: 'user', content: 'Give me an example', source: 'master' }, { role: 'master', content: evEx2, source: 'master' });
+    check('master p2: second example is a DIFFERENT scenario, never a repeat', isDistinct(evEx2, evLr) && isDistinct(evEx2, evExplain) && isDistinct(evEx2, evEx1) && evEx2.includes('everyday life') && /Sun|Life Path|hexagram/.test(evEx2), evEx2.slice(0, 160));
+    const evDeep = masterChatAnswer(evReading, 'Tell me more about work', 'en', evHist, null);
+    evHist.push({ role: 'user', content: 'Tell me more about work', source: 'master' }, { role: 'master', content: evDeep, source: 'master' });
+    check('master p2: deeper is distinct from the Live Reader answer, next layer, names its system', isDistinct(evDeep, evLr) && evDeep.includes('next layer') && /Tarot|Numerology|Horoscope|Bazi/.test(evDeep), evDeep.slice(0, 160));
+    check('master p2: all five answers in the thread are pairwise distinct', allDistinct([evLr, evExplain, evEx1, evEx2, evDeep]), 'two answers in the thread repeat each other');
+    // Master asked directly about next-year career (no Live Reader first):
+    // still grounds in timing + references the actual question.
+    const evDirect = masterChatAnswer(evReading, 'How is my career next year?', 'en', [], null);
+    check('master p2: direct next-year career question draws on timing + quotes the question', /Personal Year|hexagram|Timing/i.test(evDirect) && evDirect.includes('How is my career next year?'), evDirect.slice(0, 160));
+    // Same thread in Simplified Chinese: timing blends, explain names the term.
+    res = await evPost('/api/live-reader', { token: evToken, email: 'evidence@example.com', birthDate: '1963-11-07', sessionId: 'smoke-mc-p2c', question: '我明年的事业怎么样？', lang: 'zh' });
+    data = await res.json();
+    const evLrZh = data.answer || '';
+    check('master p2: zh next-year career Live Reader blends timing', res.ok && /个人年|卦|时机/.test(evLrZh) && /工作|事业/.test(evLrZh), `got ${res.status} ${evLrZh.slice(0, 80)}`);
+    const evExplainZh = masterChatAnswer(evReading, '这是什么意思？', 'zh', [
+      { role: 'user', content: '我明年的事业怎么样？', source: 'live-reader' },
+      { role: 'master', content: evLrZh, source: 'live-reader' },
+    ], null);
+    check('master p2: zh explain is distinct and names the term (木 / 最旺)', isDistinct(evExplainZh, evLrZh) && /木|最旺/.test(evExplainZh), evExplainZh.slice(0, 160));
+
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
   } finally {
