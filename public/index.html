@@ -56,7 +56,9 @@
     <p id="unlocked-sub"></p>
     <button type="button" id="view-report-btn" data-i18n="viewReport">View my full reading</button>
     <button type="button" class="ghost" id="resend-btn" data-i18n="resendReport">Resend report email</button>
+    <button type="button" class="ghost" id="download-report-btn" data-i18n="downloadReport">Download my report</button>
     <p id="resend-status" class="small"></p>
+    <p class="small" data-i18n="downloadNote">If the report email never arrives, download it here instead — no email needed.</p>
   </section>
 
   <section class="card" id="unlock-card">
@@ -85,6 +87,24 @@
       <label><input type="checkbox" id="lr-speak"> <span data-i18n="speakAnswer">Speak the answer aloud</span></label>
       <button id="lr-stop" type="button" class="hidden" data-i18n="stopSpeaking">Stop speaking</button>
       <div id="lr-answers"></div>
+    </div>
+
+    <div id="master-chat">
+      <h3 data-i18n="masterChatTitle">Ask the Master</h3>
+      <p data-i18n="masterChatBody">Still wondering about something in your reading? Ask a follow-up — the Master answers from your own report, and remembers what you asked before.</p>
+      <p><span data-i18n="followupsLeft">Follow-ups left</span>: <span id="mc-left">5</span> / 5</p>
+      <div id="mc-thread"></div>
+      <div class="mc-chips">
+        <button type="button" class="ghost chip-btn" data-chip="explain" data-i18n="chipExplain">What does that mean?</button>
+        <button type="button" class="ghost chip-btn" data-chip="example" data-i18n="chipExample">Give me an example</button>
+        <button type="button" class="ghost chip-btn" data-chip="deeper" data-i18n="chipDeeper">Tell me more about work</button>
+      </div>
+      <div class="lr-row">
+        <input type="text" id="mc-question" data-i18n-ph="mcAskPh" placeholder="Ask a follow-up…">
+        <button id="mc-voice" type="button" title="Voice input">🎤</button>
+        <button id="mc-ask" type="button" data-i18n="ask">Ask</button>
+      </div>
+      <p class="small" data-i18n="masterChatNote">Follow-ups are answered from your own reading only — no predictions, and no medical, financial or legal advice.</p>
     </div>
   </section>
 
