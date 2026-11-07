@@ -19,6 +19,14 @@ const SYSTEMS = [
   { key: 'numerology', route: '/numerology', section: 'sys-num', name: 'Numerology 生命灵数' },
   { key: 'portrait', route: '/portrait', section: 'sys-portrait', name: 'Complete Portrait' },
 ];
+/* Guided step flow (7 Nov 2026): hub → 1 Bazi → 2 Zi Wei → 3 Horoscope →
+   4 Yi-Jing → 5 Tarot → 6 Numerology → 7 Portrait → 8 Master → hub.
+   SYSTEMS covers steps 1–7; Master is step 8 (its content lives in
+   #report-card's Live Reader + Ask the Master blocks, not in #systems). */
+const STEP_ORDER = [
+  ...SYSTEMS,
+  { key: 'master', route: '/master', section: null, name: 'Ask the Master' },
+];
 const state = {
   lang: 'en', teaser: null, report: null, unlocked: false, price: null,
   mcUnlimited: false,
@@ -62,6 +70,15 @@ const STR = {
     sysOpen: 'Open the full page',
     backToHub: '← All six systems',
     nextSystem: 'Next',
+    hubNext: 'Start your reading — Next: Bazi →',
+    stepOf: 'Step {n} of 8 — {name}',
+    prevStep: '← Previous',
+    nextStep: 'Next: {name} →',
+    doneHub: 'Done — back to hub',
+    allSystems: 'All six systems',
+    masterLockedTitle: 'Ask the Master is locked',
+    masterLockedBody: 'Unlock your full reading first — then come back here to ask the Master.',
+    masterLockedLink: '← Back to the hub to unlock',
     tapEnlarge: 'Tap a flipped card again to enlarge it',
     heroLocked: 'Unlock the full reading to see your result here.',
     downloadReport: 'Download my report',
@@ -142,9 +159,18 @@ const STR = {
     upgradeOffer: '5 \u6b21\u8ffd\u95ee\u5df2\u7ecf\u7528\u5b8c\u3002\u82b1 $3 \u5347\u7ea7\u4e3a\u65e0\u9650\u8ffd\u95ee\u638c\u95e8\uff0c\u7ee7\u7eed\u95ee\u4e0b\u53bb\u3002',
     upgradeDone: '\u65e0\u9650\u8ffd\u95ee\u638c\u95e8\u5df2\u89e3\u9501\u2014\u2014\u60f3\u95ee\u591a\u5c11\u5c31\u95ee\u591a\u5c11\u3002',
     upgradeFail: '\u65e0\u6cd5\u5f00\u59cb\u5347\u7ea7\u7ed3\u8d26\uff0c\u8bf7\u518d\u8bd5\u4e00\u6b21\u3002',
-    sysOpen: '\u6253\u5f00\u5b8c\u6574\u9875\u9762',
-    backToHub: '\u2190 \u56de\u5230\u516d\u4e2a\u7cfb\u7edf',
-    nextSystem: '\u4e0b\u4e00\u4e2a',
+    sysOpen: '打开完整页面',
+    backToHub: '← 回到六个系统',
+    nextSystem: '下一个',
+    hubNext: '开始阅读 — 下一个：八字 →',
+    stepOf: '第 {n} 步，共 8 步 — {name}',
+    prevStep: '← 上一步',
+    nextStep: '下一个：{name} →',
+    doneHub: '完成 — 回到首页',
+    allSystems: '全部六个系统',
+    masterLockedTitle: '问掌门尚未解锁',
+    masterLockedBody: '请先解锁完整报告，再回来问掌门。',
+    masterLockedLink: '← 回到首页解锁',
     tapEnlarge: '\u518d\u70b9\u4e00\u4e0b\u5df2\u7ffb\u5f00\u7684\u724c\uff0c\u53ef\u4ee5\u653e\u5927\u67e5\u770b',
     heroLocked: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a\uff0c\u5373\u53ef\u5728\u8fd9\u91cc\u770b\u5230\u4f60\u7684\u7ed3\u679c\u3002',
     downloadReport: '\u4e0b\u8f7d\u6211\u7684\u62a5\u544a',
@@ -408,6 +434,71 @@ function pageNavHTML() {
   const next = idx >= 0 ? SYSTEMS[(idx + 1) % SYSTEMS.length] : null;
   return `<nav class="sys-nav"><a href="/">${esc(t('backToHub'))}</a>${next ? `<a href="${next.route}">${esc(t('nextSystem'))}: ${esc(next.name)} →</a>` : ''}${pageSystem !== 'master' ? `<a href="/master">${esc(t('masterChatTitle'))} →</a>` : ''}</nav>`;
 }
+/* --- Guided step flow: page isolation (7 Nov 2026) -------------------------
+   The shell (index.html) carries every section, so each page must show
+   only its own slice — otherwise a system page shows the hub hero, the
+   quiz, the unlock card, the full-reading summary, Live Reader, Ask the
+   Master, daily encouragement and honest limits underneath its own hero,
+   and the buyer has to hit Back / scroll. applyPageLayout() runs at init
+   and after every renderSystems() / loadReport(), so the layout follows
+   both the route and the state (locked/unlocked, glimpse shown). Rules:
+   - Hub: brand hero, hook form, system overview cards, unlock card
+     (while locked) / unlocked card (once unlocked), daily + limits.
+     NO quizzes, NO full-reading summary, NO Live Reader / Ask the Master.
+     After a glimpse, a big "Start your reading — Next: Bazi →" button.
+   - System page: ONLY that system (hero + its own content + its own
+     control). The unlock card stays ONLY while locked; the unlocked card
+     never appears here. Quizzes live on Portrait only. Brand hero, hook
+     form, daily + limits are hidden.
+   - Master: ONLY Live Reader + Ask the Master (from #report-card, never
+     the full-reading summary div). While locked: a locked prompt + a
+     link back to the hub instead of the chat. */
+function stepNavHTML() {
+  if (!pageSystem) return '';
+  const idx = STEP_ORDER.findIndex((s) => s.key === pageSystem);
+  if (idx < 0) return '';
+  const stepName = SYS_META[pageSystem].title;
+  const progress = esc(t('stepOf').replace('{n}', String(idx + 1)).replace('{name}', stepName));
+  const prev = idx === 0
+    ? `<a class="step-btn prev" href="/">${esc(t('backToHub'))}</a>`
+    : `<a class="step-btn prev" href="${STEP_ORDER[idx - 1].route}">${esc(t('prevStep'))}</a>`;
+  const next = idx === STEP_ORDER.length - 1
+    ? `<a class="step-btn next" href="/">${esc(t('doneHub'))}</a>`
+    : `<a class="step-btn next" href="${STEP_ORDER[idx + 1].route}">${esc(t('nextStep').replace('{name}', SYS_META[STEP_ORDER[idx + 1].key].title))}</a>`;
+  return `<div class="step-progress">${progress}</div><div class="step-btns">${prev}${next}</div><a class="step-all" href="/">${esc(t('allSystems'))}</a>`;
+}
+function hubNextHTML() {
+  if (pageSystem || (!state.teaser && !state.report)) return '';
+  return `<a class="hub-next-btn" href="/bazi">${esc(t('hubNext'))}</a>`;
+}
+function applyPageLayout() {
+  const show = (id, on) => { const el = $(id); if (el) el.classList.toggle('hidden', !on); };
+  const onHub = !pageSystem;
+  const onMaster = pageSystem === 'master';
+  const onPortrait = pageSystem === 'portrait';
+  show('brand-hero', onHub);
+  show('hook-card', onHub);
+  show('daily-card', onHub);
+  show('limits-card', onHub);
+  // Quizzes live on the Portrait page only — never on the hub or another system page.
+  show('quiz-card', onPortrait);
+  // The unlocked card (View report / Resend / Download) lives on the hub only.
+  show('unlocked-card', onHub && state.unlocked);
+  // The unlock/pay card stays on a system page ONLY while locked (it is
+  // the pay step for that system); on Master the locked prompt replaces it.
+  show('unlock-card', !onMaster && !state.unlocked);
+  // The full reading (summary + Live Reader + Ask the Master) opens only
+  // on /master — and there only the Live Reader + Master chat blocks,
+  // never the full-reading summary div. The hub never shows it.
+  show('report-card', onMaster && state.unlocked);
+  const reportDiv = $('report');
+  if (reportDiv) reportDiv.classList.toggle('hidden', onMaster);
+  show('master-locked-card', onMaster && !state.unlocked);
+  const hubNext = $('hub-next');
+  if (hubNext) hubNext.innerHTML = hubNextHTML();
+  const stepNav = $('step-nav');
+  if (stepNav) stepNav.innerHTML = stepNavHTML();
+}
 function extractSection(html, sectionId) {
   const m = html.match(new RegExp(`<section class="card" id="${sectionId}">[\\s\\S]*?</section>`));
   return m ? m[0] : '';
@@ -430,12 +521,12 @@ function renderSystems() {
   if (!src) {
     let ph = previewSystemsHTML();
     if (pageSystem) {
-      const hero = $('sys-hero'); if (hero) hero.innerHTML = pageHeroHTML() + pageNavHTML();
-      if (pageSystem === 'master') { box.innerHTML = ''; bindPreviewEvents(); return; }
+      const hero = $('sys-hero'); if (hero) hero.innerHTML = pageHeroHTML();
+      if (pageSystem === 'master') { box.innerHTML = ''; applyPageLayout(); bindPreviewEvents(); return; }
       const sec = SYSTEMS.find((s) => s.key === pageSystem);
       box.innerHTML = sec ? extractSection(ph, sec.section) : ph;
     } else box.innerHTML = addHubLinks(ph);
-    bindPreviewEvents(); return;
+    applyPageLayout(); bindPreviewEvents(); return;
   }
   const unlocked = state.unlocked && !!state.report;
   const r = state.report;
@@ -584,8 +675,8 @@ function renderSystems() {
   html += `</section>`;
 
   if (pageSystem) {
-    const hero = $('sys-hero'); if (hero) hero.innerHTML = pageHeroHTML() + pageNavHTML();
-    if (pageSystem === 'master') { box.innerHTML = ''; bindSystemEvents(); return; }
+    const hero = $('sys-hero'); if (hero) hero.innerHTML = pageHeroHTML();
+    if (pageSystem === 'master') { box.innerHTML = ''; bindSystemEvents(); applyPageLayout(); return; }
     const sec = SYSTEMS.find((s) => s.key === pageSystem);
     box.innerHTML = sec ? extractSection(html, sec.section) : html;
   } else {
@@ -593,6 +684,7 @@ function renderSystems() {
     box.innerHTML = addHubLinks(html);
   }
   bindSystemEvents();
+  applyPageLayout();
 }
 
 function bindSystemEvents() {
@@ -728,6 +820,7 @@ function resetProfileView() {
   $('report').innerHTML = '';
   renderQuizArea();
   renderQuizList();
+  applyPageLayout();
 }
 
 function renderQuizList() {
@@ -947,9 +1040,10 @@ async function loadReport(quiet) {
     $('unlocked-sub').textContent = `${esc(r.profile.birthDate)} \u00B7 ${email}`;
     $('unlocked-card').classList.remove('hidden');
     $('unlock-card').classList.add('hidden');
-    // Live Reader + Ask the Master live on the hub and on /master only —
-    // a single-system page stays focused on that system.
-    if (!pageSystem || pageSystem === 'master') $('report-card').classList.remove('hidden');
+    // Live Reader + Ask the Master live on /master only — a single-system
+    // page stays focused on that system, and the hub shows neither
+    // (applyPageLayout, called by renderSystems below, enforces this).
+    if (pageSystem === 'master') $('report-card').classList.remove('hidden');
     renderSystems();
     renderReportCard();
     loadMasterChat(); // restore the Ask the Master thread + follow-up counter
@@ -990,7 +1084,13 @@ function renderReportCard() {
     <p class="small">${[t('limit1'), t('limit2'), t('limit3'), t('limit4')].map(esc).join(' ')}</p>`;
 }
 
-$('view-report-btn').addEventListener('click', () => { $('report-card').scrollIntoView({ behavior: 'smooth' }); });
+$('view-report-btn').addEventListener('click', () => {
+  // The unlocked card lives on the hub only, and the full reading lives
+  // on the system pages — so "View my full reading" starts the guided
+  // reading at Bazi instead of scrolling to a hidden card.
+  if (!pageSystem) { location.href = '/bazi'; return; }
+  $('report-card').scrollIntoView({ behavior: 'smooth' });
+});
 $('resend-btn').addEventListener('click', async () => {
   const status = $('resend-status');
   status.textContent = t('readingGlimpse');
