@@ -1,1 +1,31 @@
-{"dependencies":{"bcryptjs":"^2.4.3","cors":"^2.8.5","dotenv":"^16.4.5","express":"^4.21.2","express-rate-limit":"^7.4.1","helmet":"^8.0.0","node-cron":"^3.0.3","nodemailer":"^6.9.16","resend":"^4.0.1","stripe":"^17.3.1"},"description":"FateWeave 天机汇 — pay-first, server-backed build. Free hook, Stripe-verified unlock, emailed report, daily encouragement.","engines":{"node":">=22.5.0"},"main":"src/server.js","name":"fateweave-server","private":true,"scripts":{"daily":"node src/jobs/daily.js","dev":"node --watch src/server.js","hash-owner-password":"node scripts/seed-owner-hash.js","smoke":"node scripts/smoke-test.js","start":"node src/server.js","test":"node scripts/smoke-test.js"},"type":"commonjs","version":"1.0.0"}
+{
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.16",
+    "resend": "^4.0.1",
+    "stripe": "^17.3.1"
+  },
+  "description": "FateWeave 天机汇 — pay-first, server-backed build. Free hook, Stripe-verified unlock, emailed report, daily encouragement.",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "main": "src/server.js",
+  "name": "fateweave-server",
+  "private": true,
+  "scripts": {
+    "daily": "node src/jobs/daily.js",
+    "dev": "node --watch src/server.js",
+    "hash-owner-password": "node scripts/seed-owner-hash.js",
+    "smoke": "node scripts/master-flow-check.js",
+    "start": "node src/server.js",
+    "test": "node scripts/run-checks.js"
+  },
+  "type": "commonjs",
+  "version": "1.0.0"
+}
