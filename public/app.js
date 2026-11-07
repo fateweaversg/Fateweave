@@ -35,6 +35,8 @@ const STR = {
     limit1: 'Bazi is a simplified demo engine \u2014 no true solar-time correction yet.',
     limit2: 'Zi Wei content in the paid reading is illustrative sample content, not a fully computed chart.',
     limit3: 'For self-reflection and entertainment only \u2014 not medical, financial or legal advice.',
+    limit4: 'Moon / Rising are approximations from the original prototype.',
+    moreDetail: 'More detail', strongest: 'Strongest', weakest: 'Weakest',
     tapReveal: 'Tap to reveal', tapFlip: 'Tap a card to flip it', castChart: 'Cast the chart', castCoins: 'Cast the coins',
     lockedTitle: 'Full reading locked', lockedBody: 'Unlock the full reading to read every detail.',
     unlockBtn: 'Unlock full reading', casting: 'Casting\u2026', flipping: 'Tap to flip', flipAllTarot: 'Flip all three cards to read them as one story.',
@@ -65,69 +67,84 @@ const STR = {
     brokenLine: 'Broken — Yin',
     changingLine: 'Changing',
     heads: 'Heads', tails: 'Tails',
-    sun: 'Sun', moon: 'Moon', rising: 'Rising', lifePath: 'Life Path', destiny: 'Destiny', personalYear: 'Personal Year 2026',
+    sun: 'Sun', moon: 'Moon', rising: 'Rising', lifePath: 'Life Path', destiny: 'Destiny', personalYear: 'Personal Year',
     dayMaster: 'Day Master', lifePalace: 'Life Palace', hexagram: 'Hexagram', changingLines: 'Changing lines',
     overview: 'Overview', strengthsSec: 'Strengths', challengesSec: 'Challenges / growing edge', careerSec: 'Career', relationshipsSec: 'Relationships', healthSec: 'Health & energy', timingSec: 'Timing',
     growthEdge: 'Growing edge', practices: 'Practices for the next 90 days', style: 'How you think, work & connect',
     think: 'How you think', work: 'How you work', connect: 'How you connect',
   },
   zh: {
-    tagline: '\u8f38\u5165\u4e00\u6b21\u751f\u65e5\uff0c\u516d\u500b\u7cfb\u7d71\u540c\u6642\u56de\u7b54\u3002\u5b83\u5011\u8aaa\u7684\u4e00\u6a23\u55ce\uff1f',
-    masterLine: '\u300c\u6211\u4e0d\u7b97\u547d\uff0c\u53ea\u628a\u516d\u500b\u7cfb\u7d71\u64fa\u5728\u4e00\u8d77\u2014\u2014\u770b\u5b83\u5011\u5728\u54ea\u88e1\u8aaa\u7684\u4e00\u6a23\u3002\u300d\u2014\u2014 \u638c\u9580',
-    hookTitle: '\u4f60\u7684\u514d\u8cbb\u4e00\u77a5', hookLede: '\u8f38\u5165\u751f\u65e5\uff0c\u7136\u5f8c\u9010\u5f35\u9ede\u958b\u6bcf\u4e00\u500b\u7cfb\u7d71\uff0c\u770b\u4e00\u9ede\u9ede\u5167\u5bb9\u3002\u5b8c\u6574\u5831\u544a\u9700\u4ed8\u6b3e\u5f8c\u89e3\u9396\u3002',
-    birthDate: '\u51fa\u751f\u65e5\u671f', birthTime: '\u51fa\u751f\u6642\u9593\uff08\u53ef\u9078\uff09', name: '\u540d\u5b57\uff08\u53ef\u9078\uff09', hookCta: '\u67e5\u770b\u6211\u7684\u514d\u8cbb\u4e00\u77a5',
-    quizTitle: '\u8a8d\u8b58\u81ea\u5df1\u2014\u2014\u5169\u500b\u6e2c\u9a57', quizLede: '\u514d\u8cbb\u505a\u2014\u2014\u9019\u4e5f\u662f\u9810\u89bd\u7684\u4e00\u90e8\u5206\u3002\u4f60\u6703\u5373\u6642\u770b\u5230\u4f60\u7684\u985e\u578b\u8207\u4e00\u53e5\u8a71\uff1b\u5b8c\u6574\u89e3\u6790\u96a8\u5831\u544a\u89e3\u9396\u3002',
-    unlockedTitle: '\u4f60\u7684\u5831\u544a\u5df2\u89e3\u9396', viewReport: '\u67e5\u770b\u5b8c\u6574\u5831\u544a', resendReport: '\u91cd\u5bc4\u5831\u544a\u96fb\u90f5',
-    unlockedBanner: '\u2713 \u5df2\u89e3\u9396\u2014\u2014\u7121\u9700\u518d\u6b21\u4ed8\u6b3e',
-    unlockedBannerSub: '\u5b8c\u6574\u5831\u544a\u5df2\u5728\u4e0b\u65b9\u958b\u555f\uff0c\u4e26\u4fdd\u5b58\u5728\u6b64\u88dd\u7f6e\u2014\u2014\u96a8\u6642\u91cd\u65b0\u6574\u7406\uff0c\u4e0d\u7528\u518d\u8f38\u5165\u4efb\u4f55\u8cc7\u6599\u3002',
-    unlockTitle: '\u89e3\u9396\u5b8c\u6574\u5831\u544a',
-    unlockBody: '\u5148\u4ed8\u6b3e\uff0c\u5b8c\u6574\u5167\u5bb9\u96a8\u5373\u958b\u555f\u2014\u2014\u516d\u500b\u7cfb\u7d71\u5168\u90e8\u3001Live Reader\uff083 \u500b\u554f\u984c\uff09\uff0c\u4ee5\u53ca\u8a73\u7d30\u5831\u544a\u5bc4\u5230\u4f60\u7684\u4fe1\u7bb1\u3002',
-    emailLabel: '\u96fb\u90f5\uff08\u63a5\u6536\u5831\u544a\u8207\u6bcf\u65e5\u9f13\u52f5\uff09', sameDateNote: '\u8acb\u7528\u8207\u514d\u8cbb\u4e00\u77a5\u76f8\u540c\u7684\u51fa\u751f\u65e5\u671f\uff0c\u4ee5\u53ca\u76f8\u540c\u7684\u96fb\u90f5\uff0c\u4ee5\u4fbf\u65e5\u5f8c\u56de\u4f86\u67e5\u770b\u3002',
-    fullReadingTitle: '\u4f60\u7684\u5b8c\u6574\u5831\u544a', liveReaderTitle: 'Live Reader',
-    liveReaderBody: '\u6700\u591a\u554f 3 \u500b\u554f\u984c\uff0c\u53ef\u7528\u8a9e\u97f3\u6216\u6253\u5b57\u3002\u56de\u7b54\u53ea\u6839\u64da\u4f60\u7684\u5831\u544a\u5167\u5bb9\u3002',
-    questionsUsed: '\u5df2\u7528\u554f\u984c', ask: '\u63d0\u554f', askPh: '\u554f\u4e00\u500b\u554f\u984c\u2026\u2026', speakAnswer: '\u5927\u8072\u8b80\u51fa\u7b54\u6848', stopSpeaking: '\u505c\u6b62\u6717\u8b80',
-    dailyTitle: '\u514d\u8cbb\u6bcf\u65e5\u9f13\u52f5', dailyBody: '\u6bcf\u5929\u65e9\u4e0a 7:00\uff08\u65b0\u52a0\u5761\u6642\u9593\uff09\u4e00\u5c01\u77ed\u4fe1\u2014\u2014\u4e00\u53e5\u9f13\u52f5\u3001\u4e00\u5f35\u5854\u7f85\u724c\u3001\u4e00\u53e5\u4eca\u65e5\u63d0\u9192\u3002\u89e3\u9396\u5f8c\u514d\u8cbb\uff0c\u96a8\u6642\u53ef\u4ee5\u53d6\u6d88\u8a02\u95b1\u3002',
-    limitsTitle: '\u8aa0\u5be6\u8aaa\u660e',
-    limit1: '\u516b\u5b57\u70ba\u7c21\u5316\u6f14\u793a\u5f15\u64ce\u2014\u2014\u5c1a\u672a\u505a\u771f\u592a\u967d\u6642\u6821\u6b63\u3002',
-    limit2: '\u4ed8\u8cbb\u5831\u544a\u4e2d\u7684\u7d2b\u5fae\u5167\u5bb9\u70ba\u793a\u7bc4\u6a23\u672c\uff0c\u4e26\u975e\u5b8c\u6574\u6392\u76e4\u3002',
-    limit3: '\u50c5\u4f9b\u81ea\u6211\u53cd\u601d\u8207\u5a1b\u6a02\u2014\u2014\u4e0d\u662f\u91ab\u7642\u3001\u8ca1\u52d9\u6216\u6cd5\u5f8b\u5efa\u8b70\u3002',
-    tapReveal: '\u9ede\u4e00\u4e0b\u63ed\u958b', tapFlip: '\u9ede\u4e00\u5f35\u724c\u7ffb\u958b\u5b83', castChart: '\u8d77\u76e4', castCoins: '\u64f2\u5366',
-    lockedTitle: '\u5b8c\u6574\u5167\u5bb9\u672a\u89e3\u9396', lockedBody: '\u89e3\u9396\u5b8c\u6574\u5831\u544a\uff0c\u5373\u53ef\u95b1\u8b80\u5168\u90e8\u7d30\u7bc0\u3002',
-    unlockBtn: '\u89e3\u9396\u5b8c\u6574\u5831\u544a', casting: '\u8d77\u5366\u4e2d\u2026\u2026', flipping: '\u9ede\u4e00\u4e0b\u7ffb\u724c', flipAllTarot: '\u7ffb\u958b\u4e09\u5f35\u724c\uff0c\u770b\u770b\u5b83\u5011\u5408\u8d77\u4f86\u8aaa\u7684\u6545\u4e8b\u3002',
-    readingGlimpse: '\u6b63\u5728\u8b80\u53d6\u4f60\u7684\u9810\u89bd\u2026\u2026', enterDateFirst: '\u8acb\u5148\u5728\u514d\u8cbb\u4e00\u77a5\u8868\u55ae\u8f38\u5165\u51fa\u751f\u65e5\u671f\u3002',
-    couldNotRead: '\u7121\u6cd5\u8b80\u53d6\u8a72\u51fa\u751f\u65e5\u671f\u3002', networkError: '\u7db2\u7d61\u932f\u8aa4\uff1a',
-    payUnlock: '\u4ed8\u6b3e\u4e26\u89e3\u9396', priceUnavailable: '\u66ab\u6642\u7121\u6cd5\u53d6\u5f97\u50f9\u683c\u2014\u2014\u8acb\u7a0d\u5f8c\u518d\u8a66\u3002',
-    questions: '\u984c', questionOf: '\u7b2c', of: '/', back: '\u2190 \u4e0a\u4e00\u984c', restart: '\u91cd\u65b0\u6e2c\u9a57',
-    startQuiz: '\u958b\u59cb\u6e2c\u9a57', retake: '\u91cd\u65b0\u6e2c\u9a57', yourType: '\u4f60\u7684\u985e\u578b', fullBreakdownLocked: '\u5b8c\u6574\u89e3\u6790\u672a\u89e3\u9396\u2014\u2014\u89e3\u9396\u5f8c\u53ef\u95b1\u8b80\u3002',
-    strengths: '\u9577\u8655', whatsLacking: '\u5c1a\u7f3a\u4e4b\u8655', yourResult: '\u4f60\u7684\u7d50\u679c',
-    resendOk: '\u5831\u544a\u96fb\u90f5\u5df2\u91cd\u5bc4\u2014\u2014\u8acb\u6aa2\u67e5\u6536\u4ef6\u7bb1\u3002', resendFail: '\u7121\u6cd5\u91cd\u5bc4\u5831\u544a\u96fb\u90f5\u3002',
-    checkoutFail: '\u7d50\u5e33\u5931\u6557\u3002', checkoutError: '\u7d50\u5e33\u932f\u8aa4\uff1a',
-    voiceUnsupported: '\u6b64\u700f\u89bd\u5668\u4e0d\u652f\u63f4\u8a9e\u97f3\u8f38\u5165\u2014\u2014\u8acb\u6253\u5b57\u63d0\u554f\u3002',
-    portraitTitle: '\u5b8c\u6574\u8096\u50cf', synthesisTitle: '\u516d\u500b\u7cfb\u7d71\u4e00\u81f4\u4e4b\u8655\u2014\u2014\u4ee5\u53ca\u5f35\u529b\u6240\u5728',
-    sampleNote: '\u793a\u7bc4\u6a23\u672c\u5167\u5bb9\uff0c\u4e26\u975e\u5b8c\u6574\u8a08\u7b97\u3002',
-    simplifiedNote: '\u7c21\u5316\u5f15\u64ce\u2014\u2014\u5c1a\u672a\u505a\u771f\u592a\u967d\u6642\u6821\u6b63\u3002',
-    reversed: '\u9006\u4f4d', past: '\u904e\u53bb', present: '\u73fe\u5728', path: '\u8fd1\u671f\u672a\u4f86',
-    sysDescBazi: '\u516b\u5b57\u547d\u76e4\u2014\u2014\u5f9e\u51fa\u751f\u5e74\u3001\u6708\u3001\u65e5\u3001\u6642\u770b\u65e5\u4e3b\u3001\u4e94\u884c\u8207\u904b\u52e2\u3002',
-    sysDescZiwei: '\u7d2b\u5fae\u6597\u6578\u2014\u2014\u547d\u5bae\u8207\u8ca1\u5e1b\u3001\u5b98\u7984\u3001\u592b\u59bb\u7b49\u5bae\u4f4d\u3002',
-    sysDescHoro: '\u897f\u6d0b\u5360\u661f\u2014\u2014\u592a\u967d\u3001\u6708\u4eae\u8207\u4e0a\u5347\u661f\u5ea7\u3002',
-    sysDescYijing: '\u6613\u7d93\u2014\u2014\u516d\u6b21\u64f2\u5e63\uff0c\u9010\u723b\u6210\u5366\u3002',
-    sysDescTarot: '\u5854\u7f85\u2014\u2014\u4e09\u5f35\u724c\uff1a\u904e\u53bb\u3001\u73fe\u5728\u8207\u672a\u4f86\u4e4b\u8def\u3002',
-    sysDescNum: '\u751f\u547d\u9748\u6578\u2014\u2014\u751f\u547d\u9748\u6578\u3001\u547d\u904b\u6578\u8207\u500b\u4eba\u5e74\u3002',
-    sysDescPortrait: '\u5b8c\u6574\u8096\u50cf\u2014\u2014\u516d\u500b\u7cfb\u7d71\u4ea4\u7e54\u800c\u6210\uff0c\u770b\u5b83\u5011\u5728\u54ea\u88e1\u4e00\u81f4\u3001\u5728\u54ea\u88e1\u62c9\u626f\u3002',
-    yijingHow: '\u516d\u6b21\u64f2\u5e63\uff0c\u9010\u723b\u6210\u5366\uff0c\u7531\u4e0b\u800c\u4e0a\u3002',
-    castingLine: '\u6b63\u5728\u64f2\u7b2c {n} \u723b\uff0c\u5171 6 \u723b\u2026',
+    tagline: '\u8f93\u5165\u4e00\u6b21\u751f\u65e5\uff0c\u516d\u4e2a\u7cfb\u7edf\u540c\u65f6\u56de\u7b54\u3002\u5b83\u4eec\u8bf4\u7684\u4e00\u6837\u5417\uff1f',
+    masterLine: '\u300c\u6211\u4e0d\u7b97\u547d\uff0c\u53ea\u628a\u516d\u4e2a\u7cfb\u7edf\u6446\u5728\u4e00\u8d77\u2014\u2014\u770b\u5b83\u4eec\u5728\u54ea\u91cc\u8bf4\u7684\u4e00\u6837\u3002\u300d\u2014\u2014 \u638c\u95e8',
+    hookTitle: '\u4f60\u7684\u514d\u8d39\u4e00\u77a5', hookLede: '\u8f93\u5165\u751f\u65e5\uff0c\u7136\u540e\u9010\u5f20\u70b9\u5f00\u6bcf\u4e00\u4e2a\u7cfb\u7edf\uff0c\u770b\u4e00\u70b9\u70b9\u5185\u5bb9\u3002\u5b8c\u6574\u62a5\u544a\u9700\u4ed8\u6b3e\u540e\u89e3\u9501\u3002',
+    birthDate: '\u51fa\u751f\u65e5\u671f', birthTime: '\u51fa\u751f\u65f6\u95f4\uff08\u53ef\u9009\uff09', name: '\u540d\u5b57\uff08\u53ef\u9009\uff09', hookCta: '\u67e5\u770b\u6211\u7684\u514d\u8d39\u4e00\u77a5',
+    quizTitle: '\u8ba4\u8bc6\u81ea\u5df1\u2014\u2014\u4e24\u4e2a\u6d4b\u9a8c', quizLede: '\u514d\u8d39\u505a\u2014\u2014\u8fd9\u4e5f\u662f\u9884\u89c8\u7684\u4e00\u90e8\u5206\u3002\u4f60\u4f1a\u5373\u65f6\u770b\u5230\u4f60\u7684\u7c7b\u578b\u4e0e\u4e00\u53e5\u8bdd\uff1b\u5b8c\u6574\u89e3\u6790\u968f\u62a5\u544a\u89e3\u9501\u3002',
+    unlockedTitle: '\u4f60\u7684\u62a5\u544a\u5df2\u89e3\u9501', viewReport: '\u67e5\u770b\u5b8c\u6574\u62a5\u544a', resendReport: '\u91cd\u5bc4\u62a5\u544a\u7535\u90ae',
+    unlockedBanner: '\u2713 \u5df2\u89e3\u9501\u2014\u2014\u65e0\u9700\u518d\u6b21\u4ed8\u6b3e',
+    unlockedBannerSub: '\u5b8c\u6574\u62a5\u544a\u5df2\u5728\u4e0b\u65b9\u5f00\u542f\uff0c\u5e76\u4fdd\u5b58\u5728\u6b64\u88c5\u7f6e\u2014\u2014\u968f\u65f6\u91cd\u65b0\u6574\u7406\uff0c\u4e0d\u7528\u518d\u8f93\u5165\u4efb\u4f55\u8d44\u6599\u3002',
+    unlockTitle: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a',
+    unlockBody: '\u5148\u4ed8\u6b3e\uff0c\u5b8c\u6574\u5185\u5bb9\u968f\u5373\u5f00\u542f\u2014\u2014\u516d\u4e2a\u7cfb\u7edf\u5168\u90e8\u3001Live Reader\uff083 \u4e2a\u95ee\u9898\uff09\uff0c\u4ee5\u53ca\u8be6\u7ec6\u62a5\u544a\u5bc4\u5230\u4f60\u7684\u4fe1\u7bb1\u3002',
+    emailLabel: '\u7535\u90ae\uff08\u63a5\u6536\u62a5\u544a\u4e0e\u6bcf\u65e5\u9f13\u52b1\uff09', sameDateNote: '\u8bf7\u7528\u4e0e\u514d\u8d39\u4e00\u77a5\u76f8\u540c\u7684\u51fa\u751f\u65e5\u671f\uff0c\u4ee5\u53ca\u76f8\u540c\u7684\u7535\u90ae\uff0c\u4ee5\u4fbf\u65e5\u540e\u56de\u6765\u67e5\u770b\u3002',
+    fullReadingTitle: '\u4f60\u7684\u5b8c\u6574\u62a5\u544a', liveReaderTitle: 'Live Reader',
+    liveReaderBody: '\u6700\u591a\u95ee 3 \u4e2a\u95ee\u9898\uff0c\u53ef\u7528\u8bed\u97f3\u6216\u6253\u5b57\u3002\u56de\u7b54\u53ea\u6839\u636e\u4f60\u7684\u62a5\u544a\u5185\u5bb9\u3002',
+    questionsUsed: '\u5df2\u7528\u95ee\u9898', ask: '\u63d0\u95ee', askPh: '\u95ee\u4e00\u4e2a\u95ee\u9898\u2026\u2026', speakAnswer: '\u5927\u58f0\u8bfb\u51fa\u7b54\u6848', stopSpeaking: '\u505c\u6b62\u6717\u8bfb',
+    dailyTitle: '\u514d\u8d39\u6bcf\u65e5\u9f13\u52b1', dailyBody: '\u6bcf\u5929\u65e9\u4e0a 7:00\uff08\u65b0\u52a0\u5761\u65f6\u95f4\uff09\u4e00\u5c01\u77ed\u4fe1\u2014\u2014\u4e00\u53e5\u9f13\u52b1\u3001\u4e00\u5f20\u5854\u7f57\u724c\u3001\u4e00\u53e5\u4eca\u65e5\u63d0\u9192\u3002\u89e3\u9501\u540e\u514d\u8d39\uff0c\u968f\u65f6\u53ef\u4ee5\u53d6\u6d88\u8ba2\u9605\u3002',
+    limitsTitle: '\u8bda\u5b9e\u8bf4\u660e',
+    limit1: '\u516b\u5b57\u4e3a\u7b80\u5316\u6f14\u793a\u5f15\u64ce\u2014\u2014\u5c1a\u672a\u505a\u771f\u592a\u9633\u65f6\u6821\u6b63\u3002',
+    limit2: '\u4ed8\u8d39\u62a5\u544a\u4e2d\u7684\u7d2b\u5fae\u5185\u5bb9\u4e3a\u793a\u8303\u6837\u672c\uff0c\u5e76\u975e\u5b8c\u6574\u6392\u76d8\u3002',
+    limit3: '\u4ec5\u4f9b\u81ea\u6211\u53cd\u601d\u4e0e\u5a31\u4e50\u2014\u2014\u4e0d\u662f\u533b\u7597\u3001\u8d22\u52a1\u6216\u6cd5\u5f8b\u5efa\u8bae\u3002',
+    limit4: '\u6708\u4eae\u4e0e\u4e0a\u5347\u661f\u5ea7\u4e3a\u539f\u578b\u7684\u8fd1\u4f3c\u8ba1\u7b97\u3002',
+    moreDetail: '\u66f4\u591a\u8be6\u60c5', strongest: '\u6700\u65fa', weakest: '\u6700\u5f31',
+    tapReveal: '\u70b9\u4e00\u4e0b\u63ed\u5f00', tapFlip: '\u70b9\u4e00\u5f20\u724c\u7ffb\u5f00\u5b83', castChart: '\u8d77\u76d8', castCoins: '\u63b7\u5366',
+    lockedTitle: '\u5b8c\u6574\u5185\u5bb9\u672a\u89e3\u9501', lockedBody: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a\uff0c\u5373\u53ef\u9605\u8bfb\u5168\u90e8\u7ec6\u8282\u3002',
+    unlockBtn: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a', casting: '\u8d77\u5366\u4e2d\u2026\u2026', flipping: '\u70b9\u4e00\u4e0b\u7ffb\u724c', flipAllTarot: '\u7ffb\u5f00\u4e09\u5f20\u724c\uff0c\u770b\u770b\u5b83\u4eec\u5408\u8d77\u6765\u8bf4\u7684\u6545\u4e8b\u3002',
+    readingGlimpse: '\u6b63\u5728\u8bfb\u53d6\u4f60\u7684\u9884\u89c8\u2026\u2026', enterDateFirst: '\u8bf7\u5148\u5728\u514d\u8d39\u4e00\u77a5\u8868\u5355\u8f93\u5165\u51fa\u751f\u65e5\u671f\u3002',
+    couldNotRead: '\u65e0\u6cd5\u8bfb\u53d6\u8be5\u51fa\u751f\u65e5\u671f\u3002', networkError: '\u7f51\u7edc\u9519\u8bef\uff1a',
+    payUnlock: '\u4ed8\u6b3e\u5e76\u89e3\u9501', priceUnavailable: '\u6682\u65f6\u65e0\u6cd5\u53d6\u5f97\u4ef7\u683c\u2014\u2014\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+    questions: '\u9898', questionOf: '\u7b2c', of: '/', back: '\u2190 \u4e0a\u4e00\u9898', restart: '\u91cd\u65b0\u6d4b\u9a8c',
+    startQuiz: '\u5f00\u59cb\u6d4b\u9a8c', retake: '\u91cd\u65b0\u6d4b\u9a8c', yourType: '\u4f60\u7684\u7c7b\u578b', fullBreakdownLocked: '\u5b8c\u6574\u89e3\u6790\u672a\u89e3\u9501\u2014\u2014\u89e3\u9501\u540e\u53ef\u9605\u8bfb\u3002',
+    strengths: '\u957f\u5904', whatsLacking: '\u5c1a\u7f3a\u4e4b\u5904', yourResult: '\u4f60\u7684\u7ed3\u679c',
+    resendOk: '\u62a5\u544a\u7535\u90ae\u5df2\u91cd\u5bc4\u2014\u2014\u8bf7\u68c0\u67e5\u6536\u4ef6\u7bb1\u3002', resendFail: '\u65e0\u6cd5\u91cd\u5bc4\u62a5\u544a\u7535\u90ae\u3002',
+    checkoutFail: '\u7ed3\u5e10\u5931\u8d25\u3002', checkoutError: '\u7ed3\u5e10\u9519\u8bef\uff1a',
+    voiceUnsupported: '\u6b64\u6d4f\u89c8\u5668\u4e0d\u652f\u63f4\u8bed\u97f3\u8f93\u5165\u2014\u2014\u8bf7\u6253\u5b57\u63d0\u95ee\u3002',
+    portraitTitle: '\u5b8c\u6574\u8096\u50cf', synthesisTitle: '\u516d\u4e2a\u7cfb\u7edf\u4e00\u81f4\u4e4b\u5904\u2014\u2014\u4ee5\u53ca\u5f20\u529b\u6240\u5728',
+    sampleNote: '\u793a\u8303\u6837\u672c\u5185\u5bb9\uff0c\u5e76\u975e\u5b8c\u6574\u8ba1\u7b97\u3002',
+    simplifiedNote: '\u7b80\u5316\u5f15\u64ce\u2014\u2014\u5c1a\u672a\u505a\u771f\u592a\u9633\u65f6\u6821\u6b63\u3002',
+    reversed: '\u9006\u4f4d', past: '\u8fc7\u53bb', present: '\u73b0\u5728', path: '\u8fd1\u671f\u672a\u6765',
+    sysDescBazi: '\u516b\u5b57\u547d\u76d8\u2014\u2014\u4ece\u51fa\u751f\u5e74\u3001\u6708\u3001\u65e5\u3001\u65f6\u770b\u65e5\u4e3b\u3001\u4e94\u884c\u4e0e\u8fd0\u52bf\u3002',
+    sysDescZiwei: '\u7d2b\u5fae\u6597\u6570\u2014\u2014\u547d\u5bab\u4e0e\u8d22\u5e1b\u3001\u5b98\u7984\u3001\u592b\u59bb\u7b49\u5bab\u4f4d\u3002',
+    sysDescHoro: '\u897f\u6d0b\u5360\u661f\u2014\u2014\u592a\u9633\u3001\u6708\u4eae\u4e0e\u4e0a\u5347\u661f\u5ea7\u3002',
+    sysDescYijing: '\u6613\u7ecf\u2014\u2014\u516d\u6b21\u63b7\u5e01\uff0c\u9010\u723b\u6210\u5366\u3002',
+    sysDescTarot: '\u5854\u7f57\u2014\u2014\u4e09\u5f20\u724c\uff1a\u8fc7\u53bb\u3001\u73b0\u5728\u4e0e\u672a\u6765\u4e4b\u8def\u3002',
+    sysDescNum: '\u751f\u547d\u7075\u6570\u2014\u2014\u751f\u547d\u7075\u6570\u3001\u547d\u8fd0\u6570\u4e0e\u4e2a\u4eba\u5e74\u3002',
+    sysDescPortrait: '\u5b8c\u6574\u8096\u50cf\u2014\u2014\u516d\u4e2a\u7cfb\u7edf\u4ea4\u7ec7\u800c\u6210\uff0c\u770b\u5b83\u4eec\u5728\u54ea\u91cc\u4e00\u81f4\u3001\u5728\u54ea\u91cc\u62c9\u626f\u3002',
+    yijingHow: '\u516d\u6b21\u63b7\u5e01\uff0c\u9010\u723b\u6210\u5366\uff0c\u7531\u4e0b\u800c\u4e0a\u3002',
+    castingLine: '\u6b63\u5728\u63b7\u7b2c {n} \u723b\uff0c\u5171 6 \u723b\u2026',
     lineLabel: '\u7b2c {n} \u723b',
-    solidLine: '\u967d\u723b\uff08\u5be6\u7dda\uff09',
-    brokenLine: '\u9670\u723b\uff08\u65b7\u7dda\uff09',
-    changingLine: '\u8b8a\u723b',
-    heads: '\u967d', tails: '\u9670',
-    sun: '\u592a\u967d', moon: '\u6708\u4eae', rising: '\u4e0a\u5347', lifePath: '\u751f\u547d\u9748\u6578', destiny: '\u547d\u904b\u6578', personalYear: '2026 \u500b\u4eba\u5e74',
-    dayMaster: '\u65e5\u4e3b', lifePalace: '\u547d\u5bae', hexagram: '\u5366\u8c61', changingLines: '\u8b8a\u723b',
-    overview: '\u7e3d\u89bd', strengthsSec: '\u9577\u8655', challengesSec: '\u6311\u6230 / \u6210\u9577\u908a\u7de3', careerSec: '\u4e8b\u696d', relationshipsSec: '\u611f\u60c5\u8207\u95dc\u4fc2', healthSec: '\u5065\u5eb7\u8207\u7cbe\u529b', timingSec: '\u6642\u6a5f',
-    growthEdge: '\u6210\u9577\u908a\u7de3', practices: '\u672a\u4f86 90 \u5929\u7684\u7df4\u7fd2', style: '\u4f60\u5982\u4f55\u601d\u8003\u3001\u5de5\u4f5c\u8207\u9023\u7d50',
-    think: '\u5982\u4f55\u601d\u8003', work: '\u5982\u4f55\u5de5\u4f5c', connect: '\u5982\u4f55\u9023\u7d50',
+    solidLine: '\u9633\u723b\uff08\u5b9e\u7ebf\uff09',
+    brokenLine: '\u9634\u723b\uff08\u65ad\u7ebf\uff09',
+    changingLine: '\u53d8\u723b',
+    heads: '\u9633', tails: '\u9634',
+    sun: '\u592a\u9633', moon: '\u6708\u4eae', rising: '\u4e0a\u5347', lifePath: '\u751f\u547d\u7075\u6570', destiny: '\u547d\u8fd0\u6570', personalYear: '\u4e2a\u4eba\u5e74',
+    dayMaster: '\u65e5\u4e3b', lifePalace: '\u547d\u5bab', hexagram: '\u5366\u8c61', changingLines: '\u53d8\u723b',
+    overview: '\u603b\u89c8', strengthsSec: '\u957f\u5904', challengesSec: '\u6311\u6218 / \u6210\u957f\u8fb9\u7f18', careerSec: '\u4e8b\u4e1a', relationshipsSec: '\u611f\u60c5\u4e0e\u5173\u7cfb', healthSec: '\u5065\u5eb7\u4e0e\u7cbe\u529b', timingSec: '\u65f6\u673a',
+    growthEdge: '\u6210\u957f\u8fb9\u7f18', practices: '\u672a\u6765 90 \u5929\u7684\u7ec3\u4e60', style: '\u4f60\u5982\u4f55\u601d\u8003\u3001\u5de5\u4f5c\u4e0e\u8fde\u7ed3',
+    think: '\u5982\u4f55\u601d\u8003', work: '\u5982\u4f55\u5de5\u4f5c', connect: '\u5982\u4f55\u8fde\u7ed3',
   },
 };
+
+// Element names, localised (item B) — the Bazi element bar used to render
+// the raw English keys (wood/fire/earth/metal/water) on the Chinese page.
+const EL_NAMES = {
+  en: { wood: 'Wood', fire: 'Fire', earth: 'Earth', metal: 'Metal', water: 'Water' },
+  zh: { wood: '\u6728', fire: '\u706b', earth: '\u571f', metal: '\u91d1', water: '\u6c34' },
+};
+// Tarot keywords in the page language (the server now sends keywordsZh).
+function tarotKeywords(c) {
+  if (!c) return '';
+  return c.keywordsZh ? L({ en: c.keywords, zh: c.keywordsZh }) : (c.keywords || '');
+}
+
 const t = (k) => STR[state.lang][k] || STR.en[k] || k;
 const L = (o) => (o && typeof o === 'object' ? (state.lang === 'zh' ? o.zh || o.en : o.en || o.zh) : o);
 const esc = (x) => String(x ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
@@ -135,7 +152,7 @@ const $ = (id) => document.getElementById(id);
 
 function setLang(lang) {
   state.lang = lang;
-  document.documentElement.lang = lang === 'zh' ? 'zh-TW' : 'en';
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
   document.querySelectorAll('[data-i18n]').forEach((el) => { if (STR[lang][el.dataset.i18n]) el.textContent = STR[lang][el.dataset.i18n]; });
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { if (STR[lang][el.dataset.i18nPh]) el.placeholder = STR[lang][el.dataset.i18nPh]; });
   $('lang-en').classList.toggle('active', lang === 'en');
@@ -152,11 +169,18 @@ function lockBlock() {
   </div><div class="lock-overlay"><div class="lock-ic">\uD83D\uDD12</div><p>${esc(t('lockedTitle'))}</p>
   <button type="button" class="ghost" onclick="document.getElementById('unlock-card').scrollIntoView({behavior:'smooth'})">${esc(t('unlockBtn'))}</button></div></div>`;
 }
+// Visual-first (item C): the first section (usually Overview) stays visible;
+// the rest collapse into a <details> so the page is not a wall of text.
 function sectionHTML(sections, keys) {
   if (!sections) return '';
   const label = { overview: 'overview', strengths: 'strengthsSec', challenges: 'challengesSec', career: 'careerSec', relationships: 'relationshipsSec', health: 'healthSec', timing: 'timingSec' };
-  return (keys || ['overview', 'strengths', 'challenges', 'career', 'relationships', 'health', 'timing'])
-    .filter((k) => sections[k]).map((k) => `<h3>${esc(t(label[k]))}</h3><p>${esc(L(sections[k]))}</p>`).join('');
+  const list = (keys || ['overview', 'strengths', 'challenges', 'career', 'relationships', 'health', 'timing']).filter((k) => sections[k]);
+  if (!list.length) return '';
+  const render = (k) => `<h3>${esc(t(label[k]))}</h3><p>${esc(L(sections[k]))}</p>`;
+  const first = list[0], rest = list.slice(1);
+  let html = render(first);
+  if (rest.length) html += `<details class="more"><summary>${esc(t('moreDetail'))}</summary>${rest.map(render).join('')}</details>`;
+  return html;
 }
 function sysHead(icon, title) { return `<h2><span class="sys-icon">${icon}</span>${esc(title)}</h2>`; }
 function revealCover(icon, label, sub) {
@@ -180,12 +204,12 @@ function promptBirthDate() {
 }
 function previewSystemsHTML() {
   let html = '';
-  html += `<section class="card" id="sys-bazi">${sysHead('\uD83C\uDF3F', 'Bazi \u516B\u5B57')}<p class="lede sys-desc">${esc(t('sysDescBazi'))}</p>${revealCover('\uD83C\uDF3F', `${t('tapReveal')} \u2014 ${t('dayMaster')}`, t('enterDateFirst'))}</section>`;
-  html += `<section class="card" id="sys-ziwei">${sysHead('\u2B50', 'Zi Wei \u7D2B\u5FAE\u6597\u6578')}<p class="lede sys-desc">${esc(t('sysDescZiwei'))}</p><p class="lede">${esc(t('lifePalace'))} \u00B7 ${esc(L({ en: 'Tian Ji', zh: '\u5929\u6A5F' }))}</p><button type="button" data-preview="ziwei">\u2728 ${esc(t('castChart'))}</button></section>`;
-  html += `<section class="card" id="sys-horo">${sysHead('\uD83C\uDF19', 'Horoscope \u661F\u5EA7')}<p class="lede sys-desc">${esc(t('sysDescHoro'))}</p>${revealCover('\uD83C\uDF19', `${t('tapReveal')} \u2014 ${t('sun')}`, t('enterDateFirst'))}</section>`;
-  html += `<section class="card" id="sys-yijing">${sysHead('\u262F\uFE0F', 'Yi-Jing \u6613\u7D93')}<p class="lede sys-desc">${esc(t('sysDescYijing'))}</p><p class="lede">${esc(t('yijingHow'))}</p><button type="button" data-preview="yijing">\uD83E\uDE99 ${esc(t('castCoins'))}</button></section>`;
-  html += `<section class="card" id="sys-tarot">${sysHead('\uD83C\uDCCF', 'Tarot \u5854\u7F85')}<p class="lede sys-desc">${esc(t('sysDescTarot'))}</p><p class="lede">${esc(t('tapFlip'))}</p><div class="tarot-row">${['past', 'present', 'path'].map((p) => `<div><div class="tarot-card" data-preview="tarot" role="button" tabindex="0" aria-label="${esc(t('tapFlip'))}"><div class="tarot-inner"><div class="tarot-face tarot-back"><div class="star">\u2726</div><p>${esc(t('flipping'))}</p></div></div></div><p class="tarot-pos">${esc(t(p))}</p></div>`).join('')}</div></section>`;
-  html += `<section class="card" id="sys-num">${sysHead('\uD83D\uDD22', 'Numerology \u751F\u547D\u9748\u6578')}<p class="lede sys-desc">${esc(t('sysDescNum'))}</p>${revealCover('\uD83D\uDD22', `${t('tapReveal')} \u2014 ${t('lifePath')}`, t('enterDateFirst'))}</section>`;
+  html += `<section class="card" id="sys-bazi">${sysHead('\uD83C\uDF3F', 'Bazi \u516b\u5b57')}<p class="lede sys-desc">${esc(t('sysDescBazi'))}</p>${revealCover('\uD83C\uDF3F', `${t('tapReveal')} \u2014 ${t('dayMaster')}`, t('enterDateFirst'))}</section>`;
+  html += `<section class="card" id="sys-ziwei">${sysHead('\u2B50', 'Zi Wei \u7d2b\u5fae\u6597\u6570')}<p class="lede sys-desc">${esc(t('sysDescZiwei'))}</p><p class="lede">${esc(t('lifePalace'))} \u00B7 ${esc(L({ en: 'Tian Ji', zh: '\u5929\u673a' }))}</p><button type="button" data-preview="ziwei">\u2728 ${esc(t('castChart'))}</button></section>`;
+  html += `<section class="card" id="sys-horo">${sysHead('\uD83C\uDF19', 'Horoscope \u661f\u5ea7')}<p class="lede sys-desc">${esc(t('sysDescHoro'))}</p>${revealCover('\uD83C\uDF19', `${t('tapReveal')} \u2014 ${t('sun')}`, t('enterDateFirst'))}</section>`;
+  html += `<section class="card" id="sys-yijing">${sysHead('\u262F\uFE0F', 'Yi-Jing \u6613\u7ecf')}<p class="lede sys-desc">${esc(t('sysDescYijing'))}</p><p class="lede">${esc(t('yijingHow'))}</p><button type="button" data-preview="yijing">\uD83E\uDE99 ${esc(t('castCoins'))}</button></section>`;
+  html += `<section class="card" id="sys-tarot">${sysHead('\uD83C\uDCCF', 'Tarot \u5854\u7f57')}<p class="lede sys-desc">${esc(t('sysDescTarot'))}</p><p class="lede">${esc(t('tapFlip'))}</p><div class="tarot-row">${['past', 'present', 'path'].map((p) => `<div><div class="tarot-card" data-preview="tarot" role="button" tabindex="0" aria-label="${esc(t('tapFlip'))}"><div class="tarot-inner"><div class="tarot-face tarot-back"><div class="star">\u2726</div><p>${esc(t('flipping'))}</p></div></div></div><p class="tarot-pos">${esc(t(p))}</p></div>`).join('')}</div></section>`;
+  html += `<section class="card" id="sys-num">${sysHead('\uD83D\uDD22', 'Numerology \u751f\u547d\u7075\u6570')}<p class="lede sys-desc">${esc(t('sysDescNum'))}</p>${revealCover('\uD83D\uDD22', `${t('tapReveal')} \u2014 ${t('lifePath')}`, t('enterDateFirst'))}</section>`;
   html += `<section class="card" id="sys-portrait">${sysHead('\uD83E\uDE9E', t('portraitTitle'))}<p class="lede sys-desc">${esc(t('sysDescPortrait'))}</p>${revealCover('\uD83E\uDE9E', t('portraitTitle'), t('enterDateFirst'))}</section>`;
   return html;
 }
@@ -260,7 +284,7 @@ function renderSystems() {
   let html = '';
 
   /* Bazi */
-  html += `<section class="card" id="sys-bazi">${sysHead('\uD83C\uDF3F', 'Bazi \u516B\u5B57')}<p class="lede sys-desc">${esc(t('sysDescBazi'))}</p>`;
+  html += `<section class="card" id="sys-bazi">${sysHead('\uD83C\uDF3F', 'Bazi \u516b\u5b57')}<p class="lede sys-desc">${esc(t('sysDescBazi'))}</p>`;
   if (!state.revealed.bazi) {
     html += revealCover('\uD83C\uDF3F', `${t('tapReveal')} \u2014 ${t('dayMaster')}`, t('tapReveal'));
   } else {
@@ -268,7 +292,8 @@ function renderSystems() {
     html += `<div class="reveal-in"><p class="essence">${esc(t('dayMaster'))}: ${esc(L(dm))}</p><p class="hook-line">${esc(L(baziHook))}</p>`;
     if (unlocked) {
       html += `<div class="pillars">${r.bazi.pillars.map((p) => `<div class="pillar cast-item"><div class="plabel">${esc(L(p.label))}</div><div class="pchars">${esc(p.stem.char)}${esc(p.branch.char)}</div><div class="pelem">${esc(L(p.stem))} \u00B7 ${esc(L(p.branch))}</div></div>`).join('')}</div>`;
-      html += `<div class="elbar">${Object.entries(r.bazi.counts).map(([k, v]) => `<div class="${k === r.bazi.dominant ? 'hot' : k === r.bazi.weakest ? 'cold' : ''}">${esc(k)} \u00D7${v}</div>`).join('')}</div>`;
+      html += `<div class="elbar">${Object.entries(r.bazi.counts).map(([k, v]) => `<div class="${k === r.bazi.dominant ? 'hot' : k === r.bazi.weakest ? 'cold' : ''}">${esc(EL_NAMES[state.lang][k] || k)} \u00D7${v}</div>`).join('')}</div>`;
+      html += `<div class="glance"><span class="chip">${esc(t('dayMaster'))}: <b>${esc(L(r.bazi.dayMaster))}</b></span><span class="chip">${esc(t('strongest'))}: <b>${esc(EL_NAMES[state.lang][r.bazi.dominant])}</b></span><span class="chip">${esc(t('weakest'))}: <b>${esc(EL_NAMES[state.lang][r.bazi.weakest])}</b></span></div>`;
       html += sectionHTML(r.bazi.sections);
       html += `<p class="small">${esc(t('simplifiedNote'))}</p>`;
     } else html += lockBlock();
@@ -277,34 +302,35 @@ function renderSystems() {
   html += `</section>`;
 
   /* Zi Wei — cast the chart */
-  html += `<section class="card" id="sys-ziwei">${sysHead('\u2B50', 'Zi Wei \u7D2B\u5FAE\u6597\u6578')}<p class="lede sys-desc">${esc(t('sysDescZiwei'))}</p>`;
+  html += `<section class="card" id="sys-ziwei">${sysHead('\u2B50', 'Zi Wei \u7d2b\u5fae\u6597\u6570')}<p class="lede sys-desc">${esc(t('sysDescZiwei'))}</p>`;
   if (!state.ziweiCast) {
-    html += `<p class="lede">${esc(t('lifePalace'))} \u00B7 ${esc(L({ en: 'Tian Ji', zh: '\u5929\u6A5F' }))}</p><button type="button" data-act="cast-ziwei">\u2728 ${esc(t('castChart'))}</button>`;
+    html += `<p class="lede">${esc(t('lifePalace'))} \u00B7 ${esc(L({ en: 'Tian Ji', zh: '\u5929\u673a' }))}</p><button type="button" data-act="cast-ziwei">\u2728 ${esc(t('castChart'))}</button>`;
   } else {
+    html += `<p class="small">${esc(t('sampleNote'))}</p>`;
     const palaces = unlocked ? r.ziwei.palaces : [
-      { key: 'life', en: 'Life Palace', zh: '\u547D\u5BAE', star: { en: 'Tian Ji', zh: '\u5929\u6A5F' }, text: src.ziwei.hook },
-      { key: 'wealth', en: 'Wealth Palace', zh: '\u8CA1\u5E1B\u5BAE', star: { en: 'Wu Qu', zh: '\u6B66\u66F2' }, text: null },
-      { key: 'career', en: 'Career Palace', zh: '\u5B98\u7984\u5BAE', star: { en: 'Tai Yang', zh: '\u592A\u967D' }, text: null },
-      { key: 'spouse', en: 'Spouse Palace', zh: '\u592B\u59BB\u5BAE', star: { en: 'Tai Yin', zh: '\u592A\u9670' }, text: null },
+      { key: 'life', en: 'Life Palace', zh: '\u547d\u5bab', star: { en: 'Tian Ji', zh: '\u5929\u673a' }, text: src.ziwei.hook },
+      { key: 'wealth', en: 'Wealth Palace', zh: '\u8d22\u5e1b\u5bab', star: { en: 'Wu Qu', zh: '\u6b66\u66f2' }, text: null },
+      { key: 'career', en: 'Career Palace', zh: '\u5b98\u7984\u5bab', star: { en: 'Tai Yang', zh: '\u592a\u9633' }, text: null },
+      { key: 'spouse', en: 'Spouse Palace', zh: '\u592b\u59bb\u5bab', star: { en: 'Tai Yin', zh: '\u592a\u9634' }, text: null },
     ];
     html += `<div class="palace-grid">${palaces.map((p) => {
       const readable = unlocked || p.key === 'life';
       return `<div class="palace cast-item ${p.key === 'life' ? 'main' : ''}"><div class="pname">${esc(L(p))}</div><div class="star">${esc(L(p.star))}</div>${readable && p.text ? `<p>${esc(L(p.text))}</p>` : `<div class="skel"></div><div class="skel short"></div>`}</div>`;
     }).join('')}</div>`;
-    if (unlocked) html += sectionHTML(r.ziwei.sections) + `<p class="small">${esc(t('sampleNote'))}</p>`;
+    if (unlocked) html += sectionHTML(r.ziwei.sections);
     else html += lockBlock();
   }
   html += `</section>`;
 
   /* Horoscope */
-  html += `<section class="card" id="sys-horo">${sysHead('\uD83C\uDF19', 'Horoscope \u661F\u5EA7')}<p class="lede sys-desc">${esc(t('sysDescHoro'))}</p>`;
+  html += `<section class="card" id="sys-horo">${sysHead('\uD83C\uDF19', 'Horoscope \u661f\u5ea7')}<p class="lede sys-desc">${esc(t('sysDescHoro'))}</p>`;
   if (!state.revealed.horo) {
     html += revealCover('\uD83C\uDF19', `${t('tapReveal')} \u2014 ${t('sun')}`, t('tapReveal'));
   } else {
     const sun = unlocked ? r.horoscope.sun : { en: src.horoscope.sunSign, zh: src.horoscope.sunSignZh };
     html += `<div class="reveal-in"><p class="essence">${esc(t('sun'))}: ${esc(L(sun))}</p><p class="hook-line">${esc(L(horoHook))}</p>`;
     if (unlocked) {
-      html += `<p><span class="badge">${esc(t('sun'))} ${esc(L(r.horoscope.sun))}</span><span class="badge">${esc(t('moon'))} ${esc(L(r.horoscope.moon))}</span><span class="badge">${esc(t('rising'))} ${esc(L(r.horoscope.rising))}</span></p>`;
+      html += `<p><span class="badge big">${esc(r.horoscope.sun.symbol)} ${esc(t('sun'))} ${esc(L(r.horoscope.sun))}</span><span class="badge big">${esc(r.horoscope.moon.symbol)} ${esc(t('moon'))} ${esc(L(r.horoscope.moon))}</span><span class="badge big">${esc(r.horoscope.rising.symbol)} ${esc(t('rising'))} ${esc(L(r.horoscope.rising))}</span></p>`;
       html += sectionHTML(r.horoscope.sections);
     } else html += lockBlock();
     html += `</div>`;
@@ -314,7 +340,7 @@ function renderSystems() {
   /* Yi-Jing — cast the coins: true 6-line casting, bottom to top.
      The hexagram and hook below are only shown once all six lines have
      been cast; the lines shown are the server's lines for this profile. */
-  html += `<section class="card" id="sys-yijing">${sysHead('\u262F\uFE0F', 'Yi-Jing \u6613\u7D93')}<p class="lede sys-desc">${esc(t('sysDescYijing'))}</p><p class="lede">${esc(t('yijingHow'))}</p>`;
+  html += `<section class="card" id="sys-yijing">${sysHead('\u262F\uFE0F', 'Yi-Jing \u6613\u7ecf')}<p class="lede sys-desc">${esc(t('sysDescYijing'))}</p><p class="lede">${esc(t('yijingHow'))}</p>`;
   if (!state.yijingCast) {
     html += `<button type="button" data-act="cast-yijing">\uD83E\uDE99 ${esc(t('castCoins'))}</button><div class="yijing-stage"></div>`;
   } else {
@@ -331,15 +357,15 @@ function renderSystems() {
   html += `</section>`;
 
   /* Tarot — flip the cards */
-  html += `<section class="card" id="sys-tarot">${sysHead('\uD83C\uDCCF', 'Tarot \u5854\u7F85')}<p class="lede sys-desc">${esc(t('sysDescTarot'))}</p><p class="lede">${esc(t('tapFlip'))}</p>`;
+  html += `<section class="card" id="sys-tarot">${sysHead('\uD83C\uDCCF', 'Tarot \u5854\u7f57')}<p class="lede sys-desc">${esc(t('sysDescTarot'))}</p><p class="lede">${esc(t('tapFlip'))}</p>`;
   const cards = unlocked ? r.tarot.cardsDetailed : src.tarot.cards;
   const posKeys = ['past', 'present', 'path'];
   html += `<div class="tarot-row">${cards.map((c, i) => {
     const flipped = state.tarotFlipped[i];
     return `<div><div class="tarot-card ${flipped ? 'flipped' : ''}" data-tarot="${i}" role="button" tabindex="0" aria-label="${esc(t('tapFlip'))}">
       <div class="tarot-inner">
-        <div class="tarot-face tarot-back"><div class="star">\u2726</div><p>${esc(t('flipping'))}</p></div>
-        <div class="tarot-face tarot-front"><div class="emoji">${esc(c.emoji)}</div><div class="cname">${esc(L(c.name))}</div><div class="kw">${esc(c.keywords || '')}</div>${c.reversed ? `<div class="rev">${esc(t('reversed'))}</div>` : ''}</div>
+        <div class="tarot-face tarot-back"><div class="back-frame"><div class="star">\u2726</div><p class="back-brand">FateWeave</p><p>${esc(t('flipping'))}</p></div></div>
+        <div class="tarot-face tarot-front" style="--hue:${((c.idx ?? 0) * 47) % 360}"><div class="card-num">${esc(c.number ?? '')}</div><div class="card-art"><span class="card-emoji">${esc(c.emoji)}</span></div><div class="cname">${esc(L(c.name))}</div><div class="kw">${esc(tarotKeywords(c))}</div>${c.reversed ? `<div class="rev-banner">${esc(t('reversed'))}</div>` : ''}</div>
       </div></div><p class="tarot-pos">${esc(t(posKeys[i]))}</p></div>`;
   }).join('')}</div>`;
   html += `<div id="tarot-detail">${cards.map((c, i) => {
@@ -347,7 +373,7 @@ function renderSystems() {
     if (unlocked) {
       return `<div class="tarot-detail reveal-in"><h3>${esc(t(posKeys[i]))} \u2014 ${esc(L(c.name))}${c.reversed ? ` (${esc(t('reversed'))})` : ''}</h3><p>${esc(L(c.meaning))}</p><p class="hook-line">${esc(L(c.positionText))}</p><p>${esc(L(c.forQuestion))}</p></div>`;
     }
-    return `<div class="tarot-detail"><p class="hook-line"><strong>${esc(L(c.name))}</strong> \u2014 ${esc(c.keywords || '')}</p>${lockBlock()}</div>`;
+    return `<div class="tarot-detail"><p class="hook-line"><strong>${esc(L(c.name))}</strong> \u2014 ${esc(tarotKeywords(c))}</p>${lockBlock()}</div>`;
   }).join('')}</div>`;
   if (unlocked && state.tarotFlipped.every(Boolean)) {
     // The story names all three cards and the sections discuss them in
@@ -361,14 +387,14 @@ function renderSystems() {
   html += `</section>`;
 
   /* Numerology */
-  html += `<section class="card" id="sys-num">${sysHead('\uD83D\uDD22', 'Numerology \u751F\u547D\u9748\u6578')}<p class="lede sys-desc">${esc(t('sysDescNum'))}</p>`;
+  html += `<section class="card" id="sys-num">${sysHead('\uD83D\uDD22', 'Numerology \u751f\u547d\u7075\u6570')}<p class="lede sys-desc">${esc(t('sysDescNum'))}</p>`;
   if (!state.revealed.num) {
     html += revealCover('\uD83D\uDD22', `${t('tapReveal')} \u2014 ${t('lifePath')}`, t('tapReveal'));
   } else {
     const lp = unlocked ? r.numerology.lifePath : src.numerology.lifePath;
     html += `<div class="reveal-in"><p class="essence">${esc(t('lifePath'))}: ${lp}</p><p class="hook-line">${esc(L(numHook))}</p>`;
     if (unlocked) {
-      html += `<p><span class="badge">${esc(t('lifePath'))} ${r.numerology.lifePath}</span>${r.numerology.destiny ? `<span class="badge">${esc(t('destiny'))} ${r.numerology.destiny}</span>` : ''}<span class="badge">${esc(t('personalYear'))}: ${r.numerology.personalYear}</span></p>`;
+      html += `<div class="bignum-row"><div class="bignum"><div class="n">${r.numerology.lifePath}</div><div class="l">${esc(t('lifePath'))}</div></div>${r.numerology.destiny ? `<div class="bignum"><div class="n">${r.numerology.destiny}</div><div class="l">${esc(t('destiny'))}</div></div>` : ''}<div class="bignum"><div class="n">${r.numerology.personalYear}</div><div class="l">${esc(t('personalYear'))} ${new Date().getFullYear()}</div></div></div>`;
       html += sectionHTML(r.numerology.sections);
     } else html += lockBlock();
     html += `</div>`;
@@ -378,10 +404,14 @@ function renderSystems() {
   /* Complete Portrait */
   html += `<section class="card" id="sys-portrait">${sysHead('\uD83E\uDE9E', t('portraitTitle'))}<p class="lede sys-desc">${esc(t('sysDescPortrait'))}</p><p class="essence">${esc(L(src.portrait.essenceLine))}</p>`;
   if (unlocked) {
+    const pChips = [`${esc(t('dayMaster'))}: <b>${esc(L(r.bazi.dayMaster))}</b>`, `${esc(t('sun'))}: <b>${esc(L(r.horoscope.sun))}</b>`, `${esc(t('lifePath'))}: <b>${r.numerology.lifePath}</b>`];
+    if (r.personality?.enneagram) pChips.push(`Enneagram: <b>${r.personality.enneagram.core}w${r.personality.enneagram.wing}</b>`);
+    if (r.personality?.mbti) pChips.push(`MBTI: <b>${r.personality.mbti.type}</b>`);
+    html += `<div class="glance">${pChips.map((c) => `<span class="chip">${c}</span>`).join('')}</div>`;
     html += `<h3>${esc(t('portraitTitle'))}</h3><p>${esc(L(r.portrait.character))}</p>`;
     html += `<h3>${esc(t('style'))}</h3><p><strong>${esc(t('think'))}:</strong> ${esc(L(r.portrait.style.think))}</p><p><strong>${esc(t('work'))}:</strong> ${esc(L(r.portrait.style.work))}</p><p><strong>${esc(t('connect'))}:</strong> ${esc(L(r.portrait.style.connect))}</p>`;
-    html += `<h3>${esc(t('strengths'))}</h3><ul class="clean">${r.portrait.strengths.map((x) => `<li>${esc(L(x.text))} <small>(${esc(L(x.source))})</small></li>`).join('')}</ul>`;
-    html += `<h3>${esc(t('whatsLacking'))}</h3><ul class="clean">${r.portrait.lacking.map((x) => `<li>${esc(L(x.text))} <small>(${esc(L(x.source))})</small></li>`).join('')}</ul>`;
+    html += `<h3>${esc(t('strengths'))}</h3><ul class="clean plist">${r.portrait.strengths.map((x) => `<li>${esc(L(x.text))} <small>(${esc(L(x.source))})</small></li>`).join('')}</ul>`;
+    html += `<h3>${esc(t('whatsLacking'))}</h3><ul class="clean plist">${r.portrait.lacking.map((x) => `<li>${esc(L(x.text))} <small>(${esc(L(x.source))})</small></li>`).join('')}</ul>`;
     html += `<h3>${esc(t('practices'))}</h3><ul class="clean">${r.portrait.developmentFocus.map((x) => `<li>${esc(L(x))}</li>`).join('')}</ul>`;
     html += `<h3>${esc(t('synthesisTitle'))}</h3><p>${esc(L(r.synthesis.agree))}</p><p>${esc(L(r.synthesis.tension))}</p><p><em>${esc(L(r.synthesis.full))}</em></p>`;
     if (r.synthesis.personalityLens) html += `<p class="hook-line">${esc(L(r.synthesis.personalityLens))}</p>`;
@@ -417,7 +447,7 @@ function bindSystemEvents() {
         if (lede) lede.textContent = t('casting');
         const coins = document.createElement('div');
         coins.className = 'coins';
-        coins.innerHTML = '<div class="coin spin">\u967D</div><div class="coin spin">\u9670</div><div class="coin spin">\u967D</div>';
+        coins.innerHTML = '<div class="coin spin">\u9633</div><div class="coin spin">\u9634</div><div class="coin spin">\u9633</div>';
         el.replaceWith(coins);
         setTimeout(() => { state.yijingCast = true; renderSystems(); }, 1600);
         return;
@@ -524,7 +554,7 @@ function resetProfileView() {
 function renderQuizList() {
   const list = $('quiz-list');
   const defs = [
-    { kind: 'enneagram', icon: '\uD83D\uDD2E', title: 'Enneagram \u4E5D\u578B\u4EBA\u683C', count: 27 },
+    { kind: 'enneagram', icon: '\uD83D\uDD2E', title: 'Enneagram \u4e5d\u578b\u4eba\u683c', count: 27 },
     { kind: 'mbti', icon: '\uD83E\uDDE0', title: 'MBTI', count: 24 },
   ];
   list.innerHTML = defs.map((d) => {
@@ -774,8 +804,8 @@ function renderReportCard() {
     <p>${esc(L(r.portrait.character))}</p>
     <h3>${esc(t('synthesisTitle'))}</h3><p>${esc(L(r.synthesis.agree))}</p><p>${esc(L(r.synthesis.tension))}</p>
     <p><em>${esc(L(r.synthesis.full))}</em></p>
-    ${r.personality ? `<h3>${esc(t('portraitTitle'))} \u00B7 \u4EBA\u683C</h3>${r.personality.enneagram ? `<p>Enneagram ${r.personality.enneagram.core}w${r.personality.enneagram.wing} \u00B7 ${esc(L({ en: r.personality.enneagram.nameEn, zh: r.personality.enneagram.nameZh }))}</p>` : ''}${r.personality.mbti ? `<p>MBTI ${r.personality.mbti.type} \u00B7 ${esc(L({ en: r.personality.mbti.nickEn, zh: r.personality.mbti.nickZh }))}</p>` : ''}` : ''}
-    <p class="small">${r.limits.map(esc).join(' ')}</p>`;
+    ${r.personality ? `<h3>${esc(t('portraitTitle'))} \u00B7 ${state.lang === 'zh' ? '\u4eba\u683c' : 'Personality'}</h3>${r.personality.enneagram ? `<p>Enneagram ${r.personality.enneagram.core}w${r.personality.enneagram.wing} \u00B7 ${esc(L({ en: r.personality.enneagram.nameEn, zh: r.personality.enneagram.nameZh }))}</p>` : ''}${r.personality.mbti ? `<p>MBTI ${r.personality.mbti.type} \u00B7 ${esc(L({ en: r.personality.mbti.nickEn, zh: r.personality.mbti.nickZh }))}</p>` : ''}` : ''}
+    <p class="small">${[t('limit1'), t('limit2'), t('limit3'), t('limit4')].map(esc).join(' ')}</p>`;
 }
 
 $('view-report-btn').addEventListener('click', () => { $('report-card').scrollIntoView({ behavior: 'smooth' }); });
@@ -803,7 +833,7 @@ $('lr-ask').addEventListener('click', async () => {
     if ($('lr-speak').checked && 'speechSynthesis' in window) {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(data.answer);
-      u.lang = state.lang === 'zh' ? 'zh-TW' : 'en-US';
+      u.lang = state.lang === 'zh' ? 'zh-CN' : 'en-US';
       speechSynthesis.speak(u);
       $('lr-stop').classList.remove('hidden');
     }
@@ -813,7 +843,7 @@ $('lr-voice').addEventListener('click', () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { alert(t('voiceUnsupported')); return; }
   const rec = new SR();
-  rec.lang = state.lang === 'zh' ? 'zh-TW' : 'en-US';
+  rec.lang = state.lang === 'zh' ? 'zh-CN' : 'en-US';
   rec.onresult = (e) => { $('lr-question').value = e.results[0][0].transcript; };
   rec.start();
 });
