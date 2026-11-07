@@ -2,8 +2,8 @@
 
 Deployable Node.js + SQLite codebase for the FateWeave pay-first model.
 The handover identifies the existing Railway deployment at
-https://fateweave-production.up.railway.app. This folder is a local continuation
-of the supplied source; local changes are not deployed automatically.
+https://fateweave-production.up.railway.app. Changes are committed to the existing GitHub repository; Railway deployment
+may need to be triggered manually with Deploy latest commit.
 
 ## Model (decided 7 Nov 2026 — supersedes pick-1-system + unlock code)
 
@@ -43,6 +43,7 @@ npm run hash-owner-password "a-strong-password-at-least-10-chars"
 npm test                    # smoke test, no real keys needed
 node scripts/dom-check.js    # guided-flow DOM checks
 node scripts/success-check.js # checkout-return checks
+node scripts/gemini-check.js  # Gemini failover, retry and allowance checks
 npm start                   # http://localhost:3000
 ```
 
@@ -159,8 +160,9 @@ killed the static-page code.
 
 - No real payment is taken until Stripe live keys + a live webhook are configured.
 - Live Reader answers are rule-based and grounded in the buyer's reading.
-  Ask the Master uses Gemini when available and falls back without consuming
-  the buyer's AI allowance when unavailable.
+  Ask the Master always uses Gemini for the 5 included or 30 total upgraded
+  follow-ups. It tries a lighter Gemini model if the primary fails. If both
+  fail, it returns a retryable error with no generic answer and no chat used.
 - HitPay auto-unlock is **not** wired — the webhook is a stub that refuses to
   mark orders paid until its signature check is implemented.
 - Daily email requires a working sender and a scheduled job. The supplied
