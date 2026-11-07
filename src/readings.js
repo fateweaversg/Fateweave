@@ -99,7 +99,7 @@ function calcNumbers(date, name) {
     for (let j = 0; j < clean.length; j++) { let v = (clean.charCodeAt(j) - 96) % 9; if (v === 0) v = 9; tot += v; }
     dest = clean.length ? digitalRoot(tot) : 0;
   }
-  const pyStr = String(date.getMonth() + 1) + String(date.getDate()) + '2026'; let pySum = 0;
+  const pyStr = String(date.getMonth() + 1) + String(date.getDate()) + String(currentYear()); let pySum = 0;
   for (let k = 0; k < pyStr.length; k++) pySum += parseInt(pyStr[k], 10);
   return { lp, dest, py: singleDigit(pySum) };
 }
@@ -139,6 +139,27 @@ function castYijing(seedStr) {
 }
 function elName(key, lang) { return lang === 'zh' ? D.ELNAME[key].replace(/^[A-Za-z]+ /, '') : D.ELNAME[key].replace(/ [^ ]+$/, ''); }
 
+/* --- Current-date helpers (item F, 7 Nov 2026) ---------------------------
+   Timing must be computed from the actual current date at request time —
+   never a hardcoded year ("2026", "Fire Horse") or fixed month windows
+   ("months 3–4 and month 9"). The Chinese year stem/branch derive from
+   the year number: stem (year−4)%10, branch (year−4)%12. */
+function currentYear() { return new Date().getFullYear(); }
+function chineseYearLabel(y) {
+  const stem = ((y - 4) % 10 + 10) % 10, branch = ((y - 4) % 12 + 12) % 12;
+  return { en: `${y} · ${STEM_EN[stem]} ${BRANCH_EN[branch]}`, zh: `${y}年 · ${STEM_ZH[stem]}${BRANCH_ZH[branch]}` };
+}
+function nextTwelveMonths() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 11, 1);
+  const enFmt = (d) => d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  return {
+    en: `${enFmt(start)}–${enFmt(end)}`,
+    zh: `${start.getFullYear()}年${start.getMonth() + 1}月–${end.getFullYear()}年${end.getMonth() + 1}月`,
+  };
+}
+
 /* --- Section text (bilingual, derived from the original tables) ---------- */
 function sec(en, zh) { return { en, zh }; }
 function baziSections(b, dom, weak, dmTxt, lang) {
@@ -146,26 +167,26 @@ function baziSections(b, dom, weak, dmTxt, lang) {
   return {
     overview: sec(
       `Your Day Master is ${STEM_EN[b.dayMaster]} (${STEM_ZH[b.dayMaster]}). The chart runs strongest in ${domE} and lightest in ${weakE}; both your working style and what you need to deliberately supply come from that imbalance.`,
-      `你的日主是${STEM_ZH[b.dayMaster]}。整體五行以${elName(dom, 'zh')}最旺、${elName(weak, 'zh')}最弱——行事風格與需要補足的方向，都從這裡讀出來。`),
+      `你的日主是${STEM_ZH[b.dayMaster]}。整体五行以${elName(dom, 'zh')}最旺、${elName(weak, 'zh')}最弱——行事风格与需要补足的方向，都从这里读出来。`),
     dayMaster: sec(dmTxt.en, dmTxt.zh),
     strengths: sec(
       `Your strongest element, ${domE}, is the mode you run without effort — ${D.EL_TXT[dom].en} is a default strength. ${D.DM_PORTRAIT[b.dayMaster].sEn}.`,
-      `你最旺的${elName(dom, 'zh')}是你不費力就做到的模式——${D.EL_TXT[dom].zh}。${D.DM_PORTRAIT[b.dayMaster].sZh}。`),
+      `你最旺的${elName(dom, 'zh')}是你不费力就做到的模式——${D.EL_TXT[dom].zh}。${D.DM_PORTRAIT[b.dayMaster].sZh}。`),
     challenges: sec(
       `Your lightest element, ${weakE}, is the one to cultivate deliberately — ${D.EL_TXT[weak].en} does not switch on by itself. ${D.DM_PORTRAIT[b.dayMaster].gEn}.`,
-      `你最弱的${elName(weak, 'zh')}需要刻意經營——${D.EL_TXT[weak].zh}。${D.DM_PORTRAIT[b.dayMaster].gZh}。`),
+      `你最弱的${elName(weak, 'zh')}需要刻意经营——${D.EL_TXT[weak].zh}。${D.DM_PORTRAIT[b.dayMaster].gZh}。`),
     career: sec(
       `At work, ${domE} energy is how you deliver without forcing it: ${D.EL_TXT[dom].en} Lower your reliance on willpower in ${weakE} areas — put structure, a checklist or a collaborator there instead. Your useful god is ${weakE}: feed the lightest element to balance the chart.`,
-      `工作上，${elName(dom, 'zh')}是你不費力的工作方式：${D.EL_TXT[dom].zh}。在${elName(weak, 'zh')}的範疇，少靠意志力，多靠結構、清單或合作者。你的用神是${elName(weak, 'zh')}：補最弱者，平衡全局。`),
+      `工作上，${elName(dom, 'zh')}是你不费力的工作方式：${D.EL_TXT[dom].zh}。在${elName(weak, 'zh')}的范畴，少靠意志力，多靠结构、清单或合作者。你的用神是${elName(weak, 'zh')}：补最弱者，平衡全局。`),
     relationships: sec(
       `In relationships, your Day Master sets the tone: ${dmTxt.en} People experience you as steady in your own direction — say what you need plainly, rather than letting correctness or habit speak for it.`,
-      `在關係中，日主定下基調：${dmTxt.zh}別人感受到你朝著自己的方向穩定前行——直接說出需要，不要讓「正確」或習慣代替你說話。`),
+      `在关系中，日主定下基调：${dmTxt.zh}别人感受到你朝着自己的方向稳定前行——直接说出需要，不要让「正确」或习惯代替你说话。`),
     health: sec(
       `Energy management: ${domE} is your natural fuel, ${weakE} is where you leak. Schedule deliberate slack in your ${weakE}-light months and protect rest the way you protect deadlines — ${D.EL_PORTRAIT[weak].pEn}`,
-      `精力管理：${elName(dom, 'zh')}是你的天然燃料，${elName(weak, 'zh')}是你漏氣的地方。在${elName(weak, 'zh')}較弱的月份主動留白，像守約一樣保護恢復——${D.EL_PORTRAIT[weak].pZh}`),
+      `精力管理：${elName(dom, 'zh')}是你的天然燃料，${elName(weak, 'zh')}是你漏气的地方。在${elName(weak, 'zh')}较弱的月份主动留白，像守约一样保护恢复——${D.EL_PORTRAIT[weak].pZh}`),
     timing: sec(
-      `This year is 丙午, Fire Horse 2026 — it feeds your ${domE}. The current luck pillar runs a decade at a time; the theme now is building. Across the next twelve months, career and money windows peak in months 3–4 and again in month 9. This is a year for consolidating, not expanding.`,
-      `今年是丙午火馬年 2026，與你的${elName(dom, 'zh')}相生。當前大運十年一步，現行主題是建立。未來十二個月，事業與財務窗口在第 3–4 月及第 9 月最強。今年適合整固，而非擴張。`),
+      `This year is ${chineseYearLabel(currentYear()).en} — it feeds your ${domE}. The current luck pillar runs a decade at a time; the theme now is building. Over the next twelve months (${nextTwelveMonths().en}), keep the pace steady: this is a year for consolidating, not expanding.`,
+      `今年是${chineseYearLabel(currentYear()).zh}，与你的${elName(dom, 'zh')}相生。当前大运十年一步，现行主题是建立。未来十二个月（${nextTwelveMonths().zh}），保持节奏稳定：今年适合整固，而非扩张。`),
   };
 }
 function horoscopeSections(a, lang) {
@@ -174,14 +195,14 @@ function horoscopeSections(a, lang) {
   return {
     overview: sec(
       `People meet your ${a.rising.en} Rising first; decisions are made by your ${a.sun.en} Sun; and your ${a.moon.en} Moon explains why some days you are unstoppable and others you simply want the door closed.`,
-      `別人先遇到的，是你上升${a.rising.zh}的門面；真正做決定的，是太陽${a.sun.zh}；而月亮${a.moon.zh}解釋了你為何在某些日子特別高效、某些日子只想關門。`),
-    sun: sec(`Your core identity and fuel centre on ${t(a.sun)}. When your life is arranged around it you feel recognisably yourself; drift too far from it for too long and even a stable life slowly deflates.`, `你的核心身份與動力圍繞${tz(a.sun)}。當生活安排與這主題同向，你會感到「這才是我」；長期偏離它，再穩定的日子也會慢慢漏氣。`),
-    moon: sec(`Your emotional rhythm and recharging style are governed by ${t(a.moon)}. This is what you privately need in order to feel safe; under pressure, feed the Moon first and your judgement comes back online.`, `你的情緒節奏與充電方式由${tz(a.moon)}主導。這是你私下需要被照顧的方式——壓力大時，先滿足月亮的需求，判斷力才會回來。`),
-    rising: sec(`First impressions of you are filtered through ${t(a.rising)} — it is the style you open doors with, and where strangers most often misread you. For interviews, first meetings and public appearances, presenting in this style costs you the least energy.`, `別人對你的第一印象來自${tz(a.rising)}——這是你開門的方式，也是陌生人誤讀你的地方。面試、初次見面與公開露面時，順著上升星座的風格呈現自己最省力。`),
-    career: sec(`Career follows your Sun: work that lets you live ${t(a.sun)} will feel like yours; work that only uses your Rising style will pay but not satisfy. Choose roles where the Sun's theme is the job, not a hobby you fit around it.`, `事業跟隨你的太陽：能讓你活出${tz(a.sun)}的工作，會感覺真正屬於你；只用上升風格的工作能賺錢，卻不滿足。選擇太陽主題本身就是工作內容的崗位。`),
-    relationships: sec(`In relationships, your Moon sets the private terms: you need ${t(a.moon)} to feel safe. Say that plainly early — a partner cannot meet a need you have only hinted at.`, `在關係中，月亮定下私下條件：你需要${tz(a.moon)}才感到安全。及早直接說出來——伴侶無法滿足你只暗示過的需要。`),
-    health: sec(`Your Moon is your recovery gauge. When ${t(a.moon)} is starved, judgement goes first. Protect the Moon's recharge the way you protect a deadline.`, `月亮是你的恢復儀表。當${tz(a.moon)}被虧待，判斷力最先離場。像守死線一樣保護月亮的充電方式。`),
-    timing: sec(`Your Sun's timing is the clue: the moments when you feel most yourself are usually the moments when the answer is clearest. Do not decide when you are tired or rushed — decide in the window when you are most like yourself.`, `太陽的時機就是線索：你感覺最像自己的時刻，通常也是答案最清晰的時刻。不要在疲憊或匆忙時決定——在最像自己的時段決定。`),
+      `别人先遇到的，是你上升${a.rising.zh}的门面；真正做决定的，是太阳${a.sun.zh}；而月亮${a.moon.zh}解释了你为何在某些日子特别高效、某些日子只想关门。`),
+    sun: sec(`Your core identity and fuel centre on ${t(a.sun)}. When your life is arranged around it you feel recognisably yourself; drift too far from it for too long and even a stable life slowly deflates.`, `你的核心身份与动力围绕${tz(a.sun)}。当生活安排与这主题同向，你会感到「这才是我」；长期偏离它，再稳定的日子也会慢慢漏气。`),
+    moon: sec(`Your emotional rhythm and recharging style are governed by ${t(a.moon)}. This is what you privately need in order to feel safe; under pressure, feed the Moon first and your judgement comes back online.`, `你的情绪节奏与充电方式由${tz(a.moon)}主导。这是你私下需要被照顾的方式——压力大时，先满足月亮的需求，判断力才会回来。`),
+    rising: sec(`First impressions of you are filtered through ${t(a.rising)} — it is the style you open doors with, and where strangers most often misread you. For interviews, first meetings and public appearances, presenting in this style costs you the least energy.`, `别人对你的第一印象来自${tz(a.rising)}——这是你开门的方式，也是陌生人误读你的地方。面试、初次见面与公开露面时，顺着上升星座的风格呈现自己最省力。`),
+    career: sec(`Career follows your Sun: work that lets you live ${t(a.sun)} will feel like yours; work that only uses your Rising style will pay but not satisfy. Choose roles where the Sun's theme is the job, not a hobby you fit around it.`, `事业跟随你的太阳：能让你活出${tz(a.sun)}的工作，会感觉真正属于你；只用上升风格的工作能赚钱，却不满足。选择太阳主题本身就是工作内容的岗位。`),
+    relationships: sec(`In relationships, your Moon sets the private terms: you need ${t(a.moon)} to feel safe. Say that plainly early — a partner cannot meet a need you have only hinted at.`, `在关系中，月亮定下私下条件：你需要${tz(a.moon)}才感到安全。及早直接说出来——伴侣无法满足你只暗示过的需要。`),
+    health: sec(`Your Moon is your recovery gauge. When ${t(a.moon)} is starved, judgement goes first. Protect the Moon's recharge the way you protect a deadline.`, `月亮是你的恢复仪表。当${tz(a.moon)}被亏待，判断力最先离场。像守死线一样保护月亮的充电方式。`),
+    timing: sec(`Your Sun's timing is the clue: the moments when you feel most yourself — ${t(a.sun)} — are usually the moments when the answer is clearest. Do not decide when you are tired or rushed — decide in the window when you are most like yourself, and let your ${a.moon.en} Moon rest first.`, `太阳的时机就是线索：你感觉最像自己的时刻——${tz(a.sun)}——通常也是答案最清晰的时刻。不要在疲惫或匆忙时决定——先让月亮${a.moon.zh}休息好，再在最像自己的时段决定。`),
   };
 }
 function numerologySections(n, lang) {
@@ -195,75 +216,75 @@ function numerologySections(n, lang) {
     return l === 'zh' ? D.LP.zh[String(n.lp)] : D.LP.en[String(n.lp)];
   };
   return {
-    overview: sec(`Life Path ${n.lp}: ${D.LP.en[String(n.lp)]} This is the lesson your life keeps re-teaching in new costumes. Work with it and effort compounds; work against it and the same frustration returns wearing different clothes.`, `生命靈數 ${n.lp}：${D.LP.zh[String(n.lp)]}這是你反覆要學的一課：順著它走，事情有累積感；逆著它硬闖，同一類挫折會以不同面貌回來。`),
+    overview: sec(`Life Path ${n.lp}: ${D.LP.en[String(n.lp)]} This is the lesson your life keeps re-teaching in new costumes. Work with it and effort compounds; work against it and the same frustration returns wearing different clothes.`, `生命灵数 ${n.lp}：${D.LP.zh[String(n.lp)]}这是你反复要学的一课：顺着它走，事情有累积感；逆着它硬闯，同一类挫折会以不同面貌回来。`),
     lifePath: sec(D.LP.en[String(n.lp)], D.LP.zh[String(n.lp)]),
-    destiny: n.dest ? sec(`Destiny ${n.dest}: ${D.LP.en[String(n.dest)]} This is the outward assignment your name carries — the direction the world keeps asking you to practise.`, `命運數 ${n.dest}：${D.LP.zh[String(n.dest)]}這是你的名字帶出的外在功課——世界不斷要求你練習的方向。`) : sec('No name was given, so no Destiny number was calculated.', '未提供姓名，因此沒有計算命運數。'),
-    personalYear: sec(`2026 is ${D.PY_TXT.en[String(n.py)]}`, `2026 年是${D.PY_TXT.zh[String(n.py)]}`),
-    career: sec(`Career follows Life Path ${n.lp}: roles that let you practise ${D.LP.en[String(n.lp)].split('.')[0].toLowerCase()} will compound; roles that ask you to do the opposite will feel like pushing uphill every week.`, `事業跟隨生命靈數 ${n.lp}：能讓你練習「${D.LP.zh[String(n.lp)]}」的崗位會有累積感；要求你做相反事的崗位，每週都會像推石上山。`),
-    relationships: sec(`In relationships, Life Path ${n.lp} asks for the same lesson in a different room: ${lpLesson('en')}`, `在關係中，生命靈數 ${n.lp} 要求同一課在另一個房間重演：${lpLesson('zh')}`),
-    health: sec(`Your Personal Year ${n.py} sets the energy budget for 2026: ${D.PY_TXT.en[String(n.py)]} Plan rest and effort around that theme, not against it.`, `你的個人年 ${n.py} 定下 2026 年的能量預算：${D.PY_TXT.zh[String(n.py)]}按這個主題安排休息與努力，而不是逆著它。`),
-    timing: sec(`2026 is ${D.PY_TXT.en[String(n.py)]} Across the year, the strongest windows are the months that match this theme — use them for the big move, and let the other months be for preparation.`, `2026 年是${D.PY_TXT.zh[String(n.py)]}全年最強的窗口，是與這個主題相符的月份——大事放在那些月份，其他月份用來準備。`),
+    destiny: n.dest ? sec(`Destiny ${n.dest}: ${D.LP.en[String(n.dest)]} This is the outward assignment your name carries — the direction the world keeps asking you to practise.`, `命运数 ${n.dest}：${D.LP.zh[String(n.dest)]}这是你的名字带出的外在功课——世界不断要求你练习的方向。`) : sec('No name was given, so no Destiny number was calculated.', '未提供姓名，因此没有计算命运数。'),
+    personalYear: sec(`${currentYear()} is ${D.PY_TXT.en[String(n.py)]}`, `${currentYear()} 年是${D.PY_TXT.zh[String(n.py)]}`),
+    career: sec(`Career follows Life Path ${n.lp}: roles that let you practise ${D.LP.en[String(n.lp)].split('.')[0].toLowerCase()} will compound; roles that ask you to do the opposite will feel like pushing uphill every week.`, `事业跟随生命灵数 ${n.lp}：能让你练习「${D.LP.zh[String(n.lp)]}」的岗位会有累积感；要求你做相反事的岗位，每周都会像推石上山。`),
+    relationships: sec(`In relationships, Life Path ${n.lp} asks for the same lesson in a different room: ${lpLesson('en')}`, `在关系中，生命灵数 ${n.lp} 要求同一课在另一个房间重演：${lpLesson('zh')}`),
+    health: sec(`Your Personal Year ${n.py} sets the energy budget for ${currentYear()}: ${D.PY_TXT.en[String(n.py)]} Plan rest and effort around that theme, not against it.`, `你的个人年 ${n.py} 定下 ${currentYear()} 年的能量预算：${D.PY_TXT.zh[String(n.py)]}按这个主题安排休息与努力，而不是逆着它。`),
+    timing: sec(`${currentYear()} is ${D.PY_TXT.en[String(n.py)]} Across the year, the strongest windows are the months that match this theme — use them for the big move, and let the other months be for preparation.`, `${currentYear()} 年是${D.PY_TXT.zh[String(n.py)]}全年最强的窗口，是与这个主题相符的月份——大事放在那些月份，其他月份用来准备。`),
   };
 }
 function yijingSections(cast, lang) {
   const hex = cast.hex;
   return {
-    overview: sec(`Hexagram ${hex[0]} · ${hex[1]} (${hex[2]}) — ${D.HEX_THEME.en[hex[0]]} The upper trigram is ${cast.upper[0]}, the lower is ${cast.lower[0]}: the upper is the outer environment you are moving through; the lower is your inner position and starting point.`, `第 ${hex[0]} 卦 · ${hex[2]}（${hex[1]}）——${D.HEX_THEME.zh[hex[0]]}上卦為${cast.upper[1]}（${cast.upper[0]}）、下卦為${cast.lower[1]}（${cast.lower[0]}）：上卦是你身處的外在環境，下卦是你的內在位置與起點。`),
+    overview: sec(`Hexagram ${hex[0]} · ${hex[1]} (${hex[2]}) — ${D.HEX_THEME.en[hex[0]]} The upper trigram is ${cast.upper[0]}, the lower is ${cast.lower[0]}: the upper is the outer environment you are moving through; the lower is your inner position and starting point.`, `第 ${hex[0]} 卦 · ${hex[2]}（${hex[1]}）——${D.HEX_THEME.zh[hex[0]]}上卦为${cast.upper[1]}（${cast.upper[0]}）、下卦为${cast.lower[1]}（${cast.lower[0]}）：上卦是你身处的外在环境，下卦是你的内在位置与起点。`),
     judgement: sec(D.HEX_THEME.en[hex[0]], D.HEX_THEME.zh[hex[0]]),
-    lines: cast.lines.map((l) => ({ line: l.line, sum: l.sum, yang: l.yang, changing: l.changing, text: sec(D.COIN_TXT.en[String(l.sum)] || (l.yang ? 'Yang line' : 'Yin line'), D.COIN_TXT.zh[String(l.sum)] || (l.yang ? '陽爻' : '陰爻')) })),
+    lines: cast.lines.map((l) => ({ line: l.line, sum: l.sum, yang: l.yang, changing: l.changing, text: sec(D.COIN_TXT.en[String(l.sum)] || (l.yang ? 'Yang line' : 'Yin line'), D.COIN_TXT.zh[String(l.sum)] || (l.yang ? '阳爻' : '阴爻')) })),
     changing: cast.changingLines.length
       ? sec(`Changing line(s) at position ${cast.changingLines.join(', ')} — the situation is in motion, so the answer is not static. ${cast.changingLines.map((p) => `Line ${p}: ${D.LINE_POS.en[p - 1]}`).join(' ')} Transformed hexagram: ${cast.transformed[0]} · ${cast.transformed[1]} — ${D.HEX_THEME.en[cast.transformed[0]]} Read them together: live by the first hexagram now, while leaving room for the direction of the second.`,
-        `變爻在第 ${cast.changingLines.join('、')} 爻——情況正在移動，答案不是靜止的。${cast.changingLines.map((p) => `第 ${p} 爻：${D.LINE_POS.zh[p - 1]}`).join(' ')}變卦：第 ${cast.transformed[0]} 卦 · ${cast.transformed[2]}——${D.HEX_THEME.zh[cast.transformed[0]]}兩卦一起讀：先活在本卦的指示裡，同時為變卦的方向留位置。`)
-      : sec('No changing lines: the hexagram is stable, with no hinge in motion — act on the interpretation above, give it a month to play out, and do not re-ask the same question in the meantime.', '無變爻：卦象穩定，沒有鉸鏈在移動——直接按上面解讀行事，並以一個月為觀察期，不要急於再問同一問題。'),
-    career: sec(`For work, this hexagram instructs you to move at the pace the Judgement sets, not the pace of your anxiety. This week, do one thing that is in the same direction as the hexagram — ${D.HEX_THEME.en[hex[0]]}`, `工作上，此卦的指示是先按卦辭的節奏行事，而不是按你的焦急行事。本週只做一件與卦象同向的事——${D.HEX_THEME.zh[hex[0]]}`),
-    relationships: sec(`In relationships, the hexagram's image — ${cast.upper[0]} over ${cast.lower[0]} — is the structure of the answer: the outer environment and your inner position are not in conflict, they are in dialogue. Let the outer set the pace and the inner set the standard.`, `在關係中，卦象——上${cast.upper[1]}、下${cast.lower[1]}——就是答案的結構：外在環境與內在位置不是衝突，而是對話。讓外在定節奏，內在定標準。`),
-    health: sec(`For energy, the hexagram asks for one honest step, not a grand plan. Note the result and re-read this in a week; you will see which event the hexagram was pointing at.`, `精力方面，卦象邀請一個小而誠實的行動，而不是宏大計劃。把結果記下來，一週後再回看，你會看見此卦指的是哪一件事。`),
-    timing: sec('Give this hexagram a month to play out. Do not re-ask the same question in the meantime — the answer is already moving.', '給這卦一個月時間發酵。期間不要急於再問同一問題——答案已經在動。'),
+        `变爻在第 ${cast.changingLines.join('、')} 爻——情况正在移动，答案不是静止的。${cast.changingLines.map((p) => `第 ${p} 爻：${D.LINE_POS.zh[p - 1]}`).join(' ')}变卦：第 ${cast.transformed[0]} 卦 · ${cast.transformed[2]}——${D.HEX_THEME.zh[cast.transformed[0]]}两卦一起读：先活在本卦的指示里，同时为变卦的方向留位置。`)
+      : sec('No changing lines: the hexagram is stable, with no hinge in motion — act on the interpretation above, give it a month to play out, and do not re-ask the same question in the meantime.', '无变爻：卦象稳定，没有铰链在移动——直接按上面解读行事，并以一个月为观察期，不要急于再问同一问题。'),
+    career: sec(`For work, this hexagram instructs you to move at the pace the Judgement sets, not the pace of your anxiety. This week, do one thing that is in the same direction as the hexagram — ${D.HEX_THEME.en[hex[0]]}`, `工作上，此卦的指示是先按卦辞的节奏行事，而不是按你的焦急行事。本周只做一件与卦象同向的事——${D.HEX_THEME.zh[hex[0]]}`),
+    relationships: sec(`In relationships, the hexagram's image — ${cast.upper[0]} over ${cast.lower[0]} — is the structure of the answer: the outer environment and your inner position are not in conflict, they are in dialogue. Let the outer set the pace and the inner set the standard.`, `在关系中，卦象——上${cast.upper[1]}、下${cast.lower[1]}——就是答案的结构：外在环境与内在位置不是冲突，而是对话。让外在定节奏，内在定标准。`),
+    health: sec(`For energy, Hexagram ${hex[0]} asks for one honest step, not a grand plan. Note the result and re-read this in a week; you will see which event the hexagram was pointing at.`, `精力方面，第 ${hex[0]} 卦「${hex[2]}」邀请一个小而诚实的行动，而不是宏大计划。把结果记下来，一周后再回看，你会看见此卦指的是哪一件事。`),
+    timing: sec(`Give Hexagram ${hex[0]} · ${hex[1]} a month to play out${cast.changingLines.length ? ` — with ${cast.changingLines.length} changing line(s), watch for the shift the transformed hexagram points to` : ''}. Do not re-ask the same question in the meantime — the answer is already moving.`, `给第 ${hex[0]} 卦「${hex[2]}」一个月时间发酵${cast.changingLines.length ? `——有 ${cast.changingLines.length} 个变爻，留意变卦指出的转向` : ''}。期间不要急于再问同一问题——答案已经在动。`),
   };
 }
 function tarotSections(draw, lang) {
-  const posEn = ['Past', 'Present', 'Path'], posZh = ['過去', '現在', '路徑'];
+  const posEn = ['Past', 'Present', 'Path'], posZh = ['过去', '现在', '路径'];
   const cards = draw.map((c, i) => {
     const card = D.TAROT[c.idx];
     return {
       position: { en: posEn[i], zh: posZh[i] }, idx: c.idx, number: card[0], name: { en: card[1], zh: card[2] },
-      emoji: card[3], keywords: card[4], reversed: c.rev,
-      meaning: { en: c.rev ? D.TAROT_REV.en[c.idx] : card[5], zh: c.rev ? D.TAROT_REV.zh[c.idx] : card[5] },
+      emoji: card[3], keywords: card[4], keywordsZh: D.TAROT_ZH_KEYWORDS[c.idx], reversed: c.rev,
+      meaning: { en: c.rev ? D.TAROT_REV.en[c.idx] : card[5], zh: c.rev ? D.TAROT_REV.zh[c.idx] : D.TAROT_ZH_MEANING[c.idx] },
       positionText: { en: D.TAROT_POS.en[i], zh: D.TAROT_POS.zh[i] },
       forQuestion: sec(
         `For your question, this card in the ${posEn[i]} position asks you to deal first with the element it names — ${card[4]} — before moving to the next step. ${c.rev ? 'Reversed, its energy turns inward first: clear the blockage and outer progress follows.' : 'Upright, its energy is available outwardly: take one small action this week that answers it, and the reading becomes real.'}`,
-        `就你的問題而言，這張牌落在${posZh[i]}位，提示你先處理它指出的那一環——${card[4]}——再談下一步。${c.rev ? '因為是逆位，能量先向內：先清障礙，外在進展隨後。' : '此牌正位，能量向外可用：本週內做一個與它呼應的小行動，讓解讀落地。'}`),
+        `就你的问题而言，这张牌落在${posZh[i]}位，提示你先处理它指出的那一环——${D.TAROT_ZH_KEYWORDS[c.idx]}——再谈下一步。${c.rev ? '因为是逆位，能量先向内：先清障碍，外在进展随后。' : '此牌正位，能量向外可用：本周内做一个与它呼应的小行动，让解读落地。'}`),
     };
   });
   const story = sec(
     `Read as one story: it begins in the root named by ${cards[0].name.en}, passes through the present energy of ${cards[1].name.en}, and leans toward ${cards[2].name.en}. In one sentence: acknowledge how the past shaped the present, then walk the direction the third card points — do not skip the middle card; it is the bridge.`,
-    `連起來讀：故事由「${cards[0].name.zh}」的根源出發，經過「${cards[1].name.zh}」的現在，傾向走向「${cards[2].name.zh}」。一句話版本：先承認過去如何塑造了現在，再順著第三張牌指出的方向走——不要跳過中間那張，它是橋。`);
+    `连起来读：故事由「${cards[0].name.zh}」的根源出发，经过「${cards[1].name.zh}」的现在，倾向走向「${cards[2].name.zh}」。一句话版本：先承认过去如何塑造了现在，再顺着第三张牌指出的方向走——不要跳过中间那张，它是桥。`);
   return {
     cards, story,
-    overview: sec(`Past — ${cards[0].name.en}. Present — ${cards[1].name.en}. Near future — ${cards[2].name.en}. The thread between them is the choice you are already making.`, `過去——${cards[0].name.zh}。現在——${cards[1].name.zh}。近期未來——${cards[2].name.zh}。貫穿其中的，是你已經在做的選擇。`),
-    career: sec(`At work, the ${cards[1].name.en} in the Present position is the card to sit with longest — it names the energy that is already moving, whether or not you have named it yet.`, `工作上，現在位置的「${cards[1].name.zh}」最值得久坐——它說的是已經在動的能量，無論你是否已為它命名。`),
-    relationships: sec(`In relationships, the Path card — ${cards[2].name.en} — does not decide for you; it shows the shape of the path you are already on, so you can choose whether to stay on it.`, `在關係中，路徑位置的「${cards[2].name.zh}」不是替你決定，而是顯示你已經走在的路的形狀，讓你選擇是否繼續走下去。`),
-    health: sec(`For energy, the Past card — ${cards[0].name.en} — names what you carry. Acknowledge it before you try to fix the present; the fix lands differently once the root is named.`, `精力方面，過去位置的「${cards[0].name.zh}」說出你攜帶的東西。先承認它，再去處理現在；根源被說出來之後，修正的方式會不同。`),
-    timing: sec('Take one small action this week that matches the Present card, and watch what changes. That is how a reading earns its keep.', '本週做一件與現在這張牌相符的小事，看看什麼改變了。'),
+    overview: sec(`Past — ${cards[0].name.en}. Present — ${cards[1].name.en}. Near future — ${cards[2].name.en}. The thread between them is the choice you are already making.`, `过去——${cards[0].name.zh}。现在——${cards[1].name.zh}。近期未来——${cards[2].name.zh}。贯穿其中的，是你已经在做的选择。`),
+    career: sec(`At work, the ${cards[1].name.en} in the Present position is the card to sit with longest — it names the energy that is already moving, whether or not you have named it yet.`, `工作上，现在位置的「${cards[1].name.zh}」最值得久坐——它说的是已经在动的能量，无论你是否已为它命名。`),
+    relationships: sec(`In relationships, the Path card — ${cards[2].name.en} — does not decide for you; it shows the shape of the path you are already on, so you can choose whether to stay on it.`, `在关系中，路径位置的「${cards[2].name.zh}」不是替你决定，而是显示你已经走在的路的形状，让你选择是否继续走下去。`),
+    health: sec(`For energy, the Past card — ${cards[0].name.en} — names what you carry. Acknowledge it before you try to fix the present; the fix lands differently once the root is named.`, `精力方面，过去位置的「${cards[0].name.zh}」说出你携带的东西。先承认它，再去处理现在；根源被说出来之后，修正的方式会不同。`),
+    timing: sec(`Take one small action this week that matches the Present card, ${cards[1].name.en}, and watch what changes. That is how a reading earns its keep.`, `本周做一件与现在这张牌「${cards[1].name.zh}」相符的小事，看看什么改变了。`),
   };
 }
 // Zi Wei palaces — verbatim from the original prototype (sample, NOT computed).
 const ZIWEI_PALACES = [
-  { key: 'life', en: 'Life Palace', zh: '命宮', star: { en: 'Tian Ji', zh: '天機' }, text: { en: 'Tian Ji — strategy and adaptability lead', zh: '天機——以謀略與變化見長' } },
-  { key: 'wealth', en: 'Wealth Palace', zh: '財帛宮', star: { en: 'Wu Qu', zh: '武曲' }, text: { en: 'Wu Qu — wealth through skill and execution', zh: '武曲化祿：財來自專業與執行' } },
-  { key: 'career', en: 'Career Palace', zh: '官祿宮', star: { en: 'Tai Yang', zh: '太陽' }, text: { en: 'The Sun — a reputation-led career', zh: '太陽：名聲型事業，宜公開場合' } },
-  { key: 'spouse', en: 'Spouse Palace', zh: '夫妻宮', star: { en: 'Tai Yin', zh: '太陰' }, text: { en: 'The Moon — emotional safety first in partners', zh: '太陰：伴侶重情緒安全感' } },
+  { key: 'life', en: 'Life Palace', zh: '命宫', star: { en: 'Tian Ji', zh: '天机' }, text: { en: 'Tian Ji — strategy and adaptability lead', zh: '天机——以谋略与变化见长' } },
+  { key: 'wealth', en: 'Wealth Palace', zh: '财帛宫', star: { en: 'Wu Qu', zh: '武曲' }, text: { en: 'Wu Qu — wealth through skill and execution', zh: '武曲化禄：财来自专业与执行' } },
+  { key: 'career', en: 'Career Palace', zh: '官禄宫', star: { en: 'Tai Yang', zh: '太阳' }, text: { en: 'The Sun — a reputation-led career', zh: '太阳：名声型事业，宜公开场合' } },
+  { key: 'spouse', en: 'Spouse Palace', zh: '夫妻宫', star: { en: 'Tai Yin', zh: '太阴' }, text: { en: 'The Moon — emotional safety first in partners', zh: '太阴：伴侣重情绪安全感' } },
 ];
 function ziweiSections(lang) {
   return {
     overview: sec(
       'Your Life Palace star is Tian Ji, the strategist: your operating core is think it through, then move. Strategy and adaptability are your strongest assets, and you perform better amid change than inside fixed routines. The shadow of Tian Ji is over-thinking and slow starts — a personal rule of act at seventy percent clarity serves this star better than waiting for one hundred.',
-      '命宮主星天機：你的行事核心是「先想通、再行動」——謀略與適應力是你最強的資產，在變化中比在固定流程中表現更好。天機的陰影是想得太多、啟動太慢：給自己一個「想通七成便動手」的規則，比追求想通十成更合這顆星。'),
-    career: sec('Career Palace — Tai Yang, the Sun: a reputation-led career. Work that is seen, named and trusted in public suits this palace; work done entirely in the background starves it.', '官祿宮——太陽：名聲型事業，宜公開場合。能被看見、被指名、被信任的工作適合此宮；完全在幕後的工作會令它挨餓。'),
-    relationships: sec('Spouse Palace — Tai Yin, the Moon: emotional safety first in partners. The relationship works when both people feel safe enough to say the plain thing, not only the polished one.', '夫妻宮——太陰：伴侶重情緒安全感。關係要好，雙方都要感到安全，敢說平實的話，而不只說漂亮的話。'),
-    wealth: sec('Wealth Palace — Wu Qu: wealth through skill and execution. Money follows demonstrated competence and finished work, not speculation or waiting to be discovered.', '財帛宮——武曲化祿：財來自專業與執行。金錢跟隨被證明的專業與完成的工作，而不是投機或等待被發現。'),
-    health: sec('Life Palace energy is mental: Tian Ji thinks first and acts second. Protect thinking time and sleep — when the mind is tired, the strategist starts second-guessing instead of deciding.', '命宮能量是心智型的：天機先想後動。保護思考時間與睡眠——心累時，謀略家會開始反覆質疑，而不是作決定。'),
-    timing: sec('Tian Ji timing is seasonal: think in the quiet season, move in the open one. A full twelve-palace computed chart with decade luck is a Phase 2 layer — this sample does not claim to be it.', '天機的時機是季節性的：安靜的季節思考，公開的季節行動。完整十二宮排盤與大限走勢屬第二階段——此樣本並不聲稱是它。'),
+      '命宫主星天机：你的行事核心是「先想通、再行动」——谋略与适应力是你最强的资产，在变化中比在固定流程中表现更好。天机的阴影是想得太多、启动太慢：给自己一个「想通七成便动手」的规则，比追求想通十成更合这颗星。'),
+    career: sec('Career Palace — Tai Yang, the Sun: a reputation-led career. Work that is seen, named and trusted in public suits this palace; work done entirely in the background starves it.', '官禄宫——太阳：名声型事业，宜公开场合。能被看见、被指名、被信任的工作适合此宫；完全在幕后的工作会令它挨饿。'),
+    relationships: sec('Spouse Palace — Tai Yin, the Moon: emotional safety first in partners. The relationship works when both people feel safe enough to say the plain thing, not only the polished one.', '夫妻宫——太阴：伴侣重情绪安全感。关系要好，双方都要感到安全，敢说平实的话，而不只说漂亮的话。'),
+    wealth: sec('Wealth Palace — Wu Qu: wealth through skill and execution. Money follows demonstrated competence and finished work, not speculation or waiting to be discovered.', '财帛宫——武曲化禄：财来自专业与执行。金钱跟随被证明的专业与完成的工作，而不是投机或等待被发现。'),
+    health: sec('Life Palace energy is mental: Tian Ji thinks first and acts second. Protect thinking time and sleep — when the mind is tired, the strategist starts second-guessing instead of deciding.', '命宫能量是心智型的：天机先想后动。保护思考时间与睡眠——心累时，谋略家会开始反复质疑，而不是作决定。'),
+    timing: sec('Tian Ji timing is seasonal: think in the quiet season, move in the open one. A full twelve-palace computed chart with decade luck is a Phase 2 layer — this sample does not claim to be it.', '天机的时机是季节性的：安静的季节思考，公开的季节行动。完整十二宫排盘与大限走势属第二阶段——此样本并不声称是它。'),
   };
 }
 
@@ -281,7 +302,7 @@ function buildFullReading(profile, personality) {
   const weak = Object.keys(counts).reduce((x, y) => (counts[x] <= counts[y] ? x : y));
   const draw = drawTarot(seed);
   const cast = castYijing(seed + '|yi');
-  const pillars = [pillarObj(b.pillars[0], 'Year', '年柱'), pillarObj(b.pillars[1], 'Month', '月柱'), pillarObj(b.pillars[2], 'Day', '日柱'), pillarObj(b.pillars[3], 'Hour', '時柱')];
+  const pillars = [pillarObj(b.pillars[0], 'Year', '年柱'), pillarObj(b.pillars[1], 'Month', '月柱'), pillarObj(b.pillars[2], 'Day', '日柱'), pillarObj(b.pillars[3], 'Hour', '时柱')];
   const tarot = tarotSections(draw, 'en');
   const yijing = yijingSections(cast, 'en');
 
@@ -295,30 +316,30 @@ function buildFullReading(profile, personality) {
     dayMasterText: { en: dmTxt.en, zh: dmTxt.zh },
     guidance: { en: dmTxt.en, zh: dmTxt.zh },
     elementBalance: { en: D.EL_TXT[dom].en, zh: D.EL_TXT[dom].zh },
-    luckPillar: { en: `${D.STEMS[(b.pillars[1].stem + 3) % 10][0]}${D.BRANCHES[(b.pillars[1].branch + 3) % 12][0]}`, zh: `${D.STEMS[(b.pillars[1].stem + 3) % 10][0]}${D.BRANCHES[(b.pillars[1].branch + 3) % 12][0]}`, note: { en: 'Indicative only — one pillar per decade, current theme: building.', zh: '僅供參考——十年一步，現行主題：建立。' } },
-    currentYear: { en: '2026 · Fire Horse 丙午', zh: '2026 · 火馬年 丙午' },
+    luckPillar: { en: `${D.STEMS[(b.pillars[1].stem + 3) % 10][0]}${D.BRANCHES[(b.pillars[1].branch + 3) % 12][0]}`, zh: `${D.STEMS[(b.pillars[1].stem + 3) % 10][0]}${D.BRANCHES[(b.pillars[1].branch + 3) % 12][0]}`, note: { en: 'Indicative only — one pillar per decade, current theme: building.', zh: '仅供参考——十年一步，现行主题：建立。' } },
+    currentYear: chineseYearLabel(currentYear()),
     sections: baziSections(b, dom, weak, dmTxt, 'en'),
     note: 'Simplified engine — no true solar-time correction yet.',
-    noteZh: '簡化引擎——尚未做真太陽時校正。',
+    noteZh: '简化引擎——尚未做真太阳时校正。',
   };
   const ziwei = {
     system: 'Zi Wei Dou Shu',
-    lifePalace: 'Tian Ji Palace', lifePalaceZh: '天機宮',
-    mainStar: { en: 'Tian Ji', zh: '天機' },
+    lifePalace: 'Tian Ji Palace', lifePalaceZh: '天机宫',
+    mainStar: { en: 'Tian Ji', zh: '天机' },
     palaces: ZIWEI_PALACES,
-    guidance: { en: 'Illustrative sample reading — Zi Wei content here is a sample, not a fully computed chart. Read it as a reflection prompt, not a prediction.', zh: '示範樣本內容——此處紫微內容為樣本，並非完整排盤。請當作反思提示，而非預測。' },
+    guidance: { en: 'Illustrative sample reading — Zi Wei content here is a sample, not a fully computed chart. Read it as a reflection prompt, not a prediction.', zh: '示范样本内容——此处紫微内容为样本，并非完整排盘。请当作反思提示，而非预测。' },
     sections: ziweiSections('en'),
     note: 'Illustrative sample content, not computed.',
-    noteZh: '示範樣本內容，並非完整計算。',
+    noteZh: '示范样本内容，并非完整计算。',
     sample: true,
   };
   const horoscope = {
     system: 'Western Horoscope',
     sunSign: { en: a.sun.en, zh: a.sun.zh, symbol: a.sun.sym },
     sun: { en: a.sun.en, zh: a.sun.zh, symbol: a.sun.sym, trait: { en: D.SIGN_TRAITS.en[a.sun.en], zh: D.SIGN_TRAITS.zh[a.sun.en] } },
-    moon: { en: a.moon.en, zh: a.moon.zh, symbol: a.moon.sym, trait: { en: D.SIGN_TRAITS.en[a.moon.en], zh: D.SIGN_TRAITS.zh[a.moon.en] }, note: { en: 'Approximation from the original prototype.', zh: '原型的近似計算。' } },
-    rising: { en: a.rising.en, zh: a.rising.zh, symbol: a.rising.sym, trait: { en: D.SIGN_TRAITS.en[a.rising.en], zh: D.SIGN_TRAITS.zh[a.rising.en] }, note: { en: 'Approximation from birth time in the original prototype.', zh: '原型的近似計算。' } },
-    guidance: { en: `As a ${a.sun.en}, your next chapter is about using your natural timing — not forcing it.`, zh: `作為${a.sun.zh}，你的下一章是關於運用你自然的節奏——而不是強迫它。` },
+    moon: { en: a.moon.en, zh: a.moon.zh, symbol: a.moon.sym, trait: { en: D.SIGN_TRAITS.en[a.moon.en], zh: D.SIGN_TRAITS.zh[a.moon.en] }, note: { en: 'Approximation from the original prototype.', zh: '原型的近似计算。' } },
+    rising: { en: a.rising.en, zh: a.rising.zh, symbol: a.rising.sym, trait: { en: D.SIGN_TRAITS.en[a.rising.en], zh: D.SIGN_TRAITS.zh[a.rising.en] }, note: { en: 'Approximation from birth time in the original prototype.', zh: '原型的近似计算。' } },
+    guidance: { en: `As a ${a.sun.en}, your next chapter is about using your natural timing — not forcing it.`, zh: `作为${a.sun.zh}，你的下一章是关于运用你自然的节奏——而不是强迫它。` },
     sections: horoscopeSections(a, 'en'),
   };
   const numerology = {
@@ -327,7 +348,7 @@ function buildFullReading(profile, personality) {
     lifePathText: { en: D.LP.en[String(n.lp)], zh: D.LP.zh[String(n.lp)] },
     destinyText: n.dest ? { en: D.LP.en[String(n.dest)], zh: D.LP.zh[String(n.dest)] } : null,
     personalYearText: { en: D.PY_TXT.en[String(n.py)], zh: D.PY_TXT.zh[String(n.py)] },
-    guidance: { en: `Life Path ${n.lp} points to the lesson you keep meeting: what you practise, you become.`, zh: `生命靈數 ${n.lp} 指向你不斷遇到的課題：你練習什麼，就成為什麼。` },
+    guidance: { en: `Life Path ${n.lp} points to the lesson you keep meeting: what you practise, you become.`, zh: `生命灵数 ${n.lp} 指向你不断遇到的课题：你练习什么，就成为什么。` },
     sections: numerologySections(n, 'en'),
   };
   const yijingOut = {
@@ -339,7 +360,7 @@ function buildFullReading(profile, personality) {
     lines: yijing.lines,
     changingLines: cast.changingLines,
     transformed: cast.transformed ? { number: cast.transformed[0], en: cast.transformed[1], zh: cast.transformed[2], theme: { en: D.HEX_THEME.en[cast.transformed[0]], zh: D.HEX_THEME.zh[cast.transformed[0]] } } : null,
-    guidance: { en: `Hexagram ${cast.hex[0]} · ${cast.hex[1]} asks: what is the smallest honest step you can take today?`, zh: `卦象「${cast.hex[2]}」在問：今天你能採取的最小誠實一步是什麼？` },
+    guidance: { en: `Hexagram ${cast.hex[0]} · ${cast.hex[1]} asks: what is the smallest honest step you can take today?`, zh: `卦象「${cast.hex[2]}」在问：今天你能采取的最小诚实一步是什么？` },
     sections: yijing,
   };
   const tarotOut = {
@@ -349,16 +370,16 @@ function buildFullReading(profile, personality) {
     cardsZh: tarot.cards.map((c) => c.name.zh),
     cardsDetailed: tarot.cards,
     story: tarot.story,
-    guidance: { en: `Past — ${tarot.cards[0].name.en}. Present — ${tarot.cards[1].name.en}. Near future — ${tarot.cards[2].name.en}. ${tarot.story.en}`, zh: `過去——${tarot.cards[0].name.zh}。現在——${tarot.cards[1].name.zh}。近期未來——${tarot.cards[2].name.zh}。${tarot.story.zh}` },
+    guidance: { en: `Past — ${tarot.cards[0].name.en}. Present — ${tarot.cards[1].name.en}. Near future — ${tarot.cards[2].name.en}. ${tarot.story.en}`, zh: `过去——${tarot.cards[0].name.zh}。现在——${tarot.cards[1].name.zh}。近期未来——${tarot.cards[2].name.zh}。${tarot.story.zh}` },
     sections: { overview: tarot.overview, career: tarot.career, relationships: tarot.relationships, health: tarot.health, timing: tarot.timing },
   };
   const portrait = buildPortrait({ bazi, horoscope, numerology, dom, weak, dayMaster: b.dayMaster }, personality);
   const synthesis = {
     en: `Across all six systems, one thread repeats: ${bazi.element} steadiness, ${a.sun.en} timing, and Life Path ${n.lp}. They do not agree on the details — they agree on the direction: start small, keep going, and let the result catch up. Where they agree: your Bazi chart leans ${dom}-heavy, your life-path ${n.lp} and your first tarot card all reward the same working style — accumulation and craft over luck or shortcuts. Where they tension: your Moon in ${a.moon.en} runs a fast emotional cycle, yet the chart is light on ${weak} — quick to process, slow to replenish.`,
-    zh: `在六個系統中，一條線不斷重複：${bazi.element}的穩定、${a.sun.zh}的時機，以及生命靈數 ${n.lp}。它們在細節上並不一致，但在方向上一致：從小開始，持續前行，讓結果跟上來。一致之處：八字以${dom}最旺、生命靈數 ${n.lp}與塔羅第一張牌都獎勵同一種工作方式——累積與手藝，而非運氣或捷徑。張力之處：月亮在${a.moon.zh}令你情緒節奏較快，但八字缺${weak}——想得快、補給慢。`,
-    agree: { en: `Your Bazi chart leans ${dom}-heavy, your life-path ${n.lp} and your first tarot card all reward the same working style: accumulation and craft over luck or shortcuts.`, zh: `八字五行以${dom}最旺、數字命理生命靈數 ${n.lp}、塔羅第一張牌，三者都指向同一種工作方式：靠累積與手藝，而非靠運氣或人脈捷徑。` },
-    tension: { en: `Your Moon in ${a.moon.en} runs a fast emotional cycle, yet the chart is light on ${weak} — quick to process, slow to replenish. The full report turns this into a concrete 12-month pacing plan.`, zh: `月亮在${a.moon.zh}令你情緒節奏較快，但八字缺${weak}——想得快、補給慢。完整報告會把這點展開為具體的十二個月安排。` },
-    full: { en: `Full synthesis: across the next twelve months, career and money windows peak in months 3–4 and again in month 9. On relationships, the Yi-Jing changing line and the third tarot card give the same instruction — boundaries before commitments. Health-wise, schedule deliberate slack in your ${weak}-light months. Your Zi Wei life-palace star and your Bazi useful god point, unusually, at the same conclusion: this is a year for consolidating, not expanding.`, zh: `完整綜合：未來十二個月，事業與財務的窗口在第 3–4 月及第 9 月最強；感情層面，易經變爻與塔羅第三張牌同時提示「先定界線，後談承諾」。健康上，缺${weak}的月份要主動留白。紫微命宮主星與八字用神罕有地指向同一結論：今年適合整固，而非擴張。` },
+    zh: `在六个系统中，一条线不断重复：${elName(bazi.dayMaster.elementKey, 'zh')}的稳定、${a.sun.zh}的时机，以及生命灵数 ${n.lp}。它们在细节上并不一致，但在方向上一致：从小开始，持续前行，让结果跟上来。一致之处：八字以${elName(dom, 'zh')}最旺、生命灵数 ${n.lp}与塔罗第一张牌都奖励同一种工作方式——累积与手艺，而非运气或捷径。张力之处：月亮在${a.moon.zh}令你情绪节奏较快，但八字缺${elName(weak, 'zh')}——想得快、补给慢。`,
+    agree: { en: `Your Bazi chart leans ${dom}-heavy, your life-path ${n.lp} and your first tarot card all reward the same working style: accumulation and craft over luck or shortcuts.`, zh: `八字五行以${elName(dom, 'zh')}最旺、数字命理生命灵数 ${n.lp}、塔罗第一张牌，三者都指向同一种工作方式：靠累积与手艺，而非靠运气或人脉捷径。` },
+    tension: { en: `Your Moon in ${a.moon.en} runs a fast emotional cycle, yet the chart is light on ${weak} — quick to process, slow to replenish. The full report turns this into a concrete 12-month pacing plan.`, zh: `月亮在${a.moon.zh}令你情绪节奏较快，但八字缺${elName(weak, 'zh')}——想得快、补给慢。完整报告会把这点展开为具体的十二个月安排。` },
+    full: { en: `Full synthesis: over the next twelve months (${nextTwelveMonths().en}), keep the pace steady. On relationships, the Yi-Jing changing line and the third tarot card give the same instruction — boundaries before commitments. Health-wise, schedule deliberate slack in your ${weak}-light months. Your Zi Wei life-palace star and your Bazi useful god point, unusually, at the same conclusion: this is a year for consolidating, not expanding.`, zh: `完整综合：未来十二个月（${nextTwelveMonths().zh}），保持节奏稳定；感情层面，易经变爻与塔罗第三张牌同时提示「先定界线，后谈承诺」。健康上，缺${elName(weak, 'zh')}的月份要主动留白。紫微命宫主星与八字用神罕有地指向同一结论：今年适合整固，而非扩张。` },
     personalityLens: personality ? personalityLensText(personality) : null,
   };
 
@@ -381,7 +402,7 @@ function personalityLensText(p) {
   if (p.mbti) parts.push({ en: `MBTI ${p.mbti.type} · ${p.mbti.nickEn}. `, zh: `MBTI ${p.mbti.type} · ${p.mbti.nickZh}。` });
   return {
     en: parts.map((x) => x.en).join('') + 'This lens comes from your own questionnaire answers, not from your birth data. Your personality pattern explains how you respond to the timing the charts describe. Where your habits and the charts point the same way, things move fast. Where they pull apart, that is exactly where this reading deserves your attention.',
-    zh: parts.map((x) => x.zh).join('') + '這是人格視角，來自你自己的問卷答案，不是出生計算。對照來看：你的人格模式解釋了你「如何回應」命盤所指的時機——當人格的慣性與命盤的建議同向，事情推進得快；相左之處，正是這份判讀最值得你留意的地方。',
+    zh: parts.map((x) => x.zh).join('') + '这是人格视角，来自你自己的问卷答案，不是出生计算。对照来看：你的人格模式解释了你「如何回应」命盘所指的时机——当人格的惯性与命盘的建议同向，事情推进得快；相左之处，正是这份判读最值得你留意的地方。',
   };
 }
 
@@ -393,14 +414,14 @@ function buildPortrait(birth, personality) {
   const strengths = [], lacking = [];
   if (bazi) {
     strengths.push({ text: { en: D.DM_PORTRAIT[dayMaster].sEn, zh: D.DM_PORTRAIT[dayMaster].sZh }, source: { en: 'Bazi · Day Master', zh: '八字 · 日主' } });
-    strengths.push({ text: { en: D.EL_PORTRAIT[dom].sEn, zh: D.EL_PORTRAIT[dom].sZh }, source: { en: `Bazi · strongest element ${dom}`, zh: `八字 · 最旺五行 ${dom}` } });
-    lacking.push({ text: { en: D.EL_PORTRAIT[weak].gEn, zh: D.EL_PORTRAIT[weak].gZh }, source: { en: `Bazi · lightest element ${weak}`, zh: `八字 · 最弱五行 ${weak}` } });
-    lacking.push({ text: { en: D.DM_PORTRAIT[dayMaster].gEn, zh: D.DM_PORTRAIT[dayMaster].gZh }, source: { en: 'Bazi · Day Master lesson', zh: '八字 · 日主課題' } });
-    if (D.LP_PORTRAIT[numerology.lifePath]) lacking.push({ text: { en: D.LP_PORTRAIT[numerology.lifePath].gEn, zh: D.LP_PORTRAIT[numerology.lifePath].gZh }, source: { en: `Numerology · Life Path ${numerology.lifePath}`, zh: `數字命理 · 生命靈數 ${numerology.lifePath}` } });
+    strengths.push({ text: { en: D.EL_PORTRAIT[dom].sEn, zh: D.EL_PORTRAIT[dom].sZh }, source: { en: `Bazi · strongest element ${dom}`, zh: `八字 · 最旺五行 ${elName(dom, 'zh')}` } });
+    lacking.push({ text: { en: D.EL_PORTRAIT[weak].gEn, zh: D.EL_PORTRAIT[weak].gZh }, source: { en: `Bazi · lightest element ${weak}`, zh: `八字 · 最弱五行 ${elName(weak, 'zh')}` } });
+    lacking.push({ text: { en: D.DM_PORTRAIT[dayMaster].gEn, zh: D.DM_PORTRAIT[dayMaster].gZh }, source: { en: 'Bazi · Day Master lesson', zh: '八字 · 日主课题' } });
+    if (D.LP_PORTRAIT[numerology.lifePath]) lacking.push({ text: { en: D.LP_PORTRAIT[numerology.lifePath].gEn, zh: D.LP_PORTRAIT[numerology.lifePath].gZh }, source: { en: `Numerology · Life Path ${numerology.lifePath}`, zh: `数字命理 · 生命灵数 ${numerology.lifePath}` } });
   }
   if (ennea) {
     strengths.push({ text: { en: D.ENNEA_PORTRAIT[ennea.core].sEn, zh: D.ENNEA_PORTRAIT[ennea.core].sZh }, source: { en: `Enneagram ${ennea.core}w${ennea.wing}`, zh: `九型 ${ennea.core}w${ennea.wing}` } });
-    lacking.push({ text: { en: D.ENNEA_PORTRAIT[ennea.core].gEn, zh: D.ENNEA_PORTRAIT[ennea.core].gZh }, source: { en: `Enneagram Type ${ennea.core}`, zh: `九型 ${ennea.core} 號` } });
+    lacking.push({ text: { en: D.ENNEA_PORTRAIT[ennea.core].gEn, zh: D.ENNEA_PORTRAIT[ennea.core].gZh }, source: { en: `Enneagram Type ${ennea.core}`, zh: `九型 ${ennea.core} 号` } });
   }
   if (mbti) {
     const ms = mbtiPart(mbti.type, 's'), mg = mbtiPart(mbti.type, 'g');
@@ -409,33 +430,33 @@ function buildPortrait(birth, personality) {
   }
   const practices = [];
   if (bazi) practices.push({ en: D.EL_PORTRAIT[weak].pEn, zh: D.EL_PORTRAIT[weak].pZh });
-  if (ennea) practices.push({ en: `Take one small weekly rep against your Enneagram growth edge — ${D.ENNEA_PORTRAIT[ennea.core].gEn.charAt(0).toLowerCase()}${D.ENNEA_PORTRAIT[ennea.core].gEn.slice(1)} Each week, pick one real situation that triggers it, notice it arriving, then deliberately do the opposite in a small way once — and log the result in one line.`, zh: `針對九型所缺之處做一個每週小練習——${D.ENNEA_PORTRAIT[ennea.core].gZh}做法：每週選一個會觸發它的真實場合，先留意它出現，再刻意做一次相反的小行動，事後用一行字記下結果。` });
+  if (ennea) practices.push({ en: `Take one small weekly rep against your Enneagram growth edge — ${D.ENNEA_PORTRAIT[ennea.core].gEn.charAt(0).toLowerCase()}${D.ENNEA_PORTRAIT[ennea.core].gEn.slice(1)} Each week, pick one real situation that triggers it, notice it arriving, then deliberately do the opposite in a small way once — and log the result in one line.`, zh: `针对九型所缺之处做一个每周小练习——${D.ENNEA_PORTRAIT[ennea.core].gZh}做法：每周选一个会触发它的真实场合，先留意它出现，再刻意做一次相反的小行动，事后用一行字记下结果。` });
   if (mbti) {
     const opp = [['E', 'I'], ['S', 'N'], ['T', 'F'], ['J', 'P']].map(([a, b2]) => (mbti.dims[a] >= mbti.dims[b2] ? b2 : a));
-    practices.push({ en: `Give your less-used side (${opp.join(', ')}) one small rep each week: in a situation where ${D.MBTI_LETTER[opp[0]].en}, do it deliberately, once, on purpose.`, zh: `每週給較少使用的一側（${opp.join('、')}）一次小練習：例如需要${D.MBTI_LETTER[opp[0]].zh}的場合，不要迴避，刻意做一次小的。` });
+    practices.push({ en: `Give your less-used side (${opp.join(', ')}) one small rep each week: in a situation where ${D.MBTI_LETTER[opp[0]].en}, do it deliberately, once, on purpose.`, zh: `每周给较少使用的一侧（${opp.join('、')}）一次小练习：例如需要${D.MBTI_LETTER[opp[0]].zh}的场合，不要回避，刻意做一次小的。` });
   }
   const essence = {
     en: `${bazi ? `${bazi.dayMaster.en} Day Master, ${horoscope.sun.en} Sun, Life Path ${numerology.lifePath}` : ''}${ennea ? ` · Enneagram ${ennea.core}w${ennea.wing} ${ennea.nameEn}` : ''}${mbti ? ` · MBTI ${mbti.type} ${mbti.nickEn}` : ''} — steady in your own direction, even when the route changes.`,
-    zh: `${bazi ? `日主${bazi.dayMaster.zh}、太陽${horoscope.sun.zh}、生命靈數 ${numerology.lifePath}` : ''}${ennea ? ` · 九型 ${ennea.core}w${ennea.wing} ${ennea.nameZh}` : ''}${mbti ? ` · MBTI ${mbti.type} ${mbti.nickZh}` : ''}——即使路線改變，仍朝著自己的方向穩定前行。`,
+    zh: `${bazi ? `日主${bazi.dayMaster.zh}、太阳${horoscope.sun.zh}、生命灵数 ${numerology.lifePath}` : ''}${ennea ? ` · 九型 ${ennea.core}w${ennea.wing} ${ennea.nameZh}` : ''}${mbti ? ` · MBTI ${mbti.type} ${mbti.nickZh}` : ''}——即使路线改变，仍朝着自己的方向稳定前行。`,
   };
   return {
     essenceLine: essence,
     character: {
       en: `${D.DAYMASTER_TXT[dayMaster].en} Your Sun in ${horoscope.sun.en} centres your drive on ${D.SIGN_TRAITS.en[horoscope.sun.en]}; your Moon in ${horoscope.moon.en} sets an emotional rhythm governed by ${D.SIGN_TRAITS.en[horoscope.moon.en]}. Life Path ${numerology.lifePath}: ${D.LP.en[String(numerology.lifePath)]}${ennea ? ` Enneagram: ${D.ENNEA_TYPES[ennea.core].core.en}` : ''}${mbti ? ` MBTI: ${D.MBTI_TYPES[mbti.type].en}` : ''}`,
-      zh: `${D.DAYMASTER_TXT[dayMaster].zh}你的太陽在${horoscope.sun.zh}，核心動力圍繞${D.SIGN_TRAITS.zh[horoscope.sun.en]}；月亮在${horoscope.moon.zh}，情緒節奏與充電方式由${D.SIGN_TRAITS.zh[horoscope.moon.en]}主導。生命靈數 ${numerology.lifePath}：${D.LP.zh[String(numerology.lifePath)]}${ennea ? ` 九型：${D.ENNEA_TYPES[ennea.core].core.zh}` : ''}${mbti ? ` MBTI：${D.MBTI_TYPES[mbti.type].zh}` : ''}`,
+      zh: `${D.DAYMASTER_TXT[dayMaster].zh}你的太阳在${horoscope.sun.zh}，核心动力围绕${D.SIGN_TRAITS.zh[horoscope.sun.en]}；月亮在${horoscope.moon.zh}，情绪节奏与充电方式由${D.SIGN_TRAITS.zh[horoscope.moon.en]}主导。生命灵数 ${numerology.lifePath}：${D.LP.zh[String(numerology.lifePath)]}${ennea ? ` 九型：${D.ENNEA_TYPES[ennea.core].core.zh}` : ''}${mbti ? ` MBTI：${D.MBTI_TYPES[mbti.type].zh}` : ''}`,
     },
     style: {
-      think: { en: `${mbti ? `${D.MBTI_LETTER[mbti.dims.S >= mbti.dims.N ? 'S' : 'N'].en}; ${D.MBTI_LETTER[mbti.dims.T >= mbti.dims.F ? 'T' : 'F'].en}. ` : ''}${ennea ? `Underneath, the drive is to ${D.ENNEA_PORTRAIT[ennea.core].dEn} — decisions are rarely purely technical for you; they pass this filter first.` : `Your Day Master and strongest element (${dom}) set the tone: ${D.EL_TXT[dom].en} is your default mode.`}`, zh: `${mbti ? `${D.MBTI_LETTER[mbti.dims.S >= mbti.dims.N ? 'S' : 'N'].zh}；${D.MBTI_LETTER[mbti.dims.T >= mbti.dims.F ? 'T' : 'F'].zh}。` : ''}${ennea ? `底層動力是想要${D.ENNEA_PORTRAIT[ennea.core].dZh}——決定很少是純技術性的，它們要先過這一關。` : `你的日主與最旺五行（${dom}）定下思考基調：${D.EL_TXT[dom].zh}是你的預設模式。`}` },
-      work: { en: `Your work energy runs ${dom}-led — ${D.EL_TXT[dom].en} is how you work without effort.${mbti ? ` ${D.MBTI_LETTER[mbti.dims.J >= mbti.dims.P ? 'J' : 'P'].en}.` : ''}${ennea ? ` At work your Enneagram pattern shows as: ${D.ENNEA_PORTRAIT[ennea.core].sEn.toLowerCase()}.` : ''}`, zh: `工作能量以${dom}為主——${D.EL_TXT[dom].zh}，是你不費力的工作方式。${mbti ? ` ${D.MBTI_LETTER[mbti.dims.J >= mbti.dims.P ? 'J' : 'P'].zh}。` : ''}${ennea ? ` 九型模式在工作上表現為：${D.ENNEA_PORTRAIT[ennea.core].sZh}。` : ''}` },
-      connect: { en: `You open doors in a ${D.SIGN_TRAITS.en[horoscope.rising.en]} style (${horoscope.rising.en} Rising) and privately recharge through ${D.SIGN_TRAITS.en[horoscope.moon.en]} (${horoscope.moon.en} Moon).${mbti ? ` ${D.MBTI_LETTER[mbti.dims.E >= mbti.dims.I ? 'E' : 'I'].en}.` : ''}${ennea ? ` In relationships, your core drive — to ${D.ENNEA_PORTRAIT[ennea.core].dEn} — shapes how you give and how you withdraw.` : ''}`, zh: `你以${D.SIGN_TRAITS.zh[horoscope.rising.en]}的風格打開門（上升${horoscope.rising.zh}），私下靠${D.SIGN_TRAITS.zh[horoscope.moon.en]}充電（月亮${horoscope.moon.zh}）。${mbti ? ` ${D.MBTI_LETTER[mbti.dims.E >= mbti.dims.I ? 'E' : 'I'].zh}。` : ''}${ennea ? ` 在關係中，你的核心動力——想要${D.ENNEA_PORTRAIT[ennea.core].dZh}——決定了你付出與退縮的方式。` : ''}` },
+      think: { en: `${mbti ? `${D.MBTI_LETTER[mbti.dims.S >= mbti.dims.N ? 'S' : 'N'].en}; ${D.MBTI_LETTER[mbti.dims.T >= mbti.dims.F ? 'T' : 'F'].en}. ` : ''}${ennea ? `Underneath, the drive is to ${D.ENNEA_PORTRAIT[ennea.core].dEn} — decisions are rarely purely technical for you; they pass this filter first.` : `Your Day Master and strongest element (${dom}) set the tone: ${D.EL_TXT[dom].en} is your default mode.`}`, zh: `${mbti ? `${D.MBTI_LETTER[mbti.dims.S >= mbti.dims.N ? 'S' : 'N'].zh}；${D.MBTI_LETTER[mbti.dims.T >= mbti.dims.F ? 'T' : 'F'].zh}。` : ''}${ennea ? `底层动力是想要${D.ENNEA_PORTRAIT[ennea.core].dZh}——决定很少是纯技术性的，它们要先过这一关。` : `你的日主与最旺五行（${elName(dom, 'zh')}）定下思考基调：${D.EL_TXT[dom].zh}是你的预设模式。`}` },
+      work: { en: `Your work energy runs ${dom}-led — ${D.EL_TXT[dom].en} is how you work without effort.${mbti ? ` ${D.MBTI_LETTER[mbti.dims.J >= mbti.dims.P ? 'J' : 'P'].en}.` : ''}${ennea ? ` At work your Enneagram pattern shows as: ${D.ENNEA_PORTRAIT[ennea.core].sEn.toLowerCase()}.` : ''}`, zh: `工作能量以${elName(dom, 'zh')}为主——${D.EL_TXT[dom].zh}，是你不费力的工作方式。${mbti ? ` ${D.MBTI_LETTER[mbti.dims.J >= mbti.dims.P ? 'J' : 'P'].zh}。` : ''}${ennea ? ` 九型模式在工作上表现为：${D.ENNEA_PORTRAIT[ennea.core].sZh}。` : ''}` },
+      connect: { en: `You open doors in a ${D.SIGN_TRAITS.en[horoscope.rising.en]} style (${horoscope.rising.en} Rising) and privately recharge through ${D.SIGN_TRAITS.en[horoscope.moon.en]} (${horoscope.moon.en} Moon).${mbti ? ` ${D.MBTI_LETTER[mbti.dims.E >= mbti.dims.I ? 'E' : 'I'].en}.` : ''}${ennea ? ` In relationships, your core drive — to ${D.ENNEA_PORTRAIT[ennea.core].dEn} — shapes how you give and how you withdraw.` : ''}`, zh: `你以${D.SIGN_TRAITS.zh[horoscope.rising.en]}的风格打开门（上升${horoscope.rising.zh}），私下靠${D.SIGN_TRAITS.zh[horoscope.moon.en]}充电（月亮${horoscope.moon.zh}）。${mbti ? ` ${D.MBTI_LETTER[mbti.dims.E >= mbti.dims.I ? 'E' : 'I'].zh}。` : ''}${ennea ? ` 在关系中，你的核心动力——想要${D.ENNEA_PORTRAIT[ennea.core].dZh}——决定了你付出与退缩的方式。` : ''}` },
     },
     strengths: strengths.slice(0, 5),
     lacking: lacking.slice(0, 5),
-    growingEdge: { en: lacking[0] ? lacking[0].text.en : 'Notice where you rush to fix, and pause there first. The pause is part of the work.', zh: lacking[0] ? lacking[0].text.zh : '留意你急著修正的地方，先在那裡停一下。停頓也是工作的一部分。' },
+    growingEdge: { en: lacking[0] ? lacking[0].text.en : 'Notice where you rush to fix, and pause there first. The pause is part of the work.', zh: lacking[0] ? lacking[0].text.zh : '留意你急着修正的地方，先在那里停一下。停顿也是工作的一部分。' },
     developmentFocus: practices,
     sources: {
       en: `Drawn only from: birth reading (Bazi · Astrology · Numerology)${ennea ? ' · Enneagram' : ''}${mbti ? ' · MBTI' : ''}. ${!ennea || !mbti ? 'Complete the personality tests to add their lens — nothing is guessed at.' : ''}`,
-      zh: `只綜合已完成的來源：出生解讀（八字 · 占星 · 數字命理）${ennea ? ' · 九型人格' : ''}${mbti ? ' · MBTI' : ''}。${!ennea || !mbti ? '完成人格測試後，這裡會加入它獨有的視角——未完成的部分不會被猜測填補。' : ''}`,
+      zh: `只综合已完成的来源：出生解读（八字 · 占星 · 数字命理）${ennea ? ' · 九型人格' : ''}${mbti ? ' · MBTI' : ''}。${!ennea || !mbti ? '完成人格测试后，这里会加入它独有的视角——未完成的部分不会被猜测填补。' : ''}`,
     },
   };
 }
@@ -444,7 +465,7 @@ function mbtiPart(type, part) {
   const split = (txt, marker, endMarker) => { const a = txt.split(marker)[1]; if (!a) return ''; return endMarker ? a.split(endMarker)[0] : a; };
   return {
     en: part === 's' ? split(ty.en, 'Strengths:', '. Watch-out') : split(ty.en, 'Watch-out:', '.').replace(/\.$/, ''),
-    zh: part === 's' ? split(ty.zh, '長處：', '。注意') : split(ty.zh, '注意：', '。'),
+    zh: part === 's' ? split(ty.zh, '长处：', '。注意') : split(ty.zh, '注意：', '。'),
   };
 }
 
@@ -486,13 +507,13 @@ function buildTeaser(profile) {
       firstCard: full.tarot.cards[0],
       // Card names + keywords only — the interpretation stays locked.
       cards: full.tarot.cardsDetailed.map((c) => ({
-        name: c.name, emoji: c.emoji, keywords: c.keywords, reversed: c.reversed,
+        idx: c.idx, number: c.number, name: c.name, emoji: c.emoji, keywords: c.keywords, keywordsZh: c.keywordsZh, reversed: c.reversed,
       })),
     },
     portrait: { essenceLine: full.portrait.essenceLine },
     lockedNote: {
       en: 'Full details for each system are unlocked after payment.',
-      zh: '每個系統的完整內容需付款後解鎖。',
+      zh: '每个系统的完整内容需付款后解锁。',
     },
   };
 }
@@ -581,7 +602,7 @@ function buildPersonalitySummary(enneagram, mbti) {
   const strengths = [], lacking = [];
   if (enneagram) {
     strengths.push({ text: enneaStrength(enneagram), source: { en: `Enneagram ${enneagram.core}w${enneagram.wing}`, zh: `九型 ${enneagram.core}w${enneagram.wing}` } });
-    lacking.push({ text: enneaLacking(enneagram), source: { en: `Enneagram Type ${enneagram.core}`, zh: `九型 ${enneagram.core} 號` } });
+    lacking.push({ text: enneaLacking(enneagram), source: { en: `Enneagram Type ${enneagram.core}`, zh: `九型 ${enneagram.core} 号` } });
   }
   if (mbti) {
     const ms = mbtiPart(mbti.type, 's'), mg = mbtiPart(mbti.type, 'g');
@@ -629,4 +650,37 @@ function lockedPersonalitySummary(enneagram, mbti) {
   return out;
 }
 
-module.exports = { buildFullReading, buildTeaser, scoreEnneagram, scoreEnneagramFromChoices, scoreMbti, parseBirth, getPersonalityQuestions, buildPersonalitySummary, buildPortrait, lockedPersonalitySummary };
+/* --- Daily encouragement (item F, 7 Nov 2026) ------------------------------
+   The daily message is GENERATED for a specific date, from that buyer's
+   own birth profile entered at input — never a generic line rotated from
+   a fixed list. Same profile on a different day -> different card and
+   hexagram (both are seeded by profile + date); different profiles on
+   the same day -> different Day Master / elements / Life Path. The
+   message names the date, today's card (seeded draw), today's hexagram
+   (seeded cast), and the profile's own computed values. */
+function buildDailyMessage(profile, dateStr) {
+  const date = dateStr || new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+  const full = buildFullReading(profile);
+  const seed = `${profile.birthDate}|${date}`;
+  const draw = drawTarot(`${seed}|daily`);
+  const card = D.TAROT[draw[0].idx];
+  const cast = castYijing(`${seed}|daily-yi`);
+  const hex = cast.hex;
+  const d = new Date(`${date}T00:00:00Z`);
+  const wdEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getUTCDay()];
+  const wdZh = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][d.getUTCDay()];
+  const domEn = elName(full.bazi.dominant, 'en'), domZh = elName(full.bazi.dominant, 'zh');
+  const weakEn = elName(full.bazi.weakest, 'en'), weakZh = elName(full.bazi.weakest, 'zh');
+  return {
+    date,
+    en: `Today, ${wdEn} ${date}: your card is ${card[1]} — ${card[4]}. ${D.HEX_THEME.en[hex[0]]} Your strongest element is ${domEn}; lean on it today, and give your lightest element, ${weakEn}, one small break. Life Path ${full.numerology.lifePath} sets the theme: ${firstSentence(full.numerology.lifePathText.en)}`,
+    zh: `今天${date}${wdZh}：你的牌是「${card[2]}」——${D.TAROT_ZH_KEYWORDS[draw[0].idx]}。${D.HEX_THEME.zh[hex[0]]}你最旺的五行是${domZh}，今天就靠它；最弱的${weakZh}，给它留一点空。生命灵数 ${full.numerology.lifePath}定下今天的主题：${firstSentence(full.numerology.lifePathText.zh)}`,
+    card: { idx: draw[0].idx, number: card[0], name: { en: card[1], zh: card[2] }, emoji: card[3], reversed: draw[0].rev },
+    hexagram: { number: hex[0], en: hex[1], zh: hex[2], theme: { en: D.HEX_THEME.en[hex[0]], zh: D.HEX_THEME.zh[hex[0]] } },
+    dayMaster: full.bazi.dayMaster, lifePath: full.numerology.lifePath,
+  };
+}
+
+module.exports = { buildFullReading, buildTeaser, scoreEnneagram, scoreEnneagramFromChoices, scoreMbti, parseBirth, getPersonalityQuestions, buildPersonalitySummary, buildPortrait, lockedPersonalitySummary, buildDailyMessage, elName, currentYear, chineseYearLabel, nextTwelveMonths };
