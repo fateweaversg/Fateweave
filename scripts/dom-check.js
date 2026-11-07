@@ -41,7 +41,7 @@ class El {
 
 const IDS = ['lang-en', 'lang-zh', 'systems', 'sys-hero', 'quiz-list', 'quiz-area', 'hook-card', 'teaser-status', 'birthDate', 'birthTime', 'name', 'email', 'unlocked-banner', 'unlocked-card', 'unlocked-sub', 'unlock-card', 'price-line', 'pay-btn', 'report-card', 'report', 'lr-used', 'lr-question', 'lr-answers', 'lr-speak', 'lr-stop', 'mc-left', 'mc-left-suffix', 'mc-upgrade-btn', 'mc-upgrade-offer', 'mc-thread', 'mc-question', 'resend-status', 'view-report-btn', 'resend-btn', 'download-report-btn', 'hook-form', 'checkout-form', 'lr-ask', 'lr-voice', 'mc-ask', 'mc-voice', 'mc-upgrade-offer-btn', 'brand-hero', 'hub-next', 'step-nav', 'daily-card', 'limits-card', 'quiz-card', 'master-locked-card', 'live-reader', 'master-chat'];
 
-async function runCase({ page, unlocked, submitHook }) {
+async function runCase({ page, unlocked, submitHook, search }) {
   const els = {};
   for (const id of IDS) els[id] = new El(id);
   els['report-card'].classList.add('hidden');
@@ -69,12 +69,13 @@ async function runCase({ page, unlocked, submitHook }) {
       ? { ok: true, json: async () => buildFullReading({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' }) }
       : { ok: false, status: 403, json };
     if (u.startsWith('/api/master-chat')) return { ok: true, json: async () => ({ messages: [], questionsUsed: 0, questionsRemaining: 5, max: 5, unlimited: false }) };
+    if (u.startsWith('/api/checkout-session/')) return { ok: true, json: async () => ({ paid: true, upgrade: true, email: 'buyer@example.com', birthDate: '1990-05-14' }) };
     return { ok: false, status: 404, json };
   };
   const sandbox = {
     console, setTimeout, clearTimeout, URLSearchParams,
     crypto: require('crypto'),
-    location: { search: '', pathname: page ? '/' + page : '/', href: '' },
+    location: { search: search || '', pathname: page ? '/' + page : '/', href: '' },
     history: { replaceState() {} },
     localStorage: {
       getItem: (k) => (k in store ? store[k] : null),
@@ -164,6 +165,15 @@ function check(name, ok, detail) {
   els = await runCase({ page: null, unlocked: true });
   check('hub unlocked: unlocked card visible, unlock hidden, report hidden', !els['unlocked-card'].hidden && els['unlock-card'].hidden && els['report-card'].hidden);
   check('hub unlocked: hub-next button present', els['hub-next'].innerHTML.includes('href="/bazi"'));
+  check('hub unlocked: Skip-to-Master shortcut present (no step flow / quiz needed)', els['hub-next'].innerHTML.includes('href="/master"') && els['hub-next'].innerHTML.includes('Skip to Master'));
+  check('hub unlocked: no hub-next shortcut before unlock (locked glimpse only)', (await runCase({ page: null, unlocked: false, submitHook: true }))['hub-next'].innerHTML.includes('href="/master"') === false);
+
+  // /master unlocked after a $3 upgrade return: ?upgraded=1 verifies the
+  // session, the banner reads Unlimited, the chat is open, no quiz in sight.
+  els = await runCase({ page: 'master', unlocked: true, search: '?upgraded=1&session_id=cs_test_upgrade' });
+  check('master upgrade return: banner shows Unlimited Master Chat unlocked', !els['unlocked-banner'].hidden && els['unlocked-banner'].innerHTML.includes('Unlimited Master Chat unlocked'));
+  check('master upgrade return: report card visible, locked prompt hidden, quiz hidden', !els['report-card'].hidden && els['master-locked-card'].hidden && els['quiz-card'].hidden);
+  check('master unlocked: no quiz anywhere on the Master page', els['quiz-card'].hidden && !els.systems.innerHTML.includes('quiz'));
 
   console.log(`\nDOM check: ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);
