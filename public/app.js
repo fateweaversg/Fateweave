@@ -105,6 +105,8 @@ const STR = {
     unlockBtn: 'Unlock full reading', casting: 'Casting\u2026', flipping: 'Tap to flip', flipAllTarot: 'Flip all three cards to read them as one story.',
     readingGlimpse: 'Reading your glimpse\u2026', enterDateFirst: 'Enter your birth date in the free glimpse form first.',
     couldNotRead: 'Could not read that birth date.', networkError: 'Network error: ',
+    masterUnreachable: 'The Master couldn\u2019t be reached just now \u2014 please try again in a moment.',
+    unreachable: 'Couldn\u2019t be reached just now \u2014 please try again in a moment.',
     payUnlock: 'Pay & unlock', priceUnavailable: 'Price unavailable \u2014 please try again later.',
     questions: 'questions', questionOf: 'Question', of: 'of', back: '\u2190 Back', restart: 'Restart quiz',
     startQuiz: 'Start the quiz', retake: 'Retake', yourType: 'Your type', fullBreakdownLocked: 'Full breakdown locked \u2014 unlock to read it.',
@@ -202,6 +204,8 @@ const STR = {
     unlockBtn: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a', casting: '\u8d77\u5366\u4e2d\u2026\u2026', flipping: '\u70b9\u4e00\u4e0b\u7ffb\u724c', flipAllTarot: '\u7ffb\u5f00\u4e09\u5f20\u724c\uff0c\u770b\u770b\u5b83\u4eec\u5408\u8d77\u6765\u8bf4\u7684\u6545\u4e8b\u3002',
     readingGlimpse: '\u6b63\u5728\u8bfb\u53d6\u4f60\u7684\u9884\u89c8\u2026\u2026', enterDateFirst: '\u8bf7\u5148\u5728\u514d\u8d39\u4e00\u77a5\u8868\u5355\u8f93\u5165\u51fa\u751f\u65e5\u671f\u3002',
     couldNotRead: '\u65e0\u6cd5\u8bfb\u53d6\u8be5\u51fa\u751f\u65e5\u671f\u3002', networkError: '\u7f51\u7edc\u9519\u8bef\uff1a',
+    masterUnreachable: '\u638c\u95e8\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+    unreachable: '\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     payUnlock: '\u4ed8\u6b3e\u5e76\u89e3\u9501', priceUnavailable: '\u6682\u65f6\u65e0\u6cd5\u53d6\u5f97\u4ef7\u683c\u2014\u2014\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     questions: '\u9898', questionOf: '\u7b2c', of: '/', back: '\u2190 \u4e0a\u4e00\u9898', restart: '\u91cd\u65b0\u6d4b\u9a8c',
     startQuiz: '\u5f00\u59cb\u6d4b\u9a8c', retake: '\u91cd\u65b0\u6d4b\u9a8c', yourType: '\u4f60\u7684\u7c7b\u578b', fullBreakdownLocked: '\u5b8c\u6574\u89e3\u6790\u672a\u89e3\u9501\u2014\u2014\u89e3\u9501\u540e\u53ef\u9605\u8bfb\u3002',
@@ -1168,10 +1172,21 @@ $('lr-ask').addEventListener('click', async () => {
   const q = $('lr-question').value.trim();
   if (!q) return;
   const box = $('lr-answers');
+  let res;
   try {
-    const res = await fetch('/api/live-reader', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...authParams(), sessionId: state.sessionId, question: q, lang: state.lang }) });
-    const data = await res.json();
-    if (!res.ok) { box.innerHTML += `<p><strong>Live Reader:</strong> ${esc(data.error || t('couldNotRead'))}</p>`; return; }
+    res = await fetch('/api/live-reader', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...authParams(), sessionId: state.sessionId, question: q, lang: state.lang }) });
+  } catch (err) {
+    // Transport failure: friendly message, never the raw browser error.
+    box.innerHTML += `<p>${esc(t('unreachable'))}</p>`;
+    return;
+  }
+  let data = null;
+  try { data = await res.json(); } catch { data = null; }
+  if (!res.ok || !data || typeof data.answer !== 'string') {
+    box.innerHTML += `<p>${esc((data && data.error) || t('unreachable'))}</p>`;
+    return;
+  }
+  try {
     $('lr-used').textContent = data.questionsUsed;
     box.innerHTML += `<p><strong>You:</strong> ${esc(q)}</p><p><strong>Live Reader:</strong> ${esc(data.answer)}</p>`;
     $('lr-question').value = '';
@@ -1182,7 +1197,7 @@ $('lr-ask').addEventListener('click', async () => {
       speechSynthesis.speak(u);
       $('lr-stop').classList.remove('hidden');
     }
-  } catch (err) { box.innerHTML += `<p>Error: ${esc(err.message)}</p>`; }
+  } catch (err) { box.innerHTML += `<p>${esc(t('unreachable'))}</p>`; }
 });
 $('lr-voice').addEventListener('click', () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1264,18 +1279,40 @@ async function sendMasterChat(text) {
     renderMcThread();
     return;
   }
+  // Transport failure (offline, Railway incident page, …): show a short
+  // friendly message in the user's language — never the raw browser
+  // error (Safari's "The string did not match the expected pattern" is
+  // what res.json() throws on a non-JSON reply). The question stays in
+  // the box for a retry, nothing is stored, and no AI chat is consumed.
+  let res;
   try {
-    const res = await fetch('/api/master-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...authParams(), sessionId: state.sessionId, message: q, lang: state.lang }) });
-    const data = await res.json();
-    if (!res.ok) {
-      state.mcMessages = [...state.mcMessages, { role: 'user', content: q, lang: state.lang, source: 'master' }, { role: 'master', content: data.error || t('couldNotRead'), lang: state.lang, source: 'master' }];
+    res = await fetch('/api/master-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...authParams(), sessionId: state.sessionId, message: q, lang: state.lang }) });
+  } catch (err) {
+    state.mcMessages = [...state.mcMessages, { role: 'master', content: t('masterUnreachable'), lang: state.lang, source: 'master' }];
+    renderMcThread();
+    return;
+  }
+  let data = null;
+  try { data = await res.json(); } catch { data = null; }
+  if (!res.ok || !data || typeof data.answer !== 'string') {
+    if (!res.ok && data && data.error) {
+      // A real server error (e.g. limit reached): keep the existing
+      // behaviour — the question did reach the server.
+      state.mcMessages = [...state.mcMessages, { role: 'user', content: q, lang: state.lang, source: 'master' }, { role: 'master', content: data.error, lang: state.lang, source: 'master' }];
       if (res.status === 429) {
         state.mcLeft = 0; renderMcCounter();
         const offer = $('mc-upgrade-offer'); if (offer) offer.classList.remove('hidden');
       }
-      renderMcThread();
-      return;
+    } else {
+      // Non-JSON reply (e.g. a Railway error page) or an empty body:
+      // friendly message only — the question was never answered, so it
+      // is not stored and no chat is consumed.
+      state.mcMessages = [...state.mcMessages, { role: 'master', content: t('masterUnreachable'), lang: state.lang, source: 'master' }];
     }
+    renderMcThread();
+    return;
+  }
+  try {
     state.mcMessages = data.messages || state.mcMessages;
     state.mcExtended = !!data.extended;
     state.mcLeft = typeof data.questionsRemaining === 'number' ? data.questionsRemaining : 0;
@@ -1284,7 +1321,7 @@ async function sendMasterChat(text) {
     renderMcThread();
     mcSpeak(data.answer);
   } catch (err) {
-    state.mcMessages = [...state.mcMessages, { role: 'master', content: t('networkError') + err.message, lang: state.lang, source: 'master' }];
+    state.mcMessages = [...state.mcMessages, { role: 'master', content: t('masterUnreachable'), lang: state.lang, source: 'master' }];
     renderMcThread();
   }
 }
