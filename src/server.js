@@ -32,13 +32,23 @@ const { sendReportEmail } = require('./email');
 const { issueAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword, hashToken } = require('./auth');
 
 const app = express();
+app.set('trust proxy', 1); // Railway terminates TLS behind a proxy; rate-limit needs the real client IP.
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json({ limit: '64kb' }));
+// JSON parsing must SKIP the webhook routes: Stripe signature verification
+// needs the RAW request body, and a parsed object cannot be verified.
+// The webhook routes below use express.raw() themselves.
+// (Previous bug: global express.json() ran first, so req.body was already
+// a parsed object and stripe.webhooks.constructEvent always failed 400.)
+const jsonParser = express.json({ limit: '64kb' });
+app.use((req, res, next) => {
+  if (req.originalUrl && req.originalUrl.startsWith('/api/webhook/')) return next();
+  return jsonParser(req, res, next);
+});
 
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false });
 app.use('/api/', apiLimiter);
 
-// Stripe webhook needs the RAW body — register it BEFORE express.json for that route.
+// Stripe webhook needs the RAW body — see the skip above.
 let stripe = null;
 if (config.stripeSecretKey) {
   stripe = require('stripe')(config.stripeSecretKey);
