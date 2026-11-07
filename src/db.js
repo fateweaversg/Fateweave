@@ -47,13 +47,13 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_tokens_hash ON access_tokens(token_hash);
 
-  CREATE TABLE IF NOT EXISTS live_reader_usage (
+  CREATE TABLE IF NOT EXISTS live_reader_usage_by_buyer (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    token_hash TEXT NOT NULL,
-    session_id TEXT NOT NULL,
+    email TEXT NOT NULL,
+    birth_date TEXT NOT NULL,
     question_count INTEGER NOT NULL DEFAULT 0,
     last_asked_at TEXT,
-    UNIQUE(token_hash, session_id)
+    UNIQUE(email, birth_date)
   );
 
   CREATE TABLE IF NOT EXISTS owner_tokens (
@@ -80,14 +80,20 @@ db.exec(`
   );
 
   -- Ask the Master follow-up chat (7 Nov 2026): conversation memory per
-  -- paid session. One row per message, user or Master. Live Reader Q&A is
-  -- stored here too (source = 'live-reader') so follow-ups can refer back
-  -- to it; only source = 'master' user messages count toward the 5-message
-  -- follow-up limit. No other buyer's data is ever read for a session.
+  -- BUYER (email + birth_date), not per browser session. One row per
+  -- message, user or Master. Live Reader Q&A is stored here too
+  -- (source = 'live-reader') so follow-ups can refer back to it; only
+  -- source = 'master' user messages count toward the follow-up limit.
+  -- The client still sends a sessionId (kept for backward
+  -- compatibility), but a fresh sessionId — a reload, a new tab, the
+  -- Stripe return after the $3 upgrade — must never wipe or hide the
+  -- buyer's thread. No other buyer's data is ever read for a buyer.
   CREATE TABLE IF NOT EXISTS master_chat_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     token_hash TEXT NOT NULL,
     session_id TEXT NOT NULL,
+    email TEXT,
+    birth_date TEXT,
     role TEXT NOT NULL, -- 'user' | 'master'
     content TEXT NOT NULL,
     lang TEXT NOT NULL DEFAULT 'en',
@@ -95,6 +101,7 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_master_chat_session ON master_chat_messages(token_hash, session_id, id);
+  CREATE INDEX IF NOT EXISTS idx_master_chat_buyer ON master_chat_messages(email, birth_date, id);
 
   -- Extended Master Chat upgrade (7 Nov 2026 20:04 SGT): a paid $3
   -- upgrade gives the buyer 30 Master chats in total for the same
@@ -103,9 +110,10 @@ db.exec(`
   -- birth_date), not by one token, because a buyer can hold several
   -- tokens (fresh token per checkout-session exchange). expires_at is
   -- the unlock's expiry; the upgrade never outlives the reading it
-  -- belongs to. The 30-chat count itself lives in the ai_usage ledger
-  -- (src/ai-master.js buyerAiCallsTotal), not here — this table only
-  -- records that the upgrade was bought. Existing rows (e.g. the
+  -- belongs to. The 30-chat count itself is the number of Master
+  -- questions the buyer asked (src/server.js masterChatCount), not the
+  -- ai_usage ledger — the ledger is the AI cost record only, so the
+  -- counter moves even on rule-based replies. Existing rows (e.g. the
   -- owner's own $3 test purchase) are treated as a 30-chat grant.
   CREATE TABLE IF NOT EXISTS chat_upgrades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -149,5 +157,42 @@ db.exec(`
     UNIQUE(email, birth_date, kind)
   );
 `);
+
+// --- Migration (7 Nov 2026): buyer-keyed Master history + Live Reader -----
+// History and counts used to be keyed by (token_hash, session_id), and
+// the browser generated a fresh random sessionId on every page load —
+// so a reload, a new tab, or the Stripe return after the $3 upgrade
+// showed an empty Master thread and reset both counters to 0. They are
+// now keyed by the buyer (email + birth_date). This runs on every start
+// and is idempotent: on a fresh DB there is nothing to migrate; on the
+// live DB it backfills email/birth_date on every existing chat row from
+// access_tokens (so tonight's threads reappear instead of starting
+// over), sums the old per-session Live Reader counts per buyer into the
+// new table, then drops the old table.
+(function migrateBuyerKeying() {
+  try {
+    const cols = db.prepare('PRAGMA table_info(master_chat_messages)').all().map((c) => c.name);
+    if (!cols.includes('email')) db.exec('ALTER TABLE master_chat_messages ADD COLUMN email TEXT');
+    if (!cols.includes('birth_date')) db.exec('ALTER TABLE master_chat_messages ADD COLUMN birth_date TEXT');
+    db.prepare(`UPDATE master_chat_messages SET
+        email = (SELECT email FROM access_tokens WHERE access_tokens.token_hash = master_chat_messages.token_hash),
+        birth_date = (SELECT birth_date FROM access_tokens WHERE access_tokens.token_hash = master_chat_messages.token_hash)
+      WHERE email IS NULL`).run();
+    db.exec('CREATE INDEX IF NOT EXISTS idx_master_chat_buyer ON master_chat_messages(email, birth_date, id)');
+    const hasOldLr = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'live_reader_usage'").get();
+    if (hasOldLr) {
+      db.prepare(`INSERT INTO live_reader_usage_by_buyer (email, birth_date, question_count, last_asked_at)
+        SELECT t.email, t.birth_date, SUM(u.question_count), MAX(u.last_asked_at)
+        FROM live_reader_usage u JOIN access_tokens t ON t.token_hash = u.token_hash
+        GROUP BY t.email, t.birth_date
+        ON CONFLICT(email, birth_date) DO UPDATE SET
+          question_count = live_reader_usage_by_buyer.question_count + excluded.question_count,
+          last_asked_at = MAX(live_reader_usage_by_buyer.last_asked_at, excluded.last_asked_at)`).run();
+      db.exec('DROP TABLE live_reader_usage');
+    }
+  } catch (e) {
+    console.error('Buyer-keying migration failed (history/counts may be incomplete):', e.message);
+  }
+})();
 
 module.exports = { db };
