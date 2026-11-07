@@ -587,20 +587,45 @@ const TOPICS = [
 ];
 function firstSentence(text) {
   if (!text) return '';
-  const m = String(text).match(/^[^.!?。]+[.!?。]?/);
-  return (m ? m[0] : String(text)).trim();
+  const s = String(text);
+  // Quote-aware: a terminator inside 「」 or “” does not end the sentence
+  // (e.g. the Life Path text quoted inside the numerology career line).
+  // Only 「」 and “” are tracked — English apostrophes (chart's) must not
+  // unbalance the depth count.
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '「' || ch === '“') depth++;
+    else if (ch === '」' || ch === '”') depth = Math.max(0, depth - 1);
+    else if ((ch === '.' || ch === '!' || ch === '?' || ch === '。') && depth === 0) {
+      return s.slice(0, i + 1).trim();
+    }
+  }
+  return s.trim();
 }
 function plainEN(s) {
+  // Order matters: "Your X" must be replaced before bare "X", or "Your Day
+  // Master is…" becomes "Your your chart's core is…" (bug found 7 Nov 2026).
   return String(s)
+    .replace(/Your Day Master/g, "Your chart's core")
     .replace(/your Day Master/g, "your chart's core")
-    .replace(/Day Master/g, "your chart's core")
+    .replace(/Day Master/g, "the chart's core")
+    .replace(/Your useful god/g, 'The element you most need')
+    .replace(/your useful god/g, 'the element you most need')
     .replace(/useful god/g, 'the element you most need')
+    .replace(/Your luck pillar/g, 'Your ten-year phase')
+    .replace(/your luck pillar/g, 'your ten-year phase')
     .replace(/luck pillar/g, 'ten-year phase');
 }
 function plainZH(s) {
+  // Same ordering rule as plainEN: "你的用神是…" must not become
+  // "你的你最需要补的五行是…".
   return String(s)
+    .replace(/你的日主/g, '你的命盘核心')
     .replace(/日主/g, '命盘核心')
-    .replace(/用神/g, '你最需要补的五行')
+    .replace(/你的用神/g, '你最需要补的五行')
+    .replace(/用神/g, '最需要补的五行')
+    .replace(/你的大运/g, '你的十年阶段')
     .replace(/大运/g, '十年阶段');
 }
 
@@ -841,18 +866,37 @@ function findTermInLastAnswer(reading, text, lang, personality) {
    explanation keeps the "Your core:" line the Live Reader answer opened
    with, then explains the term itself — it never reuses the Live Reader
    answer's body. */
+/* Head for an explained term. The gloss already names the term in most
+   cases ("your Life Path number — ..."), so only prepend the label when
+   the gloss does not already say it — comparing after stripping a leading
+   "your " / "你的" from both sides, or "Moon sign — your Moon sign —"
+   stutters (bug found 7 Nov 2026). And when the body sentence already
+   contains the gloss (an element's meaning restated in its own section),
+   the head is just the label — otherwise the same phrase appears twice. */
+function explainHead(term, bodySent, lang) {
+  const zh = lang === 'zh';
+  const stripLead = (s) => String(s || '').replace(/^(your|你的)\s*/i, '');
+  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, ' ').trim();
+  const gloss = term.gloss || '';
+  if (bodySent && norm(gloss).length > 0 && norm(bodySent).includes(norm(gloss))) return term.label;
+  const glossLead = stripLead(gloss).toLowerCase();
+  const labelLead = stripLead(term.label).toLowerCase();
+  if (labelLead.length > 0 && glossLead.startsWith(labelLead)) return gloss;
+  return term.label + (zh ? '——' : ' — ') + gloss;
+}
 function explainTerm(reading, term, lang, lastTopic) {
   const zh = lang === 'zh';
   const sent = (sec) => {
     const o = sec && typeof sec === 'object' ? (zh ? sec.zh || sec.en : sec.en || sec.zh) : sec;
     return zh ? plainZH(firstSentence(o)) : plainEN(firstSentence(o));
   };
-  const head = term.gloss.toLowerCase().startsWith(term.label.toLowerCase()) ? term.gloss : term.label + (zh ? '——' : ' — ') + term.gloss;
+  const bodySent = sent(term.body || term.text);
+  const head = explainHead(term, bodySent, lang);
   const headCap = !zh ? head.charAt(0).toUpperCase() + head.slice(1) : head;
   const prefix = term.corePrefix ? topicCore(reading, lastTopic === 'general' ? 'general' : lastTopic, lang) + ' ' : '';
   const action = zh ? '这周留意一次，你在自己身上看到它的时候，用一行字记下来。' : 'This week, notice one moment when you see it in yourself, and write down one line about it.';
-  return zh ? prefix + headCap + '。' + sent(term.body || term.text) + (term.ziwei ? '（紫微为样本内容，仅供参考。）' : '') + '\n\n一小步：' + action
-    : prefix + headCap + '. ' + sent(term.body || term.text) + (term.ziwei ? ' (Zi Wei is sample content, for reflection only.)' : '') + '\n\nOne small step: ' + action;
+  return zh ? prefix + headCap + '。' + bodySent + (term.ziwei ? '（紫微为样本内容，仅供参考。）' : '') + '\n\n一小步：' + action
+    : prefix + headCap + '. ' + bodySent + (term.ziwei ? ' (Zi Wei is sample content, for reflection only.)' : '') + '\n\nOne small step: ' + action;
 }
 /* Everyday scenarios, 3 distinct variants per topic, each tied to the
    buyer's actual reading (Day Master, Sun / Moon / Rising, Life Path,
@@ -1001,7 +1045,7 @@ function masterChatAnswerRaw(reading, message, lang, history, personality) {
   // the label when the gloss does not already start with it.
   if (term && (isExplain || msg.trim().length < 30)) {
     const action = zh ? '这周留意一次，你在自己身上看到它的时候，用一行字记下来。' : 'This week, notice one moment when you see it in yourself, and write down one line about it.';
-    const head = term.gloss.toLowerCase().startsWith(term.label.toLowerCase()) ? term.gloss : term.label + (zh ? '——' : ' — ') + term.gloss;
+    const head = explainHead(term, sent(term.text), lang);
     const headCap = !zh ? head.charAt(0).toUpperCase() + head.slice(1) : head;
     return (zh ? headCap + '。' + sent(term.text) + (term.ziwei ? '（紫微为样本内容，仅供参考。）' : '') + '\n\n一小步：' + action
       : headCap + '. ' + sent(term.text) + (term.ziwei ? ' (Zi Wei is sample content, for reflection only.)' : '') + '\n\nOne small step: ' + action);
