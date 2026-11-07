@@ -67,6 +67,7 @@ const config = {
     // Default model gemini-3.5-flash (NOT gemini-2.5-flash — see note
     // below). AI_MODEL env var still overrides it.
     model: process.env.AI_MODEL || 'gemini-3.5-flash',
+    fallbackModels: (process.env.AI_FALLBACK_MODELS ?? 'gemini-3.5-flash-lite').split(',').map(x => x.trim()).filter(Boolean),
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     // Per-message limit (also enforced in src/ai-master.js).
     maxQuestionChars: 500,

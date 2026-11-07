@@ -31,7 +31,7 @@ const { strings } = require('./i18n');
 const { sendReportEmail } = require('./email');
 const { issueAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword, hashToken } = require('./auth');
 const {
-  aiMasterLive, validateMasterMessage, resolveAiMaster, fallbackNote, aiUsageSummary,
+  aiMasterLive, validateMasterMessage, resolveAiMaster, aiUsageSummary,
   aiCooldownState,
 } = require('./ai-master');
 
@@ -437,8 +437,8 @@ app.post('/api/live-reader', (req, res) => {
 // included, stored in master_chat_messages with source 'live-reader').
 // History: GET /api/master-chat returns the thread so a reload restores it.
 function masterChatHistory(email, birthDate) {
-  return db.prepare('SELECT role, content, lang, source FROM master_chat_messages WHERE email = ? AND birth_date = ? ORDER BY id ASC LIMIT 40')
-    .all(String(email).toLowerCase(), birthDate);
+  return db.prepare('SELECT role, content, lang, source FROM master_chat_messages WHERE email = ? AND birth_date = ? ORDER BY id DESC LIMIT 100')
+    .all(String(email).toLowerCase(), birthDate).reverse();
 }
 function masterChatCount(email, birthDate) {
   // AI replies received, not questions asked (7 Nov 2026 fix 3):
@@ -468,7 +468,7 @@ app.get('/api/master-chat', (req, res) => {
     // True while the AI is in its short post-failure cooldown (5 min
     // for a 5xx/timeout, 15 min for a 429) — the UI shows a small
     // honest note that answers are summaries meanwhile.
-    aiResting: aiCooldownState().active,
+    aiResting: false,
   });
 });
 // Concurrent identical Master requests, keyed by buyer + exact
@@ -479,6 +479,7 @@ app.get('/api/master-chat', (req, res) => {
 // client also disables the Ask button while a request is in flight,
 // but two tabs can still race, so the server collapses them too.
 const inflightMaster = new Map();
+const inflightMasterBuyers = new Set();
 app.post('/api/master-chat', masterChatLimiter, async (req, res) => {
   const { token, email, birthDate, sessionId, message, lang } = req.body || {};
   const access = verifyAccessToken(token, email, birthDate);
@@ -503,24 +504,27 @@ app.post('/api/master-chat', masterChatLimiter, async (req, res) => {
     const lastMaster = db.prepare("SELECT content, source FROM master_chat_messages WHERE email = ? AND birth_date = ? AND role = 'master' AND id > ? ORDER BY id ASC LIMIT 1")
       .get(access.email, access.birth_date, lastUser.id);
     if (lastMaster) {
-      return res.json({ answer: lastMaster.content, questionsUsed: used, questionsRemaining: Math.max(0, max - used), max, extended, extendedTotal: config.ai.extendedChatTotalMax, messages: masterChatHistory(access.email, access.birth_date), ai: lastMaster.source === 'ai', source: lastMaster.source, aiResting: aiCooldownState().active, duplicate: true });
+      return res.json({ answer: lastMaster.content, questionsUsed: used, questionsRemaining: Math.max(0, max - used), max, extended, extendedTotal: config.ai.extendedChatTotalMax, messages: masterChatHistory(access.email, access.birth_date), ai: lastMaster.source === 'ai', source: lastMaster.source, aiResting: false, duplicate: true });
     }
   }
-  if (!extended && used >= config.masterChatMaxPerSession) {
+  if (used >= max) {
     // code lets the client tell this apart from a rate-limiter 429:
     // only the allowance being used up zeroes the counter.
-    return res.status(429).json({ error: 'Ask the Master allows ' + config.masterChatMaxPerSession + ' follow-up messages.', code: 'master_limit_reached', questionsUsed: used, questionsRemaining: 0, upgradePriceCents: config.masterChatUpgradePriceCents });
+    return res.status(429).json({ error: 'You have used all ' + max + ' Gemini follow-ups.', code: 'master_limit_reached', questionsUsed: used, questionsRemaining: 0, upgradePriceCents: config.masterChatUpgradePriceCents });
   }
   const dupKey = `${access.email.toLowerCase()}|${access.birth_date}|${valid.text}`;
   const prior = inflightMaster.get(dupKey);
   if (prior) {
     try {
       const body = await prior;
-      return res.json({ ...body, duplicate: true });
+      return res.status(body.httpStatus || 200).json({ ...body, duplicate: true });
     } catch {
       // The first call failed — fall through and try ourselves.
     }
   }
+  const buyerKey = `${access.email.toLowerCase()}|${access.birth_date}`;
+  if (inflightMasterBuyers.has(buyerKey)) return res.status(409).json({ code: 'master_busy', error: lang === 'zh' ? '请等当前问题回答完毕再提问。' : 'Please wait for your current question to finish.' });
+  inflightMasterBuyers.add(buyerKey);
   const work = (async () => {
     const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
     const personality = loadPersonality(access.email, access.birth_date);
@@ -538,32 +542,40 @@ app.post('/api/master-chat', masterChatLimiter, async (req, res) => {
       reading, message: valid.text, lang: lang === 'zh' ? 'zh' : 'en', history, personality,
       questionsAsked: used,
     });
-    let answer, source;
-    if (ai.status === 'ai') {
-      answer = ai.answer;
-      source = 'ai';
-    } else {
-      answer = masterChatAnswer(reading, valid.text, lang === 'zh' ? 'zh' : 'en', history, personality);
-      source = 'rule-based';
-      const note = fallbackNote(ai.reason, lang === 'zh' ? 'zh' : 'en');
-      if (note) answer = answer + '\n\n' + note;
+    if (ai.status !== 'ai') {
+      const retryAfterSeconds = ai.retryAfterSeconds || 30;
+      const zh = lang === 'zh';
+      const error = ai.reason === 'global-limit'
+        ? (zh ? '今日 Gemini 服务额度已用完。请明天再试，你的追问次数未扣除。' : "Today's Gemini service limit has been reached. Please retry tomorrow; no follow-up was used.")
+        : (zh ? 'Gemini 暂时无法回答，请稍后重试。你的问题已保留，追问次数未扣除。' : 'Gemini could not answer right now. Please retry shortly. Your question is kept and no follow-up was used.');
+      return { httpStatus: 503, error, code: 'gemini_unavailable', retryAfterSeconds,
+        questionsUsed: used, questionsRemaining: Math.max(0, max - used), max, extended,
+        extendedTotal: config.ai.extendedChatTotalMax, ai: false, source: null, aiResting: false };
     }
+    const answer = ai.answer, source = 'ai';
     try {
+      db.exec('BEGIN');
       db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'user', ?, ?, 'master')")
         .run(hashToken(token), sessionId, access.email, access.birth_date, valid.text, lang === 'zh' ? 'zh' : 'en');
       db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'master', ?, ?, ?)")
         .run(hashToken(token), sessionId, access.email, access.birth_date, answer, lang === 'zh' ? 'zh' : 'en', source);
-    } catch (e) { console.error('Master chat history store failed:', e.message); }
+      db.exec('COMMIT');
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
     // Counter: AI replies received out of 5 included, or 30 with
     // Extended. Recomputed after the insert, so it drops only on a
     // real AI answer — a rule-based reply while the AI is resting
     // never consumes a chat.
     const asked = masterChatCount(access.email, access.birth_date);
-    return { answer, questionsUsed: asked, questionsRemaining: Math.max(0, max - asked), max, extended, extendedTotal: config.ai.extendedChatTotalMax, messages: masterChatHistory(access.email, access.birth_date), ai: source === 'ai', source, aiResting: aiCooldownState().active };
+    return { answer, questionsUsed: asked, questionsRemaining: Math.max(0, max - asked), max, extended, extendedTotal: config.ai.extendedChatTotalMax, messages: masterChatHistory(access.email, access.birth_date), ai: source === 'ai', source, aiResting: false };
   })();
   inflightMaster.set(dupKey, work);
   try {
-    return res.json(await work);
+    const result = await work;
+    if (result.httpStatus) {
+      res.set('Retry-After', String(result.retryAfterSeconds));
+      return res.status(result.httpStatus).json(result);
+    }
+    return res.json(result);
   } catch (e) {
     // Safety net (8 Nov 2026 fix 4): Express 4 does not forward async
     // handler rejections to error middleware, so an unexpected throw
@@ -572,19 +584,12 @@ app.post('/api/master-chat', masterChatLimiter, async (req, res) => {
     // Never a dead chat: fall back to the rule-based answer, and if
     // even that cannot be built, answer with a friendly 500 JSON.
     console.error('Master chat work failed:', e && e.message);
-    try {
-      const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
-      const personality = loadPersonality(access.email, access.birth_date);
-      const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
-      const history = masterChatHistory(access.email, access.birth_date);
-      const answer = masterChatAnswer(reading, valid.text, lang === 'zh' ? 'zh' : 'en', history, personality);
-      return res.json({ answer, questionsUsed: used, questionsRemaining: Math.max(0, max - used), max, extended, extendedTotal: config.ai.extendedChatTotalMax, messages: masterChatHistory(access.email, access.birth_date), ai: false, source: 'rule-based', aiResting: aiCooldownState().active });
-    } catch (e2) {
-      console.error('Master chat rule-based fallback failed:', e2 && e2.message);
-      return res.status(500).json({ error: lang === 'zh' ? '掌门刚才出了一点小状况，请稍后再试。' : 'The Master hit a brief hiccup — please try again in a moment.' });
-    }
+    return res.status(503).json({ code: 'gemini_unavailable', error: lang === 'zh'
+      ? '暂时无法取得回答，请重试。追问次数未扣除。'
+      : 'The answer could not be completed. Please retry; no follow-up was used.' });
   } finally {
     if (inflightMaster.get(dupKey) === work) inflightMaster.delete(dupKey);
+    inflightMasterBuyers.delete(buyerKey);
   }
 });
 
