@@ -36,7 +36,7 @@ const STR = {
     limit3: 'For self-reflection and entertainment only \u2014 not medical, financial or legal advice.',
     tapReveal: 'Tap to reveal', tapFlip: 'Tap a card to flip it', castChart: 'Cast the chart', castCoins: 'Cast the coins',
     lockedTitle: 'Full reading locked', lockedBody: 'Unlock the full reading to read every detail.',
-    unlockBtn: 'Unlock full reading', casting: 'Casting\u2026', flipping: 'Tap to flip',
+    unlockBtn: 'Unlock full reading', casting: 'Casting\u2026', flipping: 'Tap to flip', flipAllTarot: 'Flip all three cards to read them as one story.',
     readingGlimpse: 'Reading your glimpse\u2026', enterDateFirst: 'Enter your birth date in the free glimpse form first.',
     couldNotRead: 'Could not read that birth date.', networkError: 'Network error: ',
     payUnlock: 'Pay & unlock', priceUnavailable: 'Price unavailable \u2014 please try again later.',
@@ -78,7 +78,7 @@ const STR = {
     limit3: '\u50c5\u4f9b\u81ea\u6211\u53cd\u601d\u8207\u5a1b\u6a02\u2014\u2014\u4e0d\u662f\u91ab\u7642\u3001\u8ca1\u52d9\u6216\u6cd5\u5f8b\u5efa\u8b70\u3002',
     tapReveal: '\u9ede\u4e00\u4e0b\u63ed\u958b', tapFlip: '\u9ede\u4e00\u5f35\u724c\u7ffb\u958b\u5b83', castChart: '\u8d77\u76e4', castCoins: '\u64f2\u5366',
     lockedTitle: '\u5b8c\u6574\u5167\u5bb9\u672a\u89e3\u9396', lockedBody: '\u89e3\u9396\u5b8c\u6574\u5831\u544a\uff0c\u5373\u53ef\u95b1\u8b80\u5168\u90e8\u7d30\u7bc0\u3002',
-    unlockBtn: '\u89e3\u9396\u5b8c\u6574\u5831\u544a', casting: '\u8d77\u5366\u4e2d\u2026\u2026', flipping: '\u9ede\u4e00\u4e0b\u7ffb\u724c',
+    unlockBtn: '\u89e3\u9396\u5b8c\u6574\u5831\u544a', casting: '\u8d77\u5366\u4e2d\u2026\u2026', flipping: '\u9ede\u4e00\u4e0b\u7ffb\u724c', flipAllTarot: '\u7ffb\u958b\u4e09\u5f35\u724c\uff0c\u770b\u770b\u5b83\u5011\u5408\u8d77\u4f86\u8aaa\u7684\u6545\u4e8b\u3002',
     readingGlimpse: '\u6b63\u5728\u8b80\u53d6\u4f60\u7684\u9810\u89bd\u2026\u2026', enterDateFirst: '\u8acb\u5148\u5728\u514d\u8cbb\u4e00\u77a5\u8868\u55ae\u8f38\u5165\u51fa\u751f\u65e5\u671f\u3002',
     couldNotRead: '\u7121\u6cd5\u8b80\u53d6\u8a72\u51fa\u751f\u65e5\u671f\u3002', networkError: '\u7db2\u7d61\u932f\u8aa4\uff1a',
     payUnlock: '\u4ed8\u6b3e\u4e26\u89e3\u9396', priceUnavailable: '\u66ab\u6642\u7121\u6cd5\u53d6\u5f97\u50f9\u683c\u2014\u2014\u8acb\u7a0d\u5f8c\u518d\u8a66\u3002',
@@ -237,7 +237,15 @@ function renderSystems() {
     }
     return `<div class="tarot-detail"><p class="hook-line"><strong>${esc(L(c.name))}</strong> \u2014 ${esc(c.keywords || '')}</p>${lockBlock()}</div>`;
   }).join('')}</div>`;
-  if (unlocked) html += `<p class="hook-line"><em>${esc(L(r.tarot.story))}</em></p>` + sectionHTML(r.tarot.sections, ['career', 'relationships', 'health', 'timing']);
+  if (unlocked && state.tarotFlipped.every(Boolean)) {
+    // The story names all three cards and the sections discuss them in
+    // detail, so they only appear once every card has actually been flipped
+    // open. Previously they rendered for a paid session even with all cards
+    // face-down after a reload (bug found live 7 Nov 2026).
+    html += `<p class="hook-line"><em>${esc(L(r.tarot.story))}</em></p>` + sectionHTML(r.tarot.sections, ['career', 'relationships', 'health', 'timing']);
+  } else if (unlocked) {
+    html += `<p class="small">${esc(t('flipAllTarot'))}</p>`;
+  }
   html += `</section>`;
 
   /* Numerology */
@@ -316,6 +324,59 @@ function authParams() {
   };
 }
 
+/* --- Birth profile persistence (bug 3) --------------------------------------
+   The birth date and email were already stored, but birth time and name were
+   not — after a reload both fields came back empty even though the banner
+   promises "no need to re-enter anything". Persist time + name alongside
+   them, and prefill the form from storage on every load. */
+function saveProfile(birthDate, birthTime, name) {
+  try {
+    if (birthDate) localStorage.setItem('fateweave_birthDate', birthDate);
+    localStorage.setItem('fateweave_birthTime', birthTime || '');
+    localStorage.setItem('fateweave_name', name || '');
+  } catch {}
+}
+function prefillForm() {
+  try {
+    const birthDate = localStorage.getItem('fateweave_birthDate');
+    const birthTime = localStorage.getItem('fateweave_birthTime');
+    const name = localStorage.getItem('fateweave_name');
+    const email = localStorage.getItem('fateweave_email');
+    if (birthDate) $('birthDate').value = birthDate;
+    if (birthTime) $('birthTime').value = birthTime;
+    if (name) $('name').value = name;
+    if (email) $('email').value = email;
+  } catch {}
+}
+
+/* --- Profile change (bug 2) -------------------------------------------------
+   A paid reading belongs to ONE birth date: the stored token is bound to
+   email + birth date on the server. When the user asks for a glimpse of a
+   DIFFERENT birth date, the old full reading must not stay on screen for
+   the new date — previously renderSystems() kept showing state.report
+   whenever the device was unlocked, so pillars / Sun / Life Path never
+   changed. Reset the view to locked; the stored token is deliberately NOT
+   deleted, so going back to the paid birth date restores the paid reading
+   (loadReport below) instead of asking the buyer to pay again. */
+function resetProfileView() {
+  state.report = null;
+  state.unlocked = false;
+  state.teaser = null;
+  state.revealed = {};
+  state.tarotFlipped = [false, false, false];
+  state.ziweiCast = false;
+  state.yijingCast = false;
+  state.quiz = { kind: null, questions: null, idx: 0, answers: [], result: null };
+  $('unlocked-banner').classList.add('hidden');
+  $('unlocked-banner').innerHTML = '';
+  $('unlocked-card').classList.add('hidden');
+  $('unlock-card').classList.remove('hidden');
+  $('report-card').classList.add('hidden');
+  $('report').innerHTML = '';
+  renderQuizArea();
+  renderQuizList();
+}
+
 function renderQuizList() {
   const list = $('quiz-list');
   const defs = [
@@ -357,6 +418,15 @@ function renderQuizArea() {
   const area = $('quiz-area');
   const q = state.quiz;
   if (!q.kind || !q.questions) { area.innerHTML = ''; return; }
+  if (q.result) {
+    // Finished: show the result, not the last question card. Previously
+    // submitQuiz() wrote the result into the area and then renderQuizList()
+    // re-ran this function, which re-rendered the last question on top of
+    // it (bug found live 7 Nov 2026). A locked summary has .locked set, so
+    // it renders the locked view even if state.unlocked changed meanwhile.
+    area.innerHTML = quizFullResult(q.kind, q.result, state.unlocked && !q.result.locked);
+    return;
+  }
   const total = q.questions.length;
   const item = q.questions[q.idx];
   const pct = Math.round((q.idx / total) * 100);
@@ -398,7 +468,7 @@ async function submitQuiz() {
     saveQuiz(q.kind, { answers: q.answers, result });
     state.quiz.result = result;
     area.innerHTML = quizFullResult(q.kind, result, data.unlocked);
-    renderQuizList();
+    renderQuizList(); // re-renders the area too; renderQuizArea() now shows the result, not the last question
     if (data.unlocked) loadReport(true); // refresh portrait lens with the new personality
   } catch (e) { area.innerHTML = `<p>${esc(t('networkError'))}${esc(e.message)}</p>`; }
 }
@@ -453,8 +523,24 @@ $('hook-form').addEventListener('submit', async (e) => {
     const res = await fetch('/api/hook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ birthDate, birthTime, name }) });
     const data = await res.json();
     if (!res.ok) { status.textContent = data.error || t('couldNotRead'); return; }
+    // The profile the user just asked about is the current profile from now
+    // on — persist date, time and name so a reload prefills all three.
+    const prevBirthDate = state.report?.profile?.birthDate || localStorage.getItem('fateweave_birthDate');
+    saveProfile(birthDate, birthTime, name);
     state.teaser = data;
     status.textContent = '';
+    if (prevBirthDate && birthDate !== prevBirthDate) {
+      // Different birth date = different profile (bug 2): the paid reading
+      // for the old date must not be shown for this one. Reset to the locked
+      // teaser view; if this date is the one the stored token was issued
+      // for, the paid reading is restored instead. Either way, quiz results
+      // are re-fetched for the current profile (locked summary when unpaid,
+      // full breakdown when paid) so no stale personality state lingers.
+      resetProfileView();
+      state.teaser = data; // resetProfileView() clears it
+      await loadReport(true);
+      unlockStoredQuizzes();
+    }
     renderSystems();
     $('systems').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) { status.textContent = t('networkError') + err.message; }
@@ -467,6 +553,10 @@ $('checkout-form').addEventListener('submit', async (e) => {
   if (!birthDate) { alert(t('enterDateFirst')); return; }
   const birthTime = $('birthTime').value || null;
   const name = $('name').value || null;
+  // Persist the profile (and email) now, so a reload or an abandoned
+  // checkout never loses what the user already typed.
+  saveProfile(birthDate, birthTime, name);
+  try { localStorage.setItem('fateweave_email', email); } catch {}
   try {
     const res = await fetch('/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, birthDate, birthTime, name }) });
     const data = await res.json();
@@ -490,6 +580,15 @@ async function loadReport(quiet) {
     if (r.profile.birthTime) $('birthTime').value = r.profile.birthTime;
     if (r.profile.name) $('name').value = r.profile.name;
     $('email').value = email;
+    // Persist the paid profile: the token is bound to this birth date, so
+    // remember which date it belongs to (returning to it after peeking at
+    // another date must restore the paid reading), and keep birth time and
+    // name stored so a reload prefills them too.
+    try {
+      localStorage.setItem('fateweave_tokenBirthDate', r.profile.birthDate || birthDate);
+      localStorage.setItem('fateweave_birthTime', r.profile.birthTime || $('birthTime').value || '');
+      localStorage.setItem('fateweave_name', r.profile.name || $('name').value || '');
+    } catch {}
     $('unlocked-banner').innerHTML = `${esc(t('unlockedBanner'))}<small>${esc(t('unlockedBannerSub'))}</small>`;
     $('unlocked-banner').classList.remove('hidden');
     $('unlocked-sub').textContent = `${esc(r.profile.birthDate)} \u00B7 ${email}`;
@@ -513,7 +612,12 @@ async function unlockStoredQuizzes() {
       if (kind === 'enneagram') body.enneagramAnswers = saved.answers; else body.mbtiAnswers = saved.answers;
       const res = await fetch('/api/personality', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (res.ok && data[kind]) { saveQuiz(kind, { answers: saved.answers, result: data[kind] }); }
+      if (res.ok && data[kind]) {
+        saveQuiz(kind, { answers: saved.answers, result: data[kind] });
+        // Keep the in-memory result in step: after payment this is the full
+        // breakdown, after a profile change it is the locked summary again.
+        if (state.quiz.kind === kind) state.quiz.result = data[kind];
+      }
     } catch {}
   }
   renderQuizList();
@@ -571,6 +675,7 @@ $('lr-voice').addEventListener('click', () => {
 });
 $('lr-stop').addEventListener('click', () => { speechSynthesis.cancel(); $('lr-stop').classList.add('hidden'); });
 
+prefillForm(); // birth date, time, name, email survive a reload (bug 3)
 loadPrice();
 loadReport();
 renderQuizList();
