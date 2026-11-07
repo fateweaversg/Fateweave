@@ -1038,12 +1038,24 @@ $('checkout-form').addEventListener('submit', async (e) => {
 });
 
 /* --- Post-payment restore: token -> full reading, prefilled, no re-entry --- */
-async function loadReport(quiet) {
+async function loadReport(quiet, _retried) {
   const { token, email, birthDate } = authParams();
   if (!token || !email || !birthDate) return false;
   try {
     const res = await fetch(`/api/report?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}&birthDate=${encodeURIComponent(birthDate)}`);
-    if (!res.ok) return false; // not paid / expired — stay on the hook view
+    if (!res.ok) {
+      // A 403 is a real "not paid / expired" — never retry it. Any other
+      // failure (5xx, or a dropped request during a network incident)
+      // gets ONE retry after 1.5 s: a single transient failure used to
+      // leave /master showing "locked" until the buyer reloaded the page
+      // (live 8 Nov 2026 — the first /master load after the $1 unlock
+      // showed locked, the reload showed unlocked).
+      if (res.status !== 403 && !_retried) {
+        await new Promise((r) => setTimeout(r, 1500));
+        return loadReport(quiet, true);
+      }
+      return false; // not paid / expired — stay on the hook view
+    }
     const r = await res.json();
     state.report = r;
     state.unlocked = true;
@@ -1076,7 +1088,14 @@ async function loadReport(quiet) {
     loadLiveReaderCount(); // show the real Live Reader used count, not 0
     if (!quiet) unlockStoredQuizzes();
     return true;
-  } catch { return false; }
+  } catch {
+    // Network throw (offline / incident): one retry, then give up.
+    if (!_retried) {
+      await new Promise((r) => setTimeout(r, 1500));
+      return loadReport(quiet, true);
+    }
+    return false;
+  }
 }
 
 // After payment, re-submit any quizzes taken free so the full breakdown unlocks.
