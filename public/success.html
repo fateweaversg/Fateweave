@@ -16,6 +16,14 @@
     const res = await fetch('/api/checkout-session/' + encodeURIComponent(sessionId));
     const data = await res.json();
     if (!res.ok) { status.textContent = data.error || 'Payment could not be verified yet.'; goHome(5000); return; }
+    if (data.upgrade) {
+      // Unlimited Master Chat upgrade: no new token — the buyer already
+      // holds one. The server (and webhook) granted the unlimited flag.
+      heading.textContent = '✓ Unlimited Master Chat unlocked';
+      status.textContent = 'Ask the Master as many times as you like, for the same 90 days as your reading. Taking you back to your reading now…';
+      goHome(2200);
+      return;
+    }
     if (data.token) {
       // Fresh token (or first issue) — always stored, then straight to the reading.
       localStorage.setItem('fateweave_token', data.token);
