@@ -1058,6 +1058,89 @@ async function main() {
     const pastZh = mcAns(mcReading, '我前世是什么？', 'zh', [], null);
     check('master past-life question answered plainly (zh)', /没有前世/.test(pastZh), pastZh.slice(0, 120));
 
+    // 33. Fix round 4 (8 Nov 2026): the live AI Master hung — two
+    // POST /api/master-chat calls (00:37 / 00:40 SGT) never returned
+    // and logged nothing, while the AI was out of cooldown. Root
+    // causes: (i) the old AbortController guarded only time-to-first-
+    // byte, so a stalled response body could hang res.json() forever;
+    // (ii) the cooldown path logged nothing, so 6 straight Master
+    // questions during the 00:33–00:36 run left zero log lines;
+    // (iii) the tarot / Yi-Jing seed took the RAW birthTime string, so
+    // '09:15' vs '09:15 AM' seeded different hexagrams for the same
+    // buyer (LR said 1 changing line, the Yi-Jing page listed 3);
+    // (iv) the general topicCore printed "Your core: your chart's
+    // core is …" (doubled prefix); (v) "meet someone new" did not
+    // classify as love; (vi) one transient /api/report failure left
+    // /master locked until reload (client retry — see dom-check).
+    // NOTE: the global cap was topped up to 100 in §26 — clear the
+    // bulk top-up row first so resolveAiMaster can reach Gemini here.
+    // The owner ai-usage test in §26(e) already asserted calls === 100.
+    db.prepare("DELETE FROM ai_usage WHERE email = 'bulk@example.com'").run();
+    check('fix4 setup: global cap cleared for the timeout tests', ai.globalAiCallsToday(ai.sgtToday()) < 100, `global=${ai.globalAiCallsToday(ai.sgtToday())}`);
+    ai.setGeminiApiKeyForTests('test-key-not-real');
+    ai.resetAiCooldownForTests();
+    ai.setGeminiTimeoutForTests(150);
+    // (a) A fetch that never resolves must return (fallback) within
+    // the deadline budget — never hang. 2 attempts x 150 ms + 1 s
+    // retry sleep ≈ 1.3 s; assert well under 5 s, exactly 2 calls.
+    let hangCalls = 0;
+    const mockHang = async () => { hangCalls++; return new Promise(() => {}); };
+    const tHangStart = Date.now();
+    r = await ai.resolveAiMaster({ email: 'hang@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mockHang });
+    const tHangElapsed = Date.now() - tHangStart;
+    check('fix4 timeout: a never-resolving Gemini fetch falls back (unavailable) within the deadline budget, after exactly one retry', r.status === 'fallback' && r.reason === 'unavailable' && hangCalls === 2 && tHangElapsed < 5000, JSON.stringify({ r, hangCalls, tHangElapsed }));
+    check('fix4 timeout: the hang set the 5-min cooldown (no silent AI)', ai.aiCooldownState().active === true && ai.aiCooldownState().reason === 'unavailable', JSON.stringify(ai.aiCooldownState()));
+    ai.resetAiCooldownForTests();
+    // (b) Headers arrive but the body never finishes: res.json()
+    // must race the same deadline, not hang.
+    let stallCalls = 0;
+    const mockStallBody = async () => { stallCalls++; return { ok: true, status: 200, json: async () => new Promise(() => {}) }; };
+    const tStallStart = Date.now();
+    r = await ai.resolveAiMaster({ email: 'stall@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mockStallBody });
+    const tStallElapsed = Date.now() - tStallStart;
+    check('fix4 timeout: a stalled response body falls back within the deadline budget, after exactly one retry', r.status === 'fallback' && r.reason === 'unavailable' && stallCalls === 2 && tStallElapsed < 5000, JSON.stringify({ r, stallCalls, tStallElapsed }));
+    ai.resetAiCooldownForTests();
+    ai.setGeminiTimeoutForTests(null);
+    check('fix4 timeout: default deadline is 25 s (config, env-overridable)', ai.geminiTimeoutMs() === 25000 && cfg.ai.geminiTimeoutMs === 25000, `geminiTimeoutMs=${ai.geminiTimeoutMs()}`);
+    // (c) A cooldown-served request logs one cooldown-skip line and
+    // never touches Gemini.
+    const origLog = console.log;
+    const logged = [];
+    console.log = (...a) => { logged.push(a.join(' ')); };
+    let skipCalls = 0;
+    const mockSkip = async () => { skipCalls++; throw new Error('must not be called'); };
+    ai.setAiCooldownForTests(Date.now() + 60000, 'quota');
+    r = await ai.resolveAiMaster({ email: 'skip@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: mockSkip });
+    console.log = origLog;
+    check('fix4 cooldown log: a cooldown-served request logs one cooldown-skip line and never calls Gemini', r.status === 'fallback' && r.reason === 'cooldown' && skipCalls === 0 && logged.some((l) => /cooldown skip \(quota\)/.test(l)), `logged=${JSON.stringify(logged)}`);
+    ai.resetAiCooldownForTests();
+    ai.setGeminiApiKeyForTests(null);
+    // (d) Seed normalisation: the same buyer gets the same hexagram +
+    // tarot whatever way the birth time was typed, and the canonical
+    // form keeps the pre-fix cast (hex 17, [4], Moon/High Priestess/
+    // Hanged Man for the live-run buyer) — existing readings unchanged.
+    const seedA = buildFullReading({ birthDate: '1998-03-14', birthTime: '09:15', name: 'Mei Ling' });
+    const seedB = buildFullReading({ birthDate: '1998-03-14', birthTime: '09:15 AM', name: 'Mei Ling' });
+    const seedC = buildFullReading({ birthDate: '1998-03-14', birthTime: '9:15 AM', name: '  Mei Ling  ' });
+    check('fix4 seed: 09:15 / 09:15 AM / 9:15 AM (+padded name) seed the same hexagram + tarot', seedA.yijing.hexagramNumber === seedB.yijing.hexagramNumber && seedA.yijing.hexagramNumber === seedC.yijing.hexagramNumber && JSON.stringify(seedA.yijing.changingLines) === JSON.stringify(seedB.yijing.changingLines) && JSON.stringify(seedA.tarot.cardsDetailed.map((c) => c.name.en)) === JSON.stringify(seedB.tarot.cardsDetailed.map((c) => c.name.en)), `A=${seedA.yijing.hexagramNumber}/${JSON.stringify(seedA.yijing.changingLines)} B=${seedB.yijing.hexagramNumber}/${JSON.stringify(seedB.yijing.changingLines)}`);
+    check('fix4 seed: the canonical cast is the pre-fix one (hex 17, [4], Moon/High Priestess/Hanged Man)', seedA.yijing.hexagramNumber === 17 && JSON.stringify(seedA.yijing.changingLines) === '[4]' && seedA.tarot.cardsDetailed.map((c) => c.name.en).join('|') === 'The Moon|The High Priestess|The Hanged Man', `hex=${seedA.yijing.hexagramNumber} changing=${JSON.stringify(seedA.yijing.changingLines)}`);
+    const seedNull = buildFullReading({ birthDate: '1998-03-14', birthTime: null, name: 'Mei Ling' });
+    const seedEmpty = buildFullReading({ birthDate: '1998-03-14', birthTime: '', name: 'Mei Ling' });
+    check('fix4 seed: null and empty birth time seed identically', seedNull.yijing.hexagramNumber === seedEmpty.yijing.hexagramNumber && JSON.stringify(seedNull.yijing.changingLines) === JSON.stringify(seedEmpty.yijing.changingLines), '');
+    // (e) Live Reader wording: no doubled "Your core" prefix (EN +
+    // zh), and "meet someone new" classifies as love (Moon core).
+    const lrGeneralEn = liveReaderAnswer(seedA, 'What does my reading say overall?', 'en');
+    check('fix4 lr: general answer has no "Your core: your chart\'s core is" duplication', !lrGeneralEn.includes("Your core: your chart's core is") && lrGeneralEn.includes('Your core: Geng Metal'), lrGeneralEn.slice(0, 160));
+    const lrGeneralZh = liveReaderAnswer(seedA, '我的报告整体说什么？', 'zh');
+    check('fix4 lr: general answer (zh) has no "你的核心：命盘核心是" duplication', !lrGeneralZh.includes('你的核心：命盘核心是') && lrGeneralZh.includes('你的核心：庚金'), lrGeneralZh.slice(0, 120));
+    const lrMeet = liveReaderAnswer(seedA, 'Will I meet someone new in the next few months?', 'en');
+    check('fix4 lr: "meet someone new" classifies as love (Moon core, not the general core)', lrMeet.includes('your Moon is Virgo') && !lrMeet.includes('Life Path is 8'), lrMeet.slice(0, 200));
+    // (f) The Live Reader timing line agrees with the reading object —
+    // the same profile typed two ways gives the same LR answer.
+    const lrJobsA = liveReaderAnswer(seedA, 'Should I change jobs this year?', 'en');
+    const lrJobsB = liveReaderAnswer(seedB, 'Should I change jobs this year?', 'en');
+    check('fix4 lr: jobs answer is identical for 09:15 vs 09:15 AM and names 1 changing line', lrJobsA === lrJobsB && lrJobsA.includes('1 changing line(s)') && seedA.yijing.changingLines.length === 1, lrJobsA.slice(0, 200));
+
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
   } finally {
