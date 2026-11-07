@@ -25,19 +25,32 @@
  *
  * Safety shape (all in config.ai):
  *  - per-message max 500 chars (validateMasterMessage)
- *  - included unlock: 5 AI follow-ups per session (enforced by the
- *    existing master-chat limit in src/server.js, unchanged)
- *  - Extended upgrade ($3): 30 AI Master replies TOTAL per purchase
- *    (90-day window, includes the 5 from the base unlock), counted in
- *    the ai_usage ledger; past 30, Master questions get the rule-based
- *    reply + a short "used up" note
+ *  - included unlock: 5 Master follow-ups per buyer (enforced by the
+ *    master-chat limit in src/server.js, unchanged)
+ *  - Extended upgrade ($3): 30 Master chats TOTAL per purchase
+ *    (90-day window, includes the 5 from the base unlock), counted
+ *    as QUESTIONS the buyer asked — AI and rule-based alike — in
+ *    src/server.js; the ai_usage ledger is the cost record only.
+ *    Past 30, Master questions get the rule-based reply + a short
+ *    "used up" note
  *  - global daily cap (default 100) across all buyers — the launch-day
  *    safety valve while on Gemini's free tier
  *  - fallback chain: no key / quota (429) / 5xx / timeout → rule-based
- *    reply, with a 1-hour cooldown after a Gemini failure so the site
- *    never hammers Google
+ *    reply, with a SHORT cooldown after a Gemini failure — 5 minutes
+ *    for a 5xx / timeout / network error, 15 minutes for a 429 quota
+ *    error — so one transient Google 503 never silences the AI for an
+ *    hour (7 Nov 2026 live failure: a single 503 at 21:19 SGT + the
+ *    old 1-hour cooldown kept every later question rule-based).
+ *    The Gemini call itself retries ONCE after ~1s on 5xx / timeout /
+ *    network errors before falling back at all.
  *  - usage ledger (ai_usage table): every AI call + every fallback is
- *    recorded per buyer per SGT day; no message text is ever logged
+ *    recorded per buyer per SGT day; no message text is ever logged.
+ *    The ledger is the COST record only — the Master chat counter
+ *    counts questions the buyer actually asked (src/server.js), not
+ *    ledger rows, so the counter moves even while the AI is down.
+ *  - every AI attempt outcome is logged (success, and failure with
+ *    status/reason + timestamp) so the next failure is diagnosable
+ *    from the logs alone.
  */
 const crypto = require('crypto');
 
@@ -49,9 +62,23 @@ const { db } = require('./db');
 // and a mock fetch instead of touching the environment or the network.
 let testKeyOverride = null;
 function setGeminiApiKeyForTests(key) { testKeyOverride = key || null; }
+// Cooldown after a Gemini failure (7 Nov 2026 fix): short, and split by
+// cause — a transient 5xx / timeout / network error rests the AI for
+// 5 minutes, a 429 quota error for 15 minutes. The old single 1-hour
+// cooldown turned one Google 503 into an hour of rule-based replies.
+const COOLDOWN_5XX_MS = 5 * 60 * 1000;
+const COOLDOWN_429_MS = 15 * 60 * 1000;
 let cooldownUntil = 0;
-function resetAiCooldownForTests() { cooldownUntil = 0; }
-function setAiCooldownForTests(untilMs) { cooldownUntil = untilMs; }
+let cooldownReason = null; // 'quota' | 'unavailable' | null
+function resetAiCooldownForTests() { cooldownUntil = 0; cooldownReason = null; }
+function setAiCooldownForTests(untilMs, reason) { cooldownUntil = untilMs; cooldownReason = reason || null; }
+/** Current cooldown state, for GET /api/master-chat (aiResting) and tests. */
+function aiCooldownState() {
+  const now = Date.now();
+  if (now < cooldownUntil) return { active: true, reason: cooldownReason, msLeft: cooldownUntil - now };
+  return { active: false, reason: null, msLeft: 0 };
+}
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 function getGeminiApiKey() {
   return testKeyOverride !== null ? testKeyOverride : config.ai.geminiApiKey;
@@ -231,6 +258,19 @@ async function callGemini({ systemInstruction, contents, fetchImpl }) {
     },
   };
   let lastErr = null;
+  // One retry on 5xx / timeout / network errors, after a ~1s pause —
+  // a single transient Google 503 must not end the exchange. Never
+  // retry a 429 (quota) or any other 4xx. Every attempt outcome is
+  // logged so the next failure is diagnosable from the logs alone.
+  async function retryOrFail(err, attempt) {
+    lastErr = err;
+    if (attempt === 0) {
+      console.error(`AI Master: Gemini attempt ${attempt + 1} failed (${err.status || 'no-status'}): ${err.message} — retrying in 1s`);
+      await sleep(1000);
+    } else {
+      console.error(`AI Master: Gemini attempt ${attempt + 1} failed (${err.status || 'no-status'}): ${err.message} — no more retries`);
+    }
+  }
   for (let attempt = 0; attempt < 2; attempt++) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 20000);
@@ -250,7 +290,7 @@ async function callGemini({ systemInstruction, contents, fetchImpl }) {
       if (res.status >= 500) {
         const e = new Error(`Gemini server error (${res.status})`);
         e.status = res.status;
-        lastErr = e;
+        await retryOrFail(e, attempt);
         continue; // one retry on 5xx only, never on 429
       }
       if (!res.ok) {
@@ -264,7 +304,7 @@ async function callGemini({ systemInstruction, contents, fetchImpl }) {
       if (!text) {
         const e = new Error('Gemini returned no text');
         e.status = 502;
-        lastErr = e;
+        await retryOrFail(e, attempt);
         continue;
       }
       const usage = data.usageMetadata || {};
@@ -279,10 +319,10 @@ async function callGemini({ systemInstruction, contents, fetchImpl }) {
       if (e && e.name === 'AbortError') {
         const t = new Error('Gemini timed out');
         t.status = 504;
-        lastErr = t;
+        await retryOrFail(t, attempt);
         continue;
       }
-      lastErr = e;
+      await retryOrFail(e, attempt);
       continue; // network error — one retry
     }
   }
@@ -357,6 +397,11 @@ function aiUsageSummary(days = 7) {
 // --- Fallback notes (appended to the rule-based reply when a cap bites) ----
 function fallbackNote(reason, lang) {
   const zh = lang === 'zh';
+  if (reason === 'cooldown') {
+    return zh
+      ? '提示：AI 掌门刚才出了一点小状况，正在短暂休息——这条是根据你的报告整理的摘要。几分钟后再试。'
+      : 'Note: the AI Master hit a brief hiccup and is resting for a few minutes — this reply is a summary from your reading. Try again shortly.';
+  }
   if (reason === 'extended-used-up') {
     return zh
       ? '提示：你的加长掌门追问已用完（共 30 次）——这条是根据你的报告整理的摘要。'
@@ -374,19 +419,26 @@ function fallbackNote(reason, lang) {
 // Returns { status: 'ai', answer, inputTokens, outputTokens, costUsd } or
 // { status: 'fallback', reason } where reason is one of:
 //   'no-key' (no GEMINI_API_KEY — rule-based, existing behaviour),
-//   'cooldown' (Gemini failed within the last hour),
-//   'extended-used-up' (Extended buyer used all 30 AI chats),
+//   'cooldown' (Gemini failed recently — 5 min for 5xx/timeout, 15 min
+//     for 429; the UI shows the AI is resting briefly),
+//   'extended-used-up' (Extended buyer used all 30 Master chats),
 //   'global-limit' (global daily cap reached),
 //   'quota' (Gemini 429), 'unavailable' (5xx / timeout / network).
+// The Extended 30-chat cap counts QUESTIONS the buyer asked
+// (questionsAsked, passed in by src/server.js from the buyer-keyed
+// chat history — AI and rule-based alike), NOT ledger rows: the
+// ai_usage ledger is the cost record only. The ledger total is kept
+// as a second condition so a buyer can never run up more than 30 AI
+// calls even if the history rows were somehow lost.
 // Cap-triggered fallbacks are recorded in the ledger (recordAiFallback)
 // so the owner usage view counts them; no-key and cooldown are not
 // recorded, because they are a missing key / a transient outage, not a
 // buyer hitting a limit.
-async function resolveAiMaster({ email, birthDate, extended, reading, message, lang = 'en', history = [], personality = null, fetchImpl }) {
+async function resolveAiMaster({ email, birthDate, extended, reading, message, lang = 'en', history = [], personality = null, fetchImpl, questionsAsked = 0 }) {
   if (!aiMasterLive()) return { status: 'fallback', reason: 'no-key' };
   if (Date.now() < cooldownUntil) return { status: 'fallback', reason: 'cooldown' };
   const day = sgtToday();
-  if (extended && buyerAiCallsTotal(email, birthDate) >= config.ai.extendedChatTotalMax) {
+  if (extended && (buyerAiCallsTotal(email, birthDate) >= config.ai.extendedChatTotalMax || questionsAsked >= config.ai.extendedChatTotalMax)) {
     recordAiFallback(email, birthDate);
     return { status: 'fallback', reason: 'extended-used-up' };
   }
@@ -411,10 +463,15 @@ async function resolveAiMaster({ email, birthDate, extended, reading, message, l
     return { status: 'ai', answer: out.text, inputTokens, outputTokens, costUsd };
   } catch (e) {
     const reason = e && e.status === 429 ? 'quota' : 'unavailable';
-    // 1-hour cooldown: do not hammer Google after a failure.
-    cooldownUntil = Date.now() + 60 * 60 * 1000;
+    // Short cooldown, split by cause: 5 min for a 5xx / timeout /
+    // network error, 15 min for a 429 quota error. The old 1-hour
+    // cooldown turned one transient Google 503 into an hour of
+    // rule-based replies — never again.
+    const cooldownMs = reason === 'quota' ? COOLDOWN_429_MS : COOLDOWN_5XX_MS;
+    cooldownUntil = Date.now() + cooldownMs;
+    cooldownReason = reason;
     recordAiFallback(email, birthDate);
-    console.error(`AI Master fallback (${reason}):`, e && e.message);
+    console.error(`AI Master fallback (${reason}): ${e && e.message} at ${new Date().toISOString()} — cooldown ${cooldownMs / 60000} min until ${new Date(cooldownUntil).toISOString()}`);
     return { status: 'fallback', reason };
   }
 }
@@ -423,6 +480,7 @@ module.exports = {
   aiMasterLive, sgtToday, estimateTokens, validateMasterMessage,
   buildCompactSummary, buildSystemInstruction, buildAiPrompt, callGemini,
   recordAiCall, recordAiFallback, buyerAiCallsTotal, globalAiCallsToday,
-  aiUsageSummary, fallbackNote, resolveAiMaster,
+  aiUsageSummary, fallbackNote, resolveAiMaster, aiCooldownState,
+  COOLDOWN_5XX_MS, COOLDOWN_429_MS,
   setGeminiApiKeyForTests, resetAiCooldownForTests, setAiCooldownForTests,
 };
