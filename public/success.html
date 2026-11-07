@@ -21,6 +21,9 @@
       localStorage.setItem('fateweave_token', data.token);
       localStorage.setItem('fateweave_email', data.email);
       localStorage.setItem('fateweave_birthDate', data.birthDate);
+      // The token is bound to this birth date: remember it, so going back
+      // to this date after peeking at another one restores the paid reading.
+      localStorage.setItem('fateweave_tokenBirthDate', data.birthDate);
       heading.textContent = '✓ Payment confirmed — your reading is unlocked';
       status.textContent = 'Your full reading is open and your detailed report has been emailed to ' + data.email + '. Taking you there now…';
       goHome(2200);
