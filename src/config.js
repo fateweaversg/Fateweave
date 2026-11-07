@@ -24,6 +24,13 @@ const config = {
   stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
   resendApiKey: process.env.RESEND_API_KEY || '',
+  // Sandbox sender (7 Nov 2026): Resend's onboarding@resend.dev only
+  // delivers to the Resend account owner's own email address — any other
+  // recipient is rejected with 403 "You can only send testing emails to
+  // your own email address". Until a verified domain is set here, report
+  // emails to other addresses will fail; the in-app Download report
+  // fallback (public/app.js) covers those buyers. Do NOT buy a domain
+  // or change this sender without the owner's say-so.
   resendFrom: process.env.RESEND_FROM_EMAIL || 'noreply@fateweave.example',
   smtp: {
     host: process.env.SMTP_HOST || '',
@@ -41,6 +48,7 @@ const config = {
   ownerEmail: process.env.OWNER_EMAIL || 'owner@example.com',
   accessTokenDays: intEnv('ACCESS_TOKEN_DAYS', 90),
   liveReaderMaxPerSession: 3,
+  masterChatMaxPerSession: 5, // Ask the Master follow-ups per paid session (separate from Live Reader's 3)
 };
 
 /** Price in force right now, decided server-side by date (SGT). */
