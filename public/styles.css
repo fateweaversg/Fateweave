@@ -179,6 +179,15 @@ ul.clean.plist { padding-left: 0; }
 .lr-row input { flex: 1; }
 .lr-row button { margin-top: 0; }
 #lr-answers p { background: var(--card-2); border-radius: 10px; padding: 10px 12px; }
+
+/* --- Ask the Master (follow-up chat, 7 Nov 2026) --- */
+#master-chat { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 6px; }
+#mc-thread { max-height: 320px; overflow-y: auto; margin: 12px 0; }
+#mc-thread p { border-radius: 10px; padding: 10px 12px; white-space: pre-line; }
+#mc-thread p.mc-user { background: rgba(212,175,55,.14); border: 1px solid var(--gold-dim); margin-left: 24px; }
+#mc-thread p.mc-master { background: var(--card-2); margin-right: 24px; }
+.mc-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
+.mc-chips .chip-btn { margin-top: 0; padding: 8px 14px; min-height: 0; font-size: .9rem; }
 footer { text-align: center; color: var(--muted); padding: 24px; }
 .limits ul { margin: 0; padding-left: 20px; color: var(--muted); }
 @media (max-width: 560px) {
