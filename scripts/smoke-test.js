@@ -1011,6 +1011,37 @@ async function main() {
     const woodZh = (weakAnsZh.match(/木主生长、规划与新开始/g) || []).length;
     check('master explain weakest element (zh): element phrase appears once', woodZh === 1, `occurrences=${woodZh} :: ${weakAnsZh.slice(0, 160)}`);
 
+    // 31. Stress-test fixes (8 Nov 2026, 10-profile run): the medical
+    // guard missed symptom language ("I have chest pain", "My knees
+    // hurt" got a reading answer, not a doctor pointer); the Master
+    // default / example answers printed ".." / "。。" because
+    // firstSentence keeps its terminator and the template added another;
+    // a deliberate repeat after the 5 s duplicate window must get a
+    // fresh answer (wrapper dedup fallback), not pairs 2-3 again.
+    const mcReading = buildFullReading({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' });
+    const chestAns = mcAns(mcReading, 'I have chest pain, what is it?', 'en', [], null);
+    check('master medical guard fires for chest pain', /^I can't advise/i.test(chestAns), chestAns.slice(0, 160));
+    const kneesAns = mcAns(mcReading, 'My knees hurt a lot lately, what should I do?', 'en', [], null);
+    check('master medical guard fires for knees hurt', /^I can't advise/i.test(kneesAns), kneesAns.slice(0, 160));
+    const kneesZh = mcAns(mcReading, '我的膝盖很痛，怎么办？', 'zh', [], null);
+    check('master medical guard fires for 膝盖很痛 (zh)', /不能回答/.test(kneesZh), kneesZh.slice(0, 120));
+    const healthGeneral = mcAns(mcReading, 'How is my health looking in the next year?', 'en', [], null);
+    check('master health question without symptoms still answers from reading', !/can't advise/i.test(healthGeneral) && healthGeneral.length > 40, healthGeneral.slice(0, 160));
+    const secureAns = mcAns(mcReading, 'Is my job secure?', 'en', [], null);
+    check('master "secure" does not trip the medical guard', !/can't advise/i.test(secureAns), secureAns.slice(0, 160));
+    const spainAns = mcAns(mcReading, 'Should I move to Spain?', 'en', [], null);
+    check('master "Spain" does not trip the medical guard', !/can't advise/i.test(spainAns), spainAns.slice(0, 160));
+    const vagueEn = mcAns(mcReading, 'What was I in my past life?', 'en', [], null);
+    check('master default answer has no ".." (en)', !vagueEn.includes('..'), vagueEn.slice(0, 200));
+    const vagueZh = mcAns(mcReading, 'What was I in my past life?', 'zh', [], null);
+    check('master default answer has no "。。" (zh)', !vagueZh.includes('。。'), vagueZh.slice(0, 200));
+    const exZh = mcAns(mcReading, '举个例子。', 'zh', [], null);
+    check('master general example (zh) has no "。。"', !exZh.includes('。。'), exZh.slice(0, 200));
+    const deep1 = mcAns(mcReading, 'Tell me more about work', 'en', [], null);
+    const deepHist = [{ role: 'user', content: 'Tell me more about work' }, { role: 'master', content: deep1 }];
+    const deep2 = mcAns(mcReading, 'Tell me more about work', 'en', deepHist, null);
+    check('master deliberate repeat after first answer differs (dedup fallback)', deep2 !== deep1 && deep2.length > 40, `same=${deep2 === deep1} :: ${deep2.slice(0, 160)}`);
+
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
   } finally {
