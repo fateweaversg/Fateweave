@@ -173,7 +173,7 @@ async function main() {
     check('music remembers toggle in localStorage', musicJs.includes("localStorage.getItem(KEY)") && musicJs.includes("localStorage.setItem(KEY"), 'no localStorage persistence');
     check('hero animation + reduced-motion guard present', css.includes('@keyframes spinSlow') && css.includes('@keyframes twinkle') && css.includes('prefers-reduced-motion'), 'spin/twinkle/reduced-motion CSS missing');
 
-    // 15. Regression (7 Nov 2026): pre-paid page must show all six systems
+    // 16. Regression (7 Nov 2026): pre-paid page must show all six systems
     // before any birth date is entered, and Yi-Jing must cast 6 lines.
     // (a) The teaser now carries the six coin-toss lines, and they must be
     // exactly the full reading's lines — same order, same sums, same
@@ -214,7 +214,7 @@ async function main() {
     const castOk = appJs.includes('yijingLinesOf()') && appJs.includes('hexagramDiagramHTML') && appJs.includes('castingLine')
       && appJs.includes('step(i + 1)') && appJs.includes('i >= 6');
     check('frontend Yi-Jing casts 6 sequential lines from server data', castOk, 'sequential 6-line cast not found in app.js');
-    const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+    // `css` is already loaded above (section 15, Ambience) — reuse it.
     check('styles include hexagram diagram + attention highlight', css.includes('.hex-diagram') && css.includes('.hex-bar.yang') && css.includes('.card.attention'), 'hexagram/attention CSS missing');
 
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
