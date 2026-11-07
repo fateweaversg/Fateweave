@@ -49,10 +49,67 @@ const config = {
   accessTokenDays: intEnv('ACCESS_TOKEN_DAYS', 90),
   liveReaderMaxPerSession: 3,
   masterChatMaxPerSession: 5, // Ask the Master follow-ups per paid session (separate from Live Reader's 3)
-  // Unlimited Master Chat upgrade (7 Nov 2026): one-line price change.
+  // Extended Master Chat upgrade (7 Nov 2026):
+  // 7 Nov 2026 20:04 SGT): one-line price change.
   // Change MASTER_CHAT_UPGRADE_PRICE_CENTS (env) or this default to change
   // the upgrade price everywhere — checkout, config and the UI read it.
   masterChatUpgradePriceCents: intEnv('MASTER_CHAT_UPGRADE_PRICE_CENTS', 300),
+
+  // --- AI Master (Gemini) — 7 Nov 2026 -------------------------------------
+  // The Master chat is AI-powered when GEMINI_API_KEY is set; without it
+  // the site keeps its rule-based answers (existing behaviour, no dead
+  // chat). The key lives ONLY in the environment (Railway variables) —
+  // never in code, never in the frontend, never in git. Provider and
+  // model are one env var each, so the model can be swapped later
+  // (e.g. to a Flash-Lite or a newer Flash) without a code change.
+  ai: {
+    provider: (process.env.AI_PROVIDER || 'gemini').toLowerCase(),
+    model: process.env.AI_MODEL || 'gemini-2.5-flash',
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    // Per-message limit (also enforced in src/ai-master.js).
+    maxQuestionChars: 500,
+    // Per-exchange budget: ~2,000 input tokens (system prompt + compact
+    // reading summary + last 6 messages + question), max 350 output.
+    maxOutputTokens: intEnv('AI_MAX_OUTPUT_TOKENS', 350),
+    temperature: 0.7,
+    historyMessages: 6,
+    // Gemini 2.5 Flash PAID tier, verified Nov 2026 (multiple sources):
+    // $0.30 / 1M input tokens, $2.50 / 1M output tokens. One reply costs
+    // 2,000 x $0.30/1M + 350 x $2.50/1M = $0.0006 + $0.000875
+    // ≈ $0.0015 (about 0.15 US cents).
+    //   $1 unlock with 5 AI chats ≈ $0.0074 cost vs $1.00 revenue.
+    //   $3 Extended upgrade, 30 chats total: 30 x $0.0015 ≈ $0.044 cost
+    //   vs $3.00 revenue — a ~68x margin on AI cost, so the fee covers
+    //   the AI many times over and leaves a decent profit.
+    //   Break-even: $1 covers ~680 replies, $3 covers ~2,030 replies.
+    //   A normal user is far below these caps.
+    // NOTE (7 Nov 2026): the original brief quoted ~$0.0012/reply,
+    // $0.036 for 30 chats and break-evens of 830 / 2,500 — that
+    // arithmetic was wrong (it under-counted the output leg). The
+    // correct figures above come from aiCostUsd; the conclusion is
+    // unchanged — the $3 fee still covers the AI many times over.
+    inputPricePerMillionUsd: 0.30,
+    outputPricePerMillionUsd: 2.50,
+    // Extended Master Chat total (7 Nov 2026 20:04 SGT — replaces the
+    // old 20/day fair-use cap): max AI Master replies per upgrade
+    // purchase, counted in the ai_usage ledger
+    // (src/ai-master.js buyerAiCallsTotal). The included 5 follow-ups
+    // from the base unlock are part of that 30 — after upgrading, the
+    // buyer has 30 Master chats in total for the 90-day unlock window,
+    // counting any of the 5 already used. Past 30, further Master
+    // questions get the rule-based reply + a short "used up" note.
+    // The UI counter reads "Master chats left: n / 30".
+    extendedChatTotalMax: intEnv('AI_EXTENDED_CHAT_TOTAL_MAX', 30),
+    // Global daily cap across ALL buyers — the launch-day safety valve
+    // while on Gemini's FREE tier, whose daily request limit varies by
+    // account and Google has tightened it (do NOT hard-code a free-tier
+    // number; treat the free quota as unknown). When this cap is hit,
+    // Master falls back to rule-based replies for the rest of the day.
+    // Raise it (or set it very high) when moving to paid Gemini, where
+    // the binding constraint is money, not requests: at $0.0012/reply,
+    // 1,000 AI calls/day costs ~$1.20.
+    globalDailyMax: intEnv('AI_GLOBAL_DAILY_MAX', 100),
+  },
 };
 
 /** Price in force right now, decided server-side by date (SGT). */
@@ -72,4 +129,13 @@ function currentPrice(now = new Date()) {
   };
 }
 
-module.exports = { config, currentPrice };
+module.exports = { config, currentPrice, aiCostUsd };
+
+/** Estimated AI cost (USD) for one Master exchange, from the Gemini
+ * 2.5 Flash paid-tier prices in config.ai. Used for the usage ledger
+ * and the owner usage view; the real bill is whatever Google charges. */
+function aiCostUsd(inputTokens, outputTokens) {
+  const inCost = (inputTokens || 0) * config.ai.inputPricePerMillionUsd / 1e6;
+  const outCost = (outputTokens || 0) * config.ai.outputPricePerMillionUsd / 1e6;
+  return inCost + outCost;
+}
