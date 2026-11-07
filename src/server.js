@@ -603,6 +603,11 @@ function firstSentence(text) {
   }
   return s.trim();
 }
+// firstSentence() keeps its trailing terminator (".", "。" …). Strip one
+// before a template adds its own, or the answer prints ".." / "。。"
+// (10-profile stress test, 8 Nov 2026: default-branch "changes.." and
+// "前行。。", general-example "生产。。今天").
+function stripTerm(s) { return String(s || '').replace(/[.。!！?？]+$/, ''); }
 function plainEN(s) {
   // Order matters: "Your X" must be replaced before bare "X", or "Your Day
   // Master is…" becomes "Your your chart's core is…" (bug found 7 Nov 2026).
@@ -954,7 +959,7 @@ function exampleScenarios(reading, topic, lang, personality) {
         : 'Here is one from everyday life: this year feeds your ' + elName(dom, 'en') + '. This week, do the growing thing first — the plan, the first draft — before the urgent thing.',
     ],
     general: [
-      zh ? '举个例子：你的命盘核心是' + reading.bazi.dayMaster.zh + '。在平常的一天里，它看起来是这样的——' + firstSentence(reading.bazi.dayMasterText.zh) + '。今天留意一次，你在哪里看到了它。'
+      zh ? '举个例子：你的命盘核心是' + reading.bazi.dayMaster.zh + '。在平常的一天里，它看起来是这样的——' + stripTerm(firstSentence(reading.bazi.dayMasterText.zh)) + '。今天留意一次，你在哪里看到了它。'
         : "Here is one from everyday life: your chart's core is " + reading.bazi.dayMaster.en + '. In a normal day it looks like this — ' + firstSentence(reading.bazi.dayMasterText.en) + ' — notice it once today, and write down where you saw it.',
       zh ? '举个例子：你的生命灵数是 ' + lp + '。今天自己先开始一件小事，不要等别人先动——哪怕很小——然后留意那是什么感觉。'
         : 'Here is one from everyday life: your Life Path is ' + lp + '. Today, start one thing without waiting for someone else to start it — even a small one — and notice how that feels.',
@@ -985,12 +990,23 @@ function masterChatAnswerRaw(reading, message, lang, history, personality) {
   // Safety guard: medical / financial / legal questions get a short
   // refusal + a redirect to the reading — never advice on those topics.
   const guard = [
-    { re: /diagnos|disease|medicine|medication|dosage|treatment|cure|cancer|doctor|hospital|symptom/i, zhRe: /诊断|吃药|用药|治疗|治病|癌症|看病|症状|医生/, kind: 'medical' },
+    // Symptom language (10-profile stress test, 8 Nov 2026): "I have
+    // chest pain" and "My knees hurt" missed the old list (no "pain" /
+    // "hurt" keyword) and got a reading answer instead of a doctor
+    // pointer. Word boundaries on cure/pain/ill/sick/sore: bare "cure"
+    // matched "secure", "pain" matched "Spain", "ill" matched "will".
+    // Bare "hurt" is NOT a trigger on its own — "he hurt me" is a love
+    // question, not a medical one — so hurt needs a body part nearby
+    // (re2). General "how is my health" has no symptom word, so it
+    // still answers from the reading, as designed.
+    { re: /diagnos|disease|medicine|medication|dosage|treatment|\bcure\b|cancer|doctor|hospital|symptom|\bpain\b|ache|\bsore\b|fever|headache|dizz|nausea|vomit|bleed|swollen|\bnumb\b|injur|fracture|sprain|cough|breathless|\bsick\b|\bill\b/i,
+      re2: /\b(knee|back|chest|neck|shoulder|stomach|throat|tooth|joint|muscle|head|eye|ear|hip|ankle|wrist|foot|finger|toe)s?\b[^.!?]{0,30}\b(hurt|hurts|pain|ache|aching|sore|swollen|numb)\b/i,
+      zhRe: /诊断|吃药|用药|治疗|治病|癌症|看病|症状|医生|胸痛|胸口痛|膝盖痛|腰痛|背痛|胃痛|牙痛|关节痛|头痛|疼痛|很痛|好痛|生病|发烧|头晕|恶心|呕吐|流血|肿胀|麻木|受伤|骨折|扭伤|咳嗽|气喘|膝盖/, kind: 'medical' },
     { re: /invest|stock|crypto|shares|buy.*(?:fund|bond)|portfolio|should i buy/i, zhRe: /投资|股票|基金|买币|理财|买房|贷款/, kind: 'money' },
     { re: /sue|lawsuit|lawyer|court|contract|legal/i, zhRe: /诉讼|律师|打官司|合同纠纷|法律/, kind: 'legal' },
   ];
   for (const g of guard) {
-    if (g.re.test(msg) || g.zhRe.test(msg)) {
+    if (g.re.test(msg) || (g.re2 && g.re2.test(msg)) || g.zhRe.test(msg)) {
       if (zh) {
         const what = g.kind === 'medical' ? '医疗' : g.kind === 'money' ? '财务' : '法律';
         return '这个问题我不能回答——这是' + what + '问题，这份报告只供自我反思。如果你需要专业意见，请找相应的专业人士。你可以问我报告里的内容，比如：我的生命灵数是什么意思？';
@@ -1112,7 +1128,7 @@ function masterChatAnswerRaw(reading, message, lang, history, personality) {
   }
 
   // Default: one-line portrait + an invitation to dig in.
-  const essence = firstSentence(L(reading.portrait.essenceLine));
+  const essence = stripTerm(firstSentence(L(reading.portrait.essenceLine)));
   return zh
     ? '你的报告一句话：' + essence + '。' + (timing ? ' ' + timing + ' ' : '') + '你可以问我某个词是什么意思——比如“我的生命灵数是什么意思？”——或者要一个例子，比如“举个例子。”'
     : 'Your reading in one line: ' + essence + '. ' + (timing ? timing + ' ' : '') + "Ask me what a word means — for example, 'What does my Life Path mean?' — or ask for an example, like 'Give me an example.'";
@@ -1150,7 +1166,7 @@ function dedupFallback(reading, message, lang, history, personality, prevMaster)
     }
   }
   candidates.push(zh
-    ? '你的完整肖像一句话：' + firstSentence(L(reading.portrait.essenceLine)) + '。' + firstSentence(L(reading.portrait.developmentFocus[0]))
+    ? '你的完整肖像一句话：' + stripTerm(firstSentence(L(reading.portrait.essenceLine))) + '。' + firstSentence(L(reading.portrait.developmentFocus[0]))
     : 'Your portrait in one line: ' + firstSentence(L(reading.portrait.essenceLine)) + ' ' + firstSentence(L(reading.portrait.developmentFocus[0])));
   if (hasTimeHorizon(message) || (lastUser && hasTimeHorizon(lastUser.content))) candidates.push(timingLine(reading, lang));
   for (const c of candidates) { if (c && !isDupAnswer(c, prevMaster)) return c; }
