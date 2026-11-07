@@ -530,15 +530,24 @@ async function main() {
     const { issueOwnerToken } = require('../src/auth');
     const { buildFullReading: bfr26 } = require('../src/readings');
     // (a) Config defaults + economics.
-    check('ai config: extended total 30, no daily fair-use cap, 350-token output cap, gemini-2.5-flash', cfg.ai.extendedChatTotalMax === 30 && cfg.ai.unlimitedDailyMax === undefined && cfg.ai.maxOutputTokens === 350 && cfg.ai.model === 'gemini-2.5-flash', JSON.stringify(cfg.ai));
+    // Default model gemini-3.5-flash (7 Nov 2026): gemini-2.5-flash
+    // returns HTTP 404 on generateContent for this key (verified by
+    // direct API test, even though ListModels lists it) — the live
+    // server started on the old 2.5-flash default because AI_MODEL was
+    // never set in Railway, the first AI call 404'd, and the 1-hour
+    // cooldown kept the Master rule-based. Do NOT revert the default.
+    check('ai config: extended total 30, no daily fair-use cap, 350-token output cap, gemini-3.5-flash, $1.50/$9.00', cfg.ai.extendedChatTotalMax === 30 && cfg.ai.unlimitedDailyMax === undefined && cfg.ai.maxOutputTokens === 350 && cfg.ai.model === 'gemini-3.5-flash' && cfg.ai.inputPricePerMillionUsd === 1.50 && cfg.ai.outputPricePerMillionUsd === 9.00, JSON.stringify(cfg.ai));
+    check('ai config: AI_MODEL env still overrides the default model', fs.readFileSync(path.join(__dirname, '..', 'src', 'config.js'), 'utf8').includes("process.env.AI_MODEL || 'gemini-3.5-flash'"), 'AI_MODEL override line missing');
+    check('ai config: the 2.5-flash 404 failure is documented in config.js', /gemini-2\.5-flash.*404|404.*gemini-2\.5-flash/s.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'config.js'), 'utf8')), 'no 404 note — a future edit could revert the default');
     const perReply = aiCostUsd(2000, 350);
-    // True arithmetic: 2,000 x $0.30/1M = $0.0006 input, 350 x $2.50/1M
-    // = $0.000875 output → $0.001475/reply. (The brief's ~$0.0012
-    // under-counted the output leg; the margin conclusion is unchanged.)
-    check('ai economics: one reply ≈ $0.0015', Math.abs(perReply - 0.001475) < 0.00001, `per-reply $${perReply}`);
-    check('ai economics: 5 chats ≈ $0.0074 vs $1', Math.abs(perReply * 5 - 0.007375) < 0.0001, `5 chats $${perReply * 5}`);
-    check('ai economics: 30 chats ≈ $0.044 vs $3 (fee covers AI many times over)', Math.abs(perReply * 30 - 0.04425) < 0.001 && perReply * 30 < 3, `30 chats $${perReply * 30}`);
-    check('ai economics: break-even $1 ≈ 680 replies, $3 ≈ 2,030 replies', Math.abs(1 / perReply - 678) < 5 && Math.abs(3 / perReply - 2034) < 10, `$1→${Math.round(1 / perReply)}, $3→${Math.round(3 / perReply)}`);
+    // True arithmetic (Gemini 3.5 Flash paid tier, Nov 2026):
+    // 2,000 x $1.50/1M = $0.003 input, 350 x $9.00/1M = $0.00315
+    // output → $0.00615/reply. (The brief's ~$0.0012 and the earlier
+    // 2.5 Flash $0.0015 figure are both superseded by the model change.)
+    check('ai economics: one reply ≈ $0.0062', Math.abs(perReply - 0.00615) < 0.00001, `per-reply $${perReply}`);
+    check('ai economics: 5 chats ≈ $0.031 vs $1', Math.abs(perReply * 5 - 0.03075) < 0.0001, `5 chats $${perReply * 5}`);
+    check('ai economics: 30 chats ≈ $0.19 vs $3 (fee covers AI many times over)', Math.abs(perReply * 30 - 0.1845) < 0.001 && perReply * 30 < 3, `30 chats $${perReply * 30}`);
+    check('ai economics: break-even $1 ≈ 160 replies, $3 ≈ 490 replies', Math.abs(1 / perReply - 163) < 5 && Math.abs(3 / perReply - 488) < 10, `$1→${Math.round(1 / perReply)}, $3→${Math.round(3 / perReply)}`);
     res = await fetch(`${BASE}/api/config`);
     data = await res.json();
     check('api/config exposes aiMasterLive false (no key) + extended total 30, no fair-use field', data.aiMasterLive === false && data.masterChatExtendedTotal === 30 && data.masterChatFairUsePerDay === undefined, JSON.stringify(data));
@@ -577,7 +586,7 @@ async function main() {
     const mockOk = async () => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'Mocked AI reply.' }] } }], usageMetadata: { promptTokenCount: 1800, candidatesTokenCount: 120 } }) });
     ai.setGeminiApiKeyForTests('test-key-not-real');
     let r = await ai.resolveAiMaster({ email: 'ai1@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'What does my chart say about work?', lang: 'en', history: [], personality: null, fetchImpl: mockOk });
-    check('ai resolve: mocked Gemini success records ledger + cost ≈ $0.00084', r.status === 'ai' && /Mocked AI reply/.test(r.answer) && Math.abs(r.costUsd - 0.00084) < 0.00001 && ai.buyerAiCallsTotal('ai1@example.com', '1990-05-14') === 1, JSON.stringify(r).slice(0, 160));
+    check('ai resolve: mocked Gemini success records ledger + cost ≈ $0.00378', r.status === 'ai' && /Mocked AI reply/.test(r.answer) && Math.abs(r.costUsd - 0.00378) < 0.00001 && ai.buyerAiCallsTotal('ai1@example.com', '1990-05-14') === 1, JSON.stringify(r).slice(0, 160));
     // No key → rule-based fallback, Gemini never called.
     ai.setGeminiApiKeyForTests(null);
     r = await ai.resolveAiMaster({ email: 'ai2@example.com', birthDate: '1990-05-14', extended: false, reading: aiReading2, message: 'Hello?', lang: 'en', history: [], personality: null, fetchImpl: async () => { throw new Error('must not be called'); } });
@@ -642,6 +651,18 @@ async function main() {
       return bad.length === 0;
     })(), 'files still containing Unlimited — see the check above');
     check('frontend has AI badge + rule-based tag + extended counter', html.includes('id="mc-ai-badge"') && html.includes('id="mc-left-label"') && appJs.includes('mcRuleBasedTag') && appJs.includes('masterChatsLeft') && appJs.includes("suffix.textContent = ' / 30'") && appJs.includes('aiMasterLive') && css.includes('.ai-badge') && css.includes('.mc-rb-tag'), 'AI Master UI missing');
+    // (g) Friendly failure (7 Nov 2026 live bug): a transport failure
+    // or a non-JSON reply must show a short friendly message in the
+    // user's language — never the raw browser error ("The string did
+    // not match the expected pattern" is what Safari's res.json()
+    // throws on an HTML error page). The failed question must not be
+    // stored and must not consume a chat.
+    const mcFn = appJs.slice(appJs.indexOf('async function sendMasterChat'), appJs.indexOf("document.querySelectorAll('[data-chip]')"));
+    check('frontend master chat: transport failure shows the friendly message, never the raw error', mcFn.includes("t('masterUnreachable')") && !mcFn.includes('err.message') && !mcFn.includes("t('networkError')"), 'sendMasterChat still leaks raw errors');
+    check('frontend master chat: non-JSON reply is caught before parsing', mcFn.includes('try { data = await res.json(); } catch { data = null; }'), 'res.json() still unguarded in sendMasterChat');
+    check('frontend master chat: friendly message keys exist in EN + Simplified Chinese', appJs.includes('masterUnreachable') && /masterUnreachable: '\\u638c\\u95e8/.test(appJs), 'masterUnreachable key missing in one language');
+    const lrFn = appJs.slice(appJs.indexOf("$('lr-ask').addEventListener"), appJs.indexOf("$('lr-voice').addEventListener"));
+    check('frontend live reader: transport failure shows the friendly message, never the raw error', lrFn.includes("t('unreachable')") && !lrFn.includes('err.message') && !lrFn.includes('Error: '), 'live reader still leaks raw errors');
 
     console.log(`\nSmoke test: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
