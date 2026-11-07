@@ -6,17 +6,22 @@
  * environment; without a key the site keeps its rule-based answers
  * (existing behaviour — never a dead chat). Provider and model are
  * swappable by env: AI_PROVIDER (default 'gemini'), AI_MODEL (default
- * 'gemini-2.5-flash'). No key is ever stored here, in the frontend,
+ * 'gemini-3.5-flash'). No key is ever stored here, in the frontend,
  * or in git.
  *
- * Economics (Gemini 2.5 Flash paid tier, Nov 2026): $0.30 / 1M input
- * tokens, $2.50 / 1M output tokens. One exchange is budgeted at
- * ~2,000 input tokens and max 350 output tokens → $0.0006 + $0.000875
- * ≈ $0.0015 per reply. $1 unlock with 5 AI chats ≈ $0.0074 vs $1.00
- * revenue; $3 Extended upgrade, 30 chats total: 30 x $0.0015 ≈ $0.044
+ * Economics (Gemini 3.5 Flash paid tier, Nov 2026): $1.50 / 1M input
+ * tokens, $9.00 / 1M output tokens. One exchange is budgeted at
+ * ~2,000 input tokens and max 350 output tokens → $0.003 + $0.00315
+ * ≈ $0.0062 per reply. $1 unlock with 5 AI chats ≈ $0.031 vs $1.00
+ * revenue; $3 Extended upgrade, 30 chats total: 30 x $0.0062 ≈ $0.19
  * vs $3.00 revenue — the fee covers the AI many times over. See
  * src/config.js for the full arithmetic (and a note on the brief's
  * original ~$0.0012 figure, which under-counted the output leg).
+ * NOTE (7 Nov 2026): gemini-2.5-flash returns HTTP 404 on
+ * generateContent for this key (verified by direct API test) — the
+ * default was gemini-2.5-flash until the live failure, when the first
+ * AI call 404'd and the cooldown kept the Master rule-based. Do NOT
+ * revert the default to gemini-2.5-flash.
  *
  * Safety shape (all in config.ai):
  *  - per-message max 500 chars (validateMasterMessage)
