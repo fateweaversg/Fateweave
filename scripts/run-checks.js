@@ -1,0 +1,1 @@
+const {spawnSync}=require('node:child_process'); for(const file of ['master-flow-check.js','dom-check.js','success-check.js']){const r=spawnSync(process.execPath,[require('node:path').join(__dirname,file)],{stdio:'inherit'});if(r.status!==0)process.exit(r.status||1);}
