@@ -93,8 +93,8 @@ function reportHtml(reading, lang = 'en') {
   // Honest limits, localised — the old version printed reading.limits,
   // which are English-only strings from the server, in both languages.
   const LIMITS = lang === 'zh'
-    ? ['八字为简化演示引擎，尚未做真太阳时校正。', '紫微付费内容为示范样本，并非完整排盘。', '月亮与上升星座为原型的近似计算。', '仅供自我反思与娱乐——不是医疗、财务或法律建议。']
-    : ['Bazi simplified engine, no true solar-time correction yet.', 'Zi Wei paid content is illustrative sample, not computed.', 'Moon / Rising are approximations from the original prototype.', 'Self-reflection / entertainment only — no medical, financial or legal claims.'];
+    ? ['八字为简化演示引擎，尚未做真太阳时校正。', '紫微根据出生日期、出生时间及排盘性别计算，使用输入的钟表时间，未作真太阳时地点校正。', '月亮与上升星座为原型的近似计算。', '仅供自我反思与娱乐——不是医疗、财务或法律建议。']
+    : ['Bazi simplified engine, no true solar-time correction yet.', 'Zi Wei is calculated from birth date, birth time and chart sex, using entered clock time without a true-solar-time location correction.', 'Moon / Rising are approximations from the original prototype.', 'Self-reflection / entertainment only — no medical, financial or legal claims.'];
   const subSecs = (sections) => {
     if (!sections) return '';
     const order = ['overview', 'strengths', 'challenges', 'career', 'relationships', 'health', 'timing'];
@@ -114,7 +114,14 @@ function reportHtml(reading, lang = 'en') {
   html += subSecs(reading.bazi.sections);
 
   html += `<h2>Zi Wei 紫微 — ${esc(reading.ziwei.lifePalace)}</h2><p><em>${esc(reading.ziwei.note)}</em></p>`;
-  html += reading.ziwei.palaces.map((p) => `<p><strong>${esc(L(p))} ${esc(L(p.star))}:</strong> ${esc(L(p.text))}</p>`).join('');
+  html += reading.ziwei.palaces.map((p) => {
+    const majors = (p.majorStars || []).map(L).join(' · ') || L(p.star);
+    const minors = (p.minorStars || []).map(L).join(' · ');
+    const cycle = p.decadal ? `${p.decadal.startAge}–${p.decadal.endAge}` : '';
+    const ageLabel = lang === 'zh' ? '大限年龄' : 'Decadal ages';
+    const bodyLabel = p.isBodyPalace ? (lang === 'zh' ? ' · 身宫' : ' · Body Palace') : '';
+    return `<p><strong>${esc(L(p))} (${esc(L(p.branch))})${bodyLabel} — ${esc(majors)}</strong>${minors ? `<br>${lang === 'zh' ? '辅曜' : 'Supporting stars'}: ${esc(minors)}` : ''}${cycle ? `<br>${ageLabel}: ${esc(cycle)}` : ''}<br>${esc(L(p.text))}</p>`;
+  }).join('');
   html += subSecs(reading.ziwei.sections);
 
   html += `<h2>Horoscope 星座 — ${esc(L(reading.horoscope.sun))}</h2>`;

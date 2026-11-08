@@ -14,7 +14,7 @@ const STRINGS = {
     limitsTitle: 'Honest limits',
     limits: [
       'Bazi is a simplified demo engine — no true solar-time correction yet.',
-      'Zi Wei content in the paid reading is illustrative sample content, not a fully computed chart.',
+      'Zi Wei is calculated from birth date, birth time and chart sex, using entered clock time without a true-solar-time location correction.',
       'For self-reflection and entertainment only — not medical, financial or legal advice.',
     ],
     promoLabel: (from, to) => `$1 launch promo · ${from}–${to} · then $8`,
@@ -33,7 +33,7 @@ const STRINGS = {
     limitsTitle: '诚实说明',
     limits: [
       '八字为简化演示引擎——尚未做真太阳时校正。',
-      '付费报告中的紫微内容为示范样本，并非完整排盘。',
+      '紫微根据出生日期、出生时间及排盘性别计算，使用输入的钟表时间，未作真太阳时地点校正。',
       '仅供自我反思与娱乐——不是医疗、财务或法律建议。',
     ],
     promoLabel: (from, to) => `$1 限时优惠 · ${from}–${to} · 之后 $8`,

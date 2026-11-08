@@ -77,12 +77,20 @@ function isValidEmail(email) {
 function requireFields(body, fields) {
   return fields.filter((f) => !body || body[f] === undefined || body[f] === '');
 }
+function validateZiweiInputs(body) {
+  const missing = requireFields(body, ['birthTime', 'ziweiGender']);
+  if (missing.length) return `Missing: ${missing.join(', ')}`;
+  if (!/^\d{2}:\d{2}$/.test(String(body.birthTime))) return 'Enter a valid birth time in HH:MM format.';
+  if (!['male', 'female'].includes(body.ziweiGender)) return 'Choose a chart sex for the Zi Wei calculation.';
+  return null;
+}
 
 const masterFlow = require('./master-flow');
 app.use('/api', masterFlow.createMasterRouter({ stripe, limiter: masterChatLimiter, readingFor: (access) => {
   const order=access.order_id?db.prepare('SELECT * FROM orders WHERE id=?').get(access.order_id):null;
   const personality=loadPersonality(access.email,access.birth_date);
-  return {personality,reading:buildFullReading({birthDate:access.birth_date,birthTime:order?.birth_time||null,name:order?.name||null},personality)};
+  if (!order?.birth_time || !order?.ziwei_gender) throw new Error('Please add your birth time and chart sex to calculate the full Zi Wei reading.');
+  return {personality,reading:buildFullReading({birthDate:access.birth_date,birthTime:order.birth_time,ziweiGender:order.ziwei_gender,name:order.name||null},personality)};
 }}));
 
 // --- Public config (safe to expose) ---------------------------------------
@@ -98,18 +106,20 @@ app.get('/api/config', (req, res) => {
     // AI Master (Gemini): true only when GEMINI_API_KEY is set server-side.
     // The key itself is never exposed — only whether the AI is live.
     aiMasterLive: aiMasterLive(),
-    masterChatExtendedTotal: 20,
+    masterChatExtendedTotal: 35,
     masterFlow: {mainQuestions:3,includedProbes:5,probesPerPack:15,maxPurchases:2,maxProbes:35},
   });
 });
 
 // --- Hook: teaser only ------------------------------------------------------
 app.post('/api/hook', (req, res) => {
-  const missing = requireFields(req.body, ['birthDate']);
+  const missing = requireFields(req.body, ['birthDate', 'birthTime', 'ziweiGender']);
   if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(', ')}` });
+  const chartError = validateZiweiInputs(req.body);
+  if (chartError) return res.status(400).json({ error: chartError });
   try {
     parseBirth(req.body.birthDate, req.body.birthTime);
-    const teaser = buildTeaser({ birthDate: req.body.birthDate, birthTime: req.body.birthTime || null, name: req.body.name || null });
+    const teaser = buildTeaser({ birthDate: req.body.birthDate, birthTime: req.body.birthTime, ziweiGender: req.body.ziweiGender, name: req.body.name || null });
     return res.json(teaser);
   } catch (e) {
     return res.status(400).json({ error: e.message });
@@ -119,16 +129,18 @@ app.post('/api/hook', (req, res) => {
 // --- Checkout: Stripe Checkout Session, price decided server-side ----------
 app.post('/api/checkout', async (req, res) => {
   if (!stripe) return res.status(503).json({ error: 'Payments are not configured yet (STRIPE_SECRET_KEY missing). See DEPLOY-CHECKLIST.md.' });
-  const missing = requireFields(req.body, ['email', 'birthDate']);
+  const missing = requireFields(req.body, ['email', 'birthDate', 'birthTime', 'ziweiGender']);
   if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(', ')}` });
+  const chartError = validateZiweiInputs(req.body);
+  if (chartError) return res.status(400).json({ error: chartError });
   if (!isValidEmail(req.body.email)) return res.status(400).json({ error: 'Invalid email' });
   try { parseBirth(req.body.birthDate, req.body.birthTime); } catch (e) { return res.status(400).json({ error: e.message }); }
 
   const price = currentPrice();
   const email = req.body.email.toLowerCase();
   const order = db.prepare(
-    'INSERT INTO orders (email, birth_date, birth_time, name, amount_cents, currency, price_label, provider, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(email, req.body.birthDate, req.body.birthTime || null, req.body.name || null,
+    'INSERT INTO orders (email, birth_date, birth_time, ziwei_gender, name, amount_cents, currency, price_label, provider, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(email, req.body.birthDate, req.body.birthTime, req.body.ziweiGender, req.body.name || null,
     price.amountCents, price.currency, price.label, 'stripe', 'pending');
 
   try {
@@ -253,7 +265,7 @@ app.get('/api/checkout-session/:sessionId', async (req, res) => {
     db.prepare('INSERT OR IGNORE INTO email_subscribers (email, birth_date, name) VALUES (?, ?, ?)').run(order.email, order.birth_date, order.name);
     // Email the detailed report (best-effort — never block the unlock on email).
     try {
-      const reading = buildFullReading({ birthDate: order.birth_date, birthTime: order.birth_time, name: order.name });
+      const reading = buildFullReading({ birthDate: order.birth_date, birthTime: order.birth_time, ziweiGender: order.ziwei_gender, name: order.name });
       await sendReportEmail(order.email, reading, 'en');
     } catch (e) { console.error('Report email failed (checkout, unlock unaffected):', { email: order.email, code: e.code || 'no-code', message: e.message }); }
     return res.json({ paid: true, email: order.email, birthDate: order.birth_date, token, expiresAt });
@@ -315,13 +327,28 @@ function loadPersonality(email, birthDate) {
   return Object.keys(out).length ? out : null;
 }
 
+app.post('/api/update-ziwei-inputs', (req, res) => {
+  const { token, email, birthDate, birthTime, ziweiGender } = req.body || {};
+  const access = verifyAccessToken(token, email, birthDate);
+  if (!access) return res.status(403).json({ error: 'A valid paid access token is required.' });
+  const chartError = validateZiweiInputs({ birthTime, ziweiGender });
+  if (chartError) return res.status(400).json({ error: chartError });
+  const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
+  if (!order) return res.status(404).json({ error: 'The paid order for this reading could not be found.' });
+  try { parseBirth(access.birth_date, birthTime); }
+  catch (e) { return res.status(400).json({ error: e.message }); }
+  db.prepare('UPDATE orders SET birth_time = ?, ziwei_gender = ? WHERE id = ?').run(birthTime, ziweiGender, order.id);
+  return res.json({ updated: true });
+});
+
 app.get('/api/report', (req, res) => {
   const { token, email, birthDate } = req.query;
   const access = verifyAccessToken(token, email, birthDate);
   if (!access) return res.status(403).json({ error: 'A valid paid access token is required for the full report.' });
   const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
+  if (!order?.birth_time || !order?.ziwei_gender) return res.status(409).json({ code: 'ziwei_inputs_required', error: 'Enter your birth time and chart sex to calculate the complete Zi Wei chart.', birthTime: order?.birth_time || null, ziweiGender: order?.ziwei_gender || null });
   const personality = loadPersonality(access.email, access.birth_date);
-  const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
+  const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order.birth_time, ziweiGender: order.ziwei_gender, name: order.name || null }, personality);
   return res.json({ ...reading, personality: personality || undefined, access: { email: access.email, expiresAt: access.expires_at, liveReaderMax: config.liveReaderMaxPerSession } });
 });
 
@@ -330,14 +357,16 @@ app.get('/api/report', (req, res) => {
 // database; this route never grants access on Railway or in normal production.
 app.post('/api/preview-access', (req, res) => {
   if (!config.previewMode) return res.status(404).json({ error: 'Not found.' });
-  const missing = requireFields(req.body, ['birthDate']);
+  const missing = requireFields(req.body, ['birthDate', 'birthTime', 'ziweiGender']);
   if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(', ')}` });
+  const chartError = validateZiweiInputs(req.body);
+  if (chartError) return res.status(400).json({ error: chartError });
   try { parseBirth(req.body.birthDate, req.body.birthTime); }
   catch (e) { return res.status(400).json({ error: e.message }); }
   const email = `preview-${crypto.randomBytes(8).toString('hex')}@fateweave.invalid`;
   const order = db.prepare(
-    "INSERT INTO orders (email, birth_date, birth_time, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, ?, 0, 'usd', 'staging-preview', 'preview', 'paid', datetime('now'))"
-  ).run(email, req.body.birthDate, req.body.birthTime || null, req.body.name || null);
+    "INSERT INTO orders (email, birth_date, birth_time, ziwei_gender, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, ?, ?, 0, 'usd', 'staging-preview', 'preview', 'paid', datetime('now'))"
+  ).run(email, req.body.birthDate, req.body.birthTime, req.body.ziweiGender, req.body.name || null);
   const { token, expiresAt } = issueAccessToken(email, req.body.birthDate, order.lastInsertRowid);
   return res.json({ token, email, birthDate: req.body.birthDate, expiresAt, preview: true });
 });
@@ -358,8 +387,9 @@ app.post('/api/resend-report', async (req, res) => {
   if (!access) return res.status(403).json({ error: 'A valid paid access token is required.' });
   try {
     const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
+    if (!order?.birth_time || !order?.ziwei_gender) return res.status(409).json({ code: 'ziwei_inputs_required', error: 'Enter your birth time and chart sex before emailing the complete report.' });
     const personality = loadPersonality(access.email, access.birth_date);
-    const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
+    const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order.birth_time, ziweiGender: order.ziwei_gender, name: order.name || null }, personality);
     await sendReportEmail(access.email, reading, 'en');
     return res.json({ resent: true, email: access.email });
   } catch (e) {
@@ -423,8 +453,9 @@ app.post('/api/live-reader', (req, res) => {
     }
   }
   const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
+  if (!order?.birth_time || !order?.ziwei_gender) return res.status(409).json({ code: 'ziwei_inputs_required', error: 'Enter your birth time and chart sex to calculate the complete reading.' });
   const personality = loadPersonality(access.email, access.birth_date);
-  const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
+  const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order.birth_time, ziweiGender: order.ziwei_gender, name: order.name || null }, personality);
   const answer = liveReaderAnswer(reading, String(question), lang === 'zh' ? 'zh' : 'en');
   try {
     db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'user', ?, ?, 'live-reader')")
@@ -548,8 +579,9 @@ app.post('/api/master-chat', masterChatLimiter, async (req, res) => {
   inflightMasterBuyers.add(buyerKey);
   const work = (async () => {
     const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
+    if (!order?.birth_time || !order?.ziwei_gender) return { httpStatus: 409, error: 'Enter your birth time and chart sex to calculate the complete reading.', code: 'ziwei_inputs_required' };
     const personality = loadPersonality(access.email, access.birth_date);
-    const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
+    const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order.birth_time, ziweiGender: order.ziwei_gender, name: order.name || null }, personality);
     const history = masterChatHistory(access.email, access.birth_date);
     // AI Master first (Gemini, when GEMINI_API_KEY is set and the caps
     // allow); rule-based reply otherwise — never a dead chat. The stored
@@ -803,9 +835,7 @@ function liveReaderAnswer(reading, question, lang = 'en') {
   const core = topicCore(reading, topic, lang);
   const action = topicAction(topic, lang);
   const s1 = pick[0], s2 = pick[1];
-  const sampleNote = (s1[0] === 'Zi Wei' || s2[0] === 'Zi Wei')
-    ? (lang === 'zh' ? '（紫微为样本内容，仅供参考。）' : ' (Zi Wei is sample content, for reflection only.)')
-    : '';
+  const sampleNote = '';
   const timing = hasTimeHorizon(question) ? timingLine(reading, lang) : '';
   return lang === 'zh'
     ? `${sysName(s1[0])}：${sent(s1[1])}\n\n${core} ${sysName(s2[0])}也这么说：${sent(s2[1])}${sampleNote}${timing ? `\n\n${timing}` : ''}\n\n本周一件事：${action}`
@@ -945,8 +975,8 @@ function explainTerm(reading, term, lang, lastTopic) {
   const headCap = !zh ? head.charAt(0).toUpperCase() + head.slice(1) : head;
   const prefix = term.corePrefix ? topicCore(reading, lastTopic === 'general' ? 'general' : lastTopic, lang) + ' ' : '';
   const action = zh ? '这周留意一次，你在自己身上看到它的时候，用一行字记下来。' : 'This week, notice one moment when you see it in yourself, and write down one line about it.';
-  return zh ? prefix + headCap + '。' + bodySent + (term.ziwei ? '（紫微为样本内容，仅供参考。）' : '') + '\n\n一小步：' + action
-    : prefix + headCap + '. ' + bodySent + (term.ziwei ? ' (Zi Wei is sample content, for reflection only.)' : '') + '\n\nOne small step: ' + action;
+  return zh ? prefix + headCap + '。' + bodySent + '\n\n一小步：' + action
+    : prefix + headCap + '. ' + bodySent + '\n\nOne small step: ' + action;
 }
 /* Everyday scenarios, 3 distinct variants per topic, each tied to the
    buyer's actual reading (Day Master, Sun / Moon / Rising, Life Path,
@@ -1021,7 +1051,7 @@ function masterChatAnswerRaw(reading, message, lang, history, personality) {
   const L = (o) => (o && typeof o === 'object' ? (zh ? o.zh || o.en : o.en || o.zh) : o);
   const sent = (sec) => (zh ? plainZH(firstSentence(L(sec))) : plainEN(firstSentence(L(sec))));
   const sysName = (name) => (zh ? { Bazi: '八字', Horoscope: '星座', Tarot: '塔罗', Numerology: '数字命理', 'Yi-Jing': '易经', 'Zi Wei': '紫微' }[name] || name : name);
-  const sampleNote = (sys) => (sys === 'Zi Wei' ? (zh ? '（紫微为样本内容，仅供参考。）' : ' (Zi Wei is sample content, for reflection only.)') : '');
+  const sampleNote = () => '';
   const lastUser = [...(history || [])].reverse().find((m) => m.role === 'user');
   const lastTopic = lastUser ? classifyTopic(lastUser.content) : 'general';
   const topic = classifyTopic(msg);
@@ -1126,8 +1156,8 @@ function masterChatAnswerRaw(reading, message, lang, history, personality) {
     const action = zh ? '这周留意一次，你在自己身上看到它的时候，用一行字记下来。' : 'This week, notice one moment when you see it in yourself, and write down one line about it.';
     const head = explainHead(term, sent(term.text), lang);
     const headCap = !zh ? head.charAt(0).toUpperCase() + head.slice(1) : head;
-    return (zh ? headCap + '。' + sent(term.text) + (term.ziwei ? '（紫微为样本内容，仅供参考。）' : '') + '\n\n一小步：' + action
-      : headCap + '. ' + sent(term.text) + (term.ziwei ? ' (Zi Wei is sample content, for reflection only.)' : '') + '\n\nOne small step: ' + action);
+    return (zh ? headCap + '。' + sent(term.text) + '\n\n一小步：' + action
+      : headCap + '. ' + sent(term.text) + '\n\nOne small step: ' + action);
   }
   // "What does that mean?" with no term named: explain the core of what
   // the Master just said, from the last topic in the conversation.
@@ -1213,7 +1243,7 @@ function dedupFallback(reading, message, lang, history, personality, prevMaster)
   const L = (o) => (o && typeof o === 'object' ? (zh ? o.zh || o.en : o.en || o.zh) : o);
   const sent = (sec) => (zh ? plainZH(firstSentence(L(sec))) : plainEN(firstSentence(L(sec))));
   const sysName = (name) => (zh ? { Bazi: '八字', Horoscope: '星座', Tarot: '塔罗', Numerology: '数字命理', 'Yi-Jing': '易经', 'Zi Wei': '紫微' }[name] || name : name);
-  const sample = (sys) => (sys === 'Zi Wei' ? (zh ? '（紫微为样本内容，仅供参考。）' : ' (Zi Wei is sample content, for reflection only.)') : '');
+  const sample = () => '';
   const candidates = [];
   for (const [sys, sec] of topicPick(reading, t2)) {
     candidates.push(zh
@@ -1292,19 +1322,23 @@ app.post('/api/owner/login', async (req, res) => {
 });
 app.post('/api/owner/issue-access', (req, res) => {
   if (!verifyOwnerToken(req.headers['x-owner-token'])) return res.status(401).json({ error: 'Owner token required.' });
-  const { email, birthDate, name } = req.body || {};
+  const { email, birthDate, birthTime, ziweiGender, name } = req.body || {};
   if (!isValidEmail(email) || !birthDate) return res.status(400).json({ error: 'Valid email and birthDate are required.' });
-  try { parseBirth(birthDate); } catch (e) { return res.status(400).json({ error: e.message }); }
-  const order = db.prepare("INSERT INTO orders (email, birth_date, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, 0, 'usd', 'owner-manual', 'manual', 'paid', datetime('now'))")
-    .run(email.toLowerCase(), birthDate, name || null);
+  const chartError = validateZiweiInputs({ birthTime, ziweiGender });
+  if (chartError) return res.status(400).json({ error: chartError });
+  try { parseBirth(birthDate, birthTime); } catch (e) { return res.status(400).json({ error: e.message }); }
+  const order = db.prepare("INSERT INTO orders (email, birth_date, birth_time, ziwei_gender, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, ?, ?, 0, 'usd', 'owner-manual', 'manual', 'paid', datetime('now'))")
+    .run(email.toLowerCase(), birthDate, birthTime, ziweiGender, name || null);
   const { token, expiresAt } = issueAccessToken(email.toLowerCase(), birthDate, order.lastInsertRowid);
   return res.json({ token, expiresAt, email, birthDate });
 });
 app.get('/api/owner/report', (req, res) => {
   if (!verifyOwnerToken(req.headers['x-owner-token'])) return res.status(401).json({ error: 'Owner token required.' });
-  const { email, birthDate } = req.query;
-  if (!email || !birthDate) return res.status(400).json({ error: 'email and birthDate are required.' });
-  const reading = buildFullReading({ birthDate, birthTime: null, name: null });
+  const { email, birthDate, birthTime, ziweiGender } = req.query;
+  if (!email || !birthDate || !birthTime || !ziweiGender) return res.status(400).json({ error: 'email, birthDate, birthTime and ziweiGender are required.' });
+  const chartError = validateZiweiInputs({ birthTime, ziweiGender });
+  if (chartError) return res.status(400).json({ error: chartError });
+  const reading = buildFullReading({ birthDate, birthTime, ziweiGender, name: null });
   return res.json({ ...reading, ownerPreview: true });
 });
 // --- Owner: AI Master usage (Gemini cost + caps) ---------------------------

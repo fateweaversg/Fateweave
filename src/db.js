@@ -20,6 +20,7 @@ db.exec(`
     email TEXT NOT NULL,
     birth_date TEXT NOT NULL,
     birth_time TEXT,
+    ziwei_gender TEXT,
     name TEXT,
     amount_cents INTEGER NOT NULL,
     currency TEXT NOT NULL DEFAULT 'usd',
@@ -160,6 +161,17 @@ db.exec(`
     UNIQUE(email, birth_date, kind)
   );
 `);
+
+// Full Zi Wei charts require the user's birth time and selected chart sex.
+// Older paid orders need a one-time prompt for those inputs, not a guessed chart.
+(function migrateZiweiInputs() {
+  try {
+    const cols = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+    if (!cols.includes('ziwei_gender')) db.exec('ALTER TABLE orders ADD COLUMN ziwei_gender TEXT');
+  } catch (e) {
+    console.error('Zi Wei input migration failed:', e.message);
+  }
+})();
 
 // --- Migration (7 Nov 2026): buyer-keyed Master history + Live Reader -----
 // History and counts used to be keyed by (token_hash, session_id), and
