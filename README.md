@@ -58,3 +58,4 @@ changes need the owner's approval.
 
 Bazi is simplified; Zi Wei is illustrative, not fully computed. Readings are
 for reflection and entertainment, not guaranteed forecasts or professional advice.
+Railway recovery (2026-11-08): Railway App access is restricted to this repository, and production auto-deploy is enabled for main. If no push-triggered deployment appears, use Railway’s Deploy latest commit action; do not Redeploy an older deployment.
