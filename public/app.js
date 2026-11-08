@@ -40,10 +40,16 @@ const state = {
 
 const STR = {
   en: {
-    tagline: 'One birthday in. Six systems answer. Do they agree?',
-    masterLine: '\u201CI don\u2019t tell fortunes. I lay six systems side by side \u2014 and we see where they agree.\u201D \u2014 The Master',
-    hookTitle: 'Your free glimpse', hookLede: 'Enter your birth date, then tap each card to reveal a little detail from every system. The full reading unlocks after payment.',
-    birthDate: 'Birth date', birthTime: 'Birth time (optional)', name: 'Name (optional)', hookCta: 'See my free glimpse',
+    tagline: 'One birthday. Six ways to read the story.',
+    heroKicker: 'A field guide to your personal patterns',
+    heroSub: 'Meet six distinct traditions. Compare the patterns they notice. Decide what feels worth exploring.',
+    heroTrust: 'For reflection and exploration. Your choices remain your own.',
+    heroArtLabel: 'FIELD NOTE 01 / SIX LENSES',
+    heroStart: 'Start with my birth date', guideCta: 'Meet the guides',
+    masterLine: 'Six traditions, six guides. You remain the author of your choices.',
+    hookKicker: 'Begin with a small clue',
+    hookTitle: 'Your first glimpse', hookLede: 'Enter your birth date to see a first clue from each tradition. Open the perspectives that interest you, then continue when you are ready.',
+    birthDate: 'Birth date', birthTime: 'Birth time (optional)', name: 'Name (optional)', hookCta: 'Create my free glimpse',
     quizTitle: 'Know yourself \u2014 two quizzes', quizLede: 'Take them free \u2014 they are part of the hook. You will see your type and one line right away; the full breakdown unlocks with your reading.',
     unlockedTitle: 'Your reading is unlocked', viewReport: 'View my full reading', resendReport: 'Resend report email',
     unlockedBanner: '\u2713 Unlocked \u2014 no need to pay again',
@@ -143,10 +149,16 @@ const STR = {
     think: 'How you think', work: 'How you work', connect: 'How you connect',
   },
   zh: {
-    tagline: '\u8f93\u5165\u4e00\u6b21\u751f\u65e5\uff0c\u516d\u4e2a\u7cfb\u7edf\u540c\u65f6\u56de\u7b54\u3002\u5b83\u4eec\u8bf4\u7684\u4e00\u6837\u5417\uff1f',
-    masterLine: '\u300c\u6211\u4e0d\u7b97\u547d\uff0c\u53ea\u628a\u516d\u4e2a\u7cfb\u7edf\u6446\u5728\u4e00\u8d77\u2014\u2014\u770b\u5b83\u4eec\u5728\u54ea\u91cc\u8bf4\u7684\u4e00\u6837\u3002\u300d\u2014\u2014 \u638c\u95e8',
-    hookTitle: '\u4f60\u7684\u514d\u8d39\u4e00\u77a5', hookLede: '\u8f93\u5165\u751f\u65e5\uff0c\u7136\u540e\u9010\u5f20\u70b9\u5f00\u6bcf\u4e00\u4e2a\u7cfb\u7edf\uff0c\u770b\u4e00\u70b9\u70b9\u5185\u5bb9\u3002\u5b8c\u6574\u62a5\u544a\u9700\u4ed8\u6b3e\u540e\u89e3\u9501\u3002',
-    birthDate: '\u51fa\u751f\u65e5\u671f', birthTime: '\u51fa\u751f\u65f6\u95f4\uff08\u53ef\u9009\uff09', name: '\u540d\u5b57\uff08\u53ef\u9009\uff09', hookCta: '\u67e5\u770b\u6211\u7684\u514d\u8d39\u4e00\u77a5',
+    tagline: '\u540c\u4e00\u4e2a\u751f\u65e5\uff0c\u516d\u79cd\u65b9\u5f0f\u8bfb\u61c2\u4f60\u7684\u6545\u4e8b\u3002',
+    heroKicker: '\u63a2\u7d22\u5c5e\u4e8e\u4f60\u7684\u751f\u547d\u7ebf\u7d22',
+    heroSub: '\u8ba4\u8bc6\u516d\u79cd\u4e0d\u540c\u7684\u4f20\u7edf\u3002\u6bd4\u8f83\u5b83\u4eec\u53d1\u73b0\u7684\u7ebf\u7d22\uff0c\u518d\u51b3\u5b9a\u4ec0\u4e48\u503c\u5f97\u7ee7\u7eed\u63a2\u7d22\u3002',
+    heroTrust: '\u7528\u4e8e\u81ea\u6211\u63a2\u7d22\u4e0e\u53cd\u601d\u3002\u4f60\u7684\u9009\u62e9\uff0c\u59cb\u7ec8\u7531\u4f60\u51b3\u5b9a\u3002',
+    heroArtLabel: '\u4e13\u9898\u8bb0\u5f55 01 / \u516d\u79cd\u89c6\u89d2',
+    heroStart: '\u4ece\u51fa\u751f\u65e5\u671f\u5f00\u59cb', guideCta: '\u8ba4\u8bc6\u516d\u4f4d\u6307\u5357',
+    masterLine: '\u516d\u79cd\u4f20\u7edf\uff0c\u516d\u4f4d\u6307\u5357\u3002\u4f60\u4ecd\u7136\u662f\u81ea\u5df1\u9009\u62e9\u7684\u4e3b\u4eba\u3002',
+    hookKicker: '\u4ece\u4e00\u4e2a\u5c0f\u7ebf\u7d22\u5f00\u59cb',
+    hookTitle: '\u5148\u770b\u4e00\u773c', hookLede: '\u8f93\u5165\u51fa\u751f\u65e5\u671f\uff0c\u5148\u770b\u770b\u516d\u79cd\u4f20\u7edf\u5404\u81ea\u6ce8\u610f\u5230\u7684\u7ebf\u7d22\u3002\u9009\u62e9\u611f\u5174\u8da3\u7684\u89c6\u89d2\uff0c\u51c6\u5907\u597d\u4e86\u518d\u7ee7\u7eed\u3002',
+    birthDate: '\u51fa\u751f\u65e5\u671f', birthTime: '\u51fa\u751f\u65f6\u95f4\uff08\u53ef\u9009\uff09', name: '\u540d\u5b57\uff08\u53ef\u9009\uff09', hookCta: '\u751f\u6210\u514d\u8d39\u9884\u89c8',
     quizTitle: '\u8ba4\u8bc6\u81ea\u5df1\u2014\u2014\u4e24\u4e2a\u6d4b\u9a8c', quizLede: '\u514d\u8d39\u505a\u2014\u2014\u8fd9\u4e5f\u662f\u9884\u89c8\u7684\u4e00\u90e8\u5206\u3002\u4f60\u4f1a\u5373\u65f6\u770b\u5230\u4f60\u7684\u7c7b\u578b\u4e0e\u4e00\u53e5\u8bdd\uff1b\u5b8c\u6574\u89e3\u6790\u968f\u62a5\u544a\u89e3\u9501\u3002',
     unlockedTitle: '\u4f60\u7684\u62a5\u544a\u5df2\u89e3\u9501', viewReport: '\u67e5\u770b\u5b8c\u6574\u62a5\u544a', resendReport: '\u91cd\u5bc4\u62a5\u544a\u7535\u90ae',
     unlockedBanner: '\u2713 \u5df2\u89e3\u9501\u2014\u2014\u65e0\u9700\u518d\u6b21\u4ed8\u6b3e',
@@ -304,7 +316,19 @@ function sectionHTML(sections, keys) {
   if (rest.length) html += `<details class="more"><summary>${esc(t('moreDetail'))}</summary>${rest.map(render).join('')}</details>`;
   return html;
 }
-function sysHead(icon, title) { return `<h2><span class="sys-icon">${icon}</span>${esc(title)}</h2>`; }
+function sysHead(icon, title) {
+  const roles = [
+    { match: 'Bazi', en: 'The Pattern Reader', zh: '五行观察者' },
+    { match: 'Zi Wei', en: 'The Star Cartographer', zh: '星曜地图师' },
+    { match: 'Horoscope', en: 'The Sky Editor', zh: '星空编辑' },
+    { match: 'Yi-Jing', en: 'The Change Editor', zh: '变化解读者' },
+    { match: 'Tarot', en: 'The Card Storyteller', zh: '牌面故事家' },
+    { match: 'Numerology', en: 'The Number Archivist', zh: '数字档案员' },
+  ];
+  const role = roles.find((item) => title.includes(item.match));
+  const label = role ? (state.lang === 'zh' ? role.zh : role.en) : (state.lang === 'zh' ? '综合编辑' : 'The Synthesis Editor');
+  return `<h2><span class="sys-icon">${icon}</span><span>${esc(title)}</span><small class="guide-credit">${esc(label)}</small></h2>`;
+}
 function revealCover(icon, label, sub) {
   return `<div class="reveal-cover" role="button" tabindex="0"><div class="big">${icon}</div><p>${esc(label)}</p><small>${esc(sub)}</small></div>`;
 }
