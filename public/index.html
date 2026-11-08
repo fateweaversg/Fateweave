@@ -98,8 +98,8 @@
 
     <div id="master-chat">
       <h3 data-i18n="masterChatTitle">Ask the Master</h3><span id="mc-ai-badge" class="hidden"></span>
-      <p id="mc-progress" class="small"></p>
-      <p><span id="mc-left-label">Follow-ups left</span>: <span id="mc-left">5</span><span id="mc-left-suffix"> / 5</span></p>
+      <p id="mc-progress" class="small">Loading your conversation…</p>
+      <p><span id="mc-left-label">Follow-ups left</span>: <span id="mc-left">…</span><span id="mc-left-suffix"></span></p>
       <p class="small" data-i18n="upgradeBody">5 follow-ups included. Add 15 for $3, at most twice: 20 then 35 total.</p>
       <button type="button" class="ghost" id="mc-upgrade-btn">Add 15 follow-ups — $3</button>
       <p id="mc-upgrade-offer" class="notice hidden"></p>
@@ -109,9 +109,9 @@
       <div class="lr-row">
         <input type="text" id="mc-question" placeholder="What would you like to ask the Master?" maxlength="500" aria-label="Question for the Master">
         <button id="mc-voice" type="button" title="Voice input">🎤</button>
-        <button id="mc-ask" type="button">Ask the Master</button>
+        <button id="mc-ask" type="button" disabled>Ask the Master</button>
       </div>
-      <button type="button" class="ghost" id="mc-next">Next question →</button>
+      <button type="button" class="ghost" id="mc-next" disabled>Next question →</button>
       <p class="small" data-i18n="masterChatNote">For reflection, not guaranteed predictions or professional advice.</p>
     </div>
   </section>
@@ -144,3 +144,4 @@
 <script src="/music.js" defer></script>
 </body>
 </html>
+
