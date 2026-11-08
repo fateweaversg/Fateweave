@@ -321,3 +321,7 @@ body.theme-tarot .tarot-front .cname { font-size: 1.25rem; }
 @media (prefers-reduced-motion: reduce) {
   .tarot-card.enlarged .tarot-inner { transition: none; }
 }
+
+/* Unified Master conversation: legacy inputs are never displayed. */
+#live-reader{display:none!important}.master-topic{padding:16px 0;border-top:1px solid #66522c}.master-topic summary{cursor:pointer;padding:12px 0;font-weight:600}.master-topic h4{font-size:1.15rem}.master-topic .mc-user,.master-topic .mc-master{padding:12px 16px;margin:10px 0;border-radius:12px}.master-topic .mc-user{background:#302616}.master-topic .mc-master{background:#271c3b}.master-topic p{white-space:normal;line-height:1.7;margin:6px 0}#mc-next{margin-top:14px}#mc-question{min-width:0}
+.theme-master #report-card>h2,.theme-master #master-chat>h3{display:none}

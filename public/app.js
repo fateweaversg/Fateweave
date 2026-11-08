@@ -49,26 +49,26 @@ const STR = {
     unlockedBanner: '\u2713 Unlocked \u2014 no need to pay again',
     unlockedBannerSub: 'Your full reading is open below. It is saved on this device \u2014 refresh any time, no need to re-enter anything.',
     unlockTitle: 'Unlock the full reading',
-    unlockBody: 'Pay first, then the full details open \u2014 for every system, plus Live Reader (3 questions) and your detailed report by email.',
+    unlockBody: 'Unlock all reading details, 3 main questions and 5 follow-ups with the Master.',
     emailLabel: 'Email (for your report + daily encouragement)', sameDateNote: 'Use the same birth date as your free glimpse, and the same email to come back later.',
     fullReadingTitle: 'Your full reading', liveReaderTitle: 'Regular questions (3)',
-    liveReaderBody: 'Ask 3 regular reading questions. Gemini follow-ups have a separate allowance of 5, or 30 total with Extended.',
+    liveReaderBody: 'All questions are now in the Master conversation.',
     masterChatTitle: 'Ask the Master',
     masterChatBody: 'Still wondering about something in your reading? Ask a follow-up — the Master answers from your own report, and remembers what you asked before.',
-    followupsLeft: 'Gemini follow-ups left',
-    masterChatsLeft: 'Gemini follow-ups left',
-    aiBadge: 'Gemini',
+    followupsLeft: 'Master follow-ups left',
+    masterChatsLeft: 'Master follow-ups left',
+    aiBadge: 'Master',
     mcRuleBasedTag: 'Summary from your reading',
     chipExplain: 'What does that mean?', chipExample: 'Give me an example', chipDeeper: 'Tell me more about work',
     mcAskPh: 'Ask a follow-up…',
     masterChatNote: 'Follow-ups are answered from your own reading only — no predictions, and no medical, financial or legal advice.',
-    masterChatExplainer: 'Your unlock includes 3 regular questions plus 5 Gemini follow-ups. Extended keeps the 3 regular questions and raises Gemini follow-ups to 30 total, including the first 5.',
-    upgradeTitle: 'Want more than 5 follow-ups?',
-    upgradeBody: 'Extended Master Chat — $3: 3 regular questions plus 30 Gemini follow-ups total, including your original 5, within the same 90-day unlock.',
+    masterChatExplainer: 'Three main questions, one conversation at a time. Ask follow-ups until you are ready, then choose Next question.',
+    upgradeTitle: 'Need more follow-ups?',
+    upgradeBody: '5 follow-ups included. Each $3 pack adds 15: 20 after one pack, 35 after two. Maximum two packs per user.',
     upgradeBtn: 'Upgrade to Extended Master Chat — $3',
     upgradeExtended: 'Extended Master Chat',
-    upgradeOffer: 'Your 5 Gemini follow-ups are used. Upgrade for $3 to raise the total to 30, including the first 5.',
-    upgradeDone: 'Extended unlocked — 30 Gemini follow-ups total, including your original 5.',
+    upgradeOffer: 'Add 15 follow-ups, or continue to the next main question.',
+    upgradeDone: '15 follow-ups added. Your previous usage is kept.',
     upgradeFail: 'Could not start the upgrade checkout. Please try again.',
     upgradePending: 'Your Extended Master Chat is being activated — if the counter still shows a limit, refresh this page in a moment.',
     skipToMaster: 'Skip to Master →',
@@ -106,8 +106,8 @@ const STR = {
     readingGlimpse: 'Reading your glimpse\u2026', enterDateFirst: 'Enter your birth date in the free glimpse form first.',
     couldNotRead: 'Could not read that birth date.', networkError: 'Network error: ',
     masterUnreachable: 'The Master couldn\u2019t be reached just now \u2014 please try again in a moment.',
-    extendedLimit: 'All 30 Gemini follow-ups have been used.',
-    aiRestingNote: 'Gemini is temporarily unavailable. Please retry shortly; no follow-up was used.',
+    extendedLimit: 'All 30 Master follow-ups have been used.',
+    aiRestingNote: 'Master is temporarily unavailable. Please retry shortly; no follow-up was used.',
     unreachable: 'Couldn\u2019t be reached just now \u2014 please try again in a moment.',
     mcThinking: 'The Master is thinking\u2026',
     lrThinking: 'Thinking\u2026',
@@ -152,26 +152,26 @@ const STR = {
     unlockedBanner: '\u2713 \u5df2\u89e3\u9501\u2014\u2014\u65e0\u9700\u518d\u6b21\u4ed8\u6b3e',
     unlockedBannerSub: '\u5b8c\u6574\u62a5\u544a\u5df2\u5728\u4e0b\u65b9\u5f00\u542f\uff0c\u5e76\u4fdd\u5b58\u5728\u6b64\u88c5\u7f6e\u2014\u2014\u968f\u65f6\u91cd\u65b0\u6574\u7406\uff0c\u4e0d\u7528\u518d\u8f93\u5165\u4efb\u4f55\u8d44\u6599\u3002',
     unlockTitle: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a',
-    unlockBody: '\u5148\u4ed8\u6b3e\uff0c\u5b8c\u6574\u5185\u5bb9\u968f\u5373\u5f00\u542f\u2014\u2014\u516d\u4e2a\u7cfb\u7edf\u5168\u90e8\u3001Live Reader\uff083 \u4e2a\u95ee\u9898\uff09\uff0c\u4ee5\u53ca\u8be6\u7ec6\u62a5\u544a\u5bc4\u5230\u4f60\u7684\u4fe1\u7bb1\u3002',
+    unlockBody: '解锁全部报告、3 个主要问题和 5 次掌门追问。',
     emailLabel: '\u7535\u90ae\uff08\u63a5\u6536\u62a5\u544a\u4e0e\u6bcf\u65e5\u9f13\u52b1\uff09', sameDateNote: '\u8bf7\u7528\u4e0e\u514d\u8d39\u4e00\u77a5\u76f8\u540c\u7684\u51fa\u751f\u65e5\u671f\uff0c\u4ee5\u53ca\u76f8\u540c\u7684\u7535\u90ae\uff0c\u4ee5\u4fbf\u65e5\u540e\u56de\u6765\u67e5\u770b\u3002',
     fullReadingTitle: '\u4f60\u7684\u5b8c\u6574\u62a5\u544a', liveReaderTitle: '普通提问（3 次）',
-    liveReaderBody: '可提问 3 次报告问题。Gemini 追问另计：普通版 5 次，加长版共 30 次。',
+    liveReaderBody: '所有问题现已合并至掌门聊天。',
     masterChatTitle: '\u95ee\u638c\u95e8',
     masterChatBody: '\u62a5\u544a\u91cc\u8fd8\u6709\u4e0d\u660e\u767d\u7684\u5730\u65b9\uff1f\u63a5\u7740\u95ee\u2014\u2014\u638c\u95e8\u53ea\u6839\u636e\u4f60\u81ea\u5df1\u7684\u62a5\u544a\u56de\u7b54\uff0c\u4e5f\u8bb0\u5f97\u4f60\u4e4b\u524d\u95ee\u8fc7\u4ec0\u4e48\u3002',
-    followupsLeft: '剩余 Gemini 追问',
-    masterChatsLeft: '剩余 Gemini 追问',
-    aiBadge: 'Gemini',
+    followupsLeft: '剩余 Master 追问',
+    masterChatsLeft: '剩余 Master 追问',
+    aiBadge: 'Master',
     mcRuleBasedTag: '\u6839\u636e\u4f60\u7684\u62a5\u544a\u6574\u7406',
     chipExplain: '\u8fd9\u662f\u4ec0\u4e48\u610f\u601d\uff1f', chipExample: '\u4e3e\u4e2a\u4f8b\u5b50', chipDeeper: '\u591a\u8bf4\u4e00\u70b9\u5de5\u4f5c',
     mcAskPh: '\u95ee\u4e00\u4e2a\u8ffd\u95ee\u2026\u2026',
     masterChatNote: '\u8ffd\u95ee\u53ea\u6839\u636e\u4f60\u81ea\u5df1\u7684\u62a5\u544a\u56de\u7b54\u2014\u2014\u6ca1\u6709\u9884\u6d4b\uff0c\u4e5f\u4e0d\u7ed9\u533b\u7597\u3001\u8d22\u52a1\u6216\u6cd5\u5f8b\u5efa\u8bae\u3002',
-    masterChatExplainer: '解锁包含 3 次普通提问和 5 次 Gemini 追问。加长版保留 3 次普通提问，并将 Gemini 追问提高到共 30 次，包含原来的 5 次。',
-    upgradeTitle: '\u60f3\u8981\u8d85\u8fc7 5 \u6b21\u8ffd\u95ee\uff1f',
-    upgradeBody: '加长掌门聊天 $3：3 次普通提问，加上共 30 次 Gemini 追问，包含原来的 5 次，有效期仍为 90 天。',
+    masterChatExplainer: '三个主要问题，逐题交流。可继续追问，满意后点击下一题。',
+    upgradeTitle: '需要更多追问？',
+    upgradeBody: '包含 5 次追问。每次 $3 加购 15 次：一次共 20 次，两次共 35 次。每位用户最多购买两次。',
     upgradeBtn: '\u5347\u7ea7\u4e3a\u52a0\u957f\u638c\u95e8\u8ffd\u95ee \u2014 $3',
     upgradeExtended: '\u52a0\u957f\u638c\u95e8\u8ffd\u95ee',
-    upgradeOffer: '5 次 Gemini 追问已用完。花 $3 升级至共 30 次，包含原来的 5 次。',
-    upgradeDone: '加长版已解锁：共 30 次 Gemini 追问，包含原来的 5 次。',
+    upgradeOffer: '加购 15 次追问，或继续下一个主要问题。',
+    upgradeDone: '已增加 15 次追问，之前的使用次数保留。',
     upgradeFail: '\u65e0\u6cd5\u5f00\u59cb\u5347\u7ea7\u7ed3\u8d26\uff0c\u8bf7\u518d\u8bd5\u4e00\u6b21\u3002',
     upgradePending: '\u52a0\u957f\u638c\u95e8\u8ffd\u95ee\u6b63\u5728\u5f00\u901a\u4e2d\u2014\u2014\u5982\u679c\u8ba1\u6570\u4ecd\u663e\u793a\u4e0a\u9650\uff0c\u8bf7\u7a0d\u540e\u5237\u65b0\u672c\u9875\u3002',
     skipToMaster: '\u76f4\u63a5\u53bb\u627e\u638c\u95e8 \u2192',
@@ -209,8 +209,8 @@ const STR = {
     readingGlimpse: '\u6b63\u5728\u8bfb\u53d6\u4f60\u7684\u9884\u89c8\u2026\u2026', enterDateFirst: '\u8bf7\u5148\u5728\u514d\u8d39\u4e00\u77a5\u8868\u5355\u8f93\u5165\u51fa\u751f\u65e5\u671f\u3002',
     couldNotRead: '\u65e0\u6cd5\u8bfb\u53d6\u8be5\u51fa\u751f\u65e5\u671f\u3002', networkError: '\u7f51\u7edc\u9519\u8bef\uff1a',
     masterUnreachable: '\u638c\u95e8\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
-    extendedLimit: '30 次 Gemini 追问已用完。',
-    aiRestingNote: 'Gemini 暂时无法回答，请稍后重试。追问次数未扣除。',
+    extendedLimit: '30 次 Master 追问已用完。',
+    aiRestingNote: 'Master 暂时无法回答，请稍后重试。追问次数未扣除。',
     unreachable: '\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     mcThinking: '\u638c\u95e8\u6b63\u5728\u601d\u8003\u2026',
     lrThinking: '\u6b63\u5728\u601d\u8003\u2026',
@@ -439,7 +439,7 @@ function heroResultHTML(key) {
     case 'portrait':
       return `<p class="hero-sub essence">${esc(L(src.portrait.essenceLine))}</p>`;
     case 'master':
-      return `<p class="hero-sub">${esc(t('masterChatExplainer'))}</p>`;
+      return ''; 
     default:
       return '';
   }
@@ -1087,7 +1087,7 @@ async function loadReport(quiet, _retried) {
     renderSystems();
     renderReportCard();
     loadMasterChat(); // restore the Ask the Master thread + follow-up counter
-    loadLiveReaderCount(); // show the real Live Reader used count, not 0
+
     if (!quiet) unlockStoredQuizzes();
     return true;
   } catch {
@@ -1278,174 +1278,69 @@ $('lr-stop').addEventListener('click', () => { speechSynthesis.cancel(); $('lr-s
    buyer, not by the browser session, so a fresh sessionId never wipes
    it. Voice in reuses the Live Reader pattern (zh-CN/en-US); voice out
    reuses the Live Reader speak checkbox. */
-function renderAiRestNote(resting) {
-  const el = $('mc-ai-rest');
-  if (!el) return;
-  el.textContent = resting ? t('aiRestingNote') : '';
-  el.classList.toggle('hidden', !resting);
-}
+
+let masterFlowState = null;
+let pendingMasterRequest = null;
+const flowText = (en,zh) => state.lang === 'zh' ? zh : en;
+function renderAiRestNote() { const n=$('mc-ai-rest');if(n)n.classList.add('hidden'); }
 function renderMcCounter() {
-  const left = $('mc-left'), label = $('mc-left-label'), suffix = $('mc-left-suffix'), btn = $('mc-upgrade-btn'), offer = $('mc-upgrade-offer');
-  if (!left) return;
-  // Counter: Extended buyers see "Master chats left: n / 30"; everyone
-  // else sees "Follow-ups left: n / 5".
-  if (label) label.textContent = state.mcExtended ? t('masterChatsLeft') : t('followupsLeft');
-  if (state.mcExtended) {
-    left.textContent = String(state.mcLeft);
-    if (suffix) suffix.textContent = ' / ' + state.mcMax;
-    if (btn) { btn.textContent = '✓ ' + t('upgradeExtended'); btn.disabled = true; }
-    if (offer) offer.classList.add('hidden');
-  } else {
-    left.textContent = String(state.mcLeft);
-    if (suffix) suffix.textContent = ' / ' + state.mcMax;
-    if (btn) { btn.textContent = t('upgradeBtn'); btn.disabled = false; }
-  }
+  if(!masterFlowState)return;
+  const f=masterFlowState, active=f.topics.find(x=>x.id===f.activeTopicId);
+  $('mc-left-label').textContent=flowText('Follow-ups left','剩余追问');
+  $('mc-left').textContent=String(f.probesRemaining);$('mc-left-suffix').textContent=' / '+f.probeMax;
+  $('mc-progress').textContent=flowText(`Main questions: ${f.mainUsed} / 3 · Follow-up packs: ${f.purchases} / 2`,`主要问题：${f.mainUsed} / 3 · 追问加购：${f.purchases} / 2`);
+  $('mc-mode').textContent=active?flowText(`Continue question ${active.number}. Follow-ups share one balance across all three questions.`,`继续第 ${active.number} 题。三题共用追问次数。`):flowText(`Question ${f.mainUsed+1} of 3 — ask about a new topic.`,`第 ${f.mainUsed+1} 题，共 3 题：请输入新问题。`);
+  $('mc-question').placeholder=active?flowText('Ask about this answer…','继续追问这条回答……'):flowText('What would you like to ask the Master?','你想问掌门什么问题？');
+  $('mc-next').disabled=state.mcSending||!active||!f.mainRemaining;
+  $('mc-next').textContent=f.mainRemaining?flowText('Next question →','下一题 →'):flowText('All 3 main questions started','已使用全部 3 个主要问题');
+  $('mc-ask').disabled=state.mcSending||(!active&&!f.mainRemaining)||(!!active&&!f.probesRemaining);
+  $('mc-ask').textContent=active?flowText('Ask follow-up','追问'):flowText('Ask the Master','问掌门');
+  const btn=$('mc-upgrade-btn');btn.disabled=state.mcSending||f.purchasesRemaining===0;
+  btn.textContent=f.purchasesRemaining?flowText('Add 15 follow-ups — $3','加购 15 次追问 — $3'):flowText('35 follow-ups maximum reached','已达到 35 次追问上限');
+  $('mc-upgrade-offer').classList.toggle('hidden',!active||f.probesRemaining>0);
+  $('mc-upgrade-offer').textContent=f.purchasesRemaining?flowText('No follow-ups left. Add a pack, or use Next question if you have main questions remaining.','追问已用完。可加购，或点击下一题使用剩余主要问题。'):flowText('All follow-ups are used. Any remaining main questions are still available.','追问已用完，仍可使用尚未用完的主要问题。');
+  const badge=$('mc-ai-badge');if(badge)badge.classList.add('hidden');
 }
 function renderMcThread() {
-  const box = $('mc-thread');
-  if (!box) return;
-  box.innerHTML = (state.mcMessages || []).map((m) => {
-    const tag = m.role === 'master' && m.source === 'rule-based'
-      ? ` <small class="mc-rb-tag">${esc(t('mcRuleBasedTag'))}</small>` : '';
-    return `<p class="${m.role === 'user' ? 'mc-user' : 'mc-master'}"><strong>${esc(m.role === 'user' ? t('mcYou') : t('mcMaster'))}:</strong> ${esc(m.content)}${tag}</p>`;
+  const box=$('mc-thread');if(!box||!masterFlowState)return;
+  box.innerHTML=masterFlowState.topics.map(topic=>{
+    const title=flowText('Question ','第 ')+topic.number+(state.lang==='zh'?' 题':'')+' · '+topic.question;
+    const body=topic.messages.map(m=>`<div class="${m.role==='user'?'mc-user':'mc-master'}"><strong>${esc(m.role==='user'?flowText('You','你'):flowText('Master','掌门'))}</strong><p>${esc(m.content.replace(/\*\*/g,'')).replace(/\n/g,'<br>')}</p></div>`).join('');
+    return topic.id===masterFlowState.activeTopicId?`<section class="master-topic"><h4>${esc(title)}</h4>${body}</section>`:`<details class="master-topic"><summary>${esc(title)}</summary>${body}</details>`;
   }).join('');
-  box.scrollTop = box.scrollHeight;
+  box.scrollTop=box.scrollHeight;
 }
-async function loadMasterChat() {
-  if (!state.unlocked) return;
-  try {
-    const p = authParams();
-    const res = await fetch(`/api/master-chat?token=${encodeURIComponent(p.token)}&email=${encodeURIComponent(p.email)}&birthDate=${encodeURIComponent(p.birthDate)}&sessionId=${state.sessionId}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    state.mcMessages = data.messages || [];
-    state.mcExtended = !!data.extended;
-    state.mcMax = typeof data.max === 'number' ? data.max : (state.mcExtended ? 30 : 5);
-    state.mcLeft = typeof data.questionsRemaining === 'number' ? data.questionsRemaining : 0;
-    // AI badge: shown only when the AI Master is actually live (the
-    // server sets GEMINI_API_KEY). Rule-based mode shows no badge.
-    const badge = $('mc-ai-badge');
-    if (badge) {
-      badge.textContent = t('aiBadge');
-      badge.classList.toggle('hidden', !data.aiMasterLive);
-    }
-    // AI resting after a brief hiccup (short cooldown server-side):
-    // say so honestly instead of silently serving summaries.
-    renderAiRestNote(!!data.aiResting);
-    renderMcCounter();
-    renderMcThread();
-  } catch {}
+function applyMasterFlow(data){masterFlowState=data;state.mcLeft=data.probesRemaining;state.mcMax=data.probeMax;state.mcExtended=data.purchases>0;renderMcCounter();renderMcThread();}
+async function loadMasterChat(){
+  if(!state.unlocked)return;
+  try{const res=await fetch('/api/master-chat?'+new URLSearchParams(authParams()));if(res.ok)applyMasterFlow(await res.json());}catch{}
 }
-function mcSpeak(text) {
-  if (!$('lr-speak').checked || !('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = state.lang === 'zh' ? 'zh-CN' : 'en-US';
-  speechSynthesis.speak(u);
+function mcSpeak(){}
+function setMcBusy(busy){state.mcSending=!!busy;renderMcCounter();}
+function showMcThinking(){const box=$('mc-thread');box.innerHTML+=`<p class="mc-thinking">${esc(flowText('The Master is thinking…','掌门正在思考……'))}</p>`;}
+function hideMcThinking(){const el=$('mc-thread').querySelector('.mc-thinking');if(el)el.remove();}
+function masterNotice(text){const n=$('mc-ai-rest');n.textContent=text;n.classList.remove('hidden');}
+async function sendMasterChat(text){
+  if(state.mcSending||!masterFlowState)return;
+  const q=(text||$('mc-question').value||'').trim();if(!q)return;
+  const f=masterFlowState,kind=f.activeTopicId?'probe':'main';
+  if(kind==='probe'&&!f.probesRemaining){renderMcCounter();return;}
+  if(!pendingMasterRequest||pendingMasterRequest.message!==q||pendingMasterRequest.topicId!==f.activeTopicId){pendingMasterRequest={message:q,topicId:f.activeTopicId,kind,requestId:crypto.randomUUID()};}
+  setMcBusy(true);renderAiRestNote();showMcThinking();
+  try{
+    const res=await fetch('/api/master-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...authParams(),...pendingMasterRequest,lang:state.lang})});
+    const data=await res.json();
+    if(!res.ok){masterNotice(data.error||flowText('Please retry. Your question is kept.','请重试，问题已保留。'));return;}
+    pendingMasterRequest=null;$('mc-question').value='';applyMasterFlow(data);
+  }catch{masterNotice(flowText('The Master could not be reached. Your question is kept; please retry.','暂时联系不上掌门。问题已保留，请重试。'));}
+  finally{setMcBusy(false);hideMcThinking();}
 }
-// While a Master question is in flight the Ask button and the chips
-// are disabled and a visible "thinking…" line shows in the thread
-// (7 Nov 2026 fix): the chat must never sit silent while waiting, and
-// a double-tap / Enter+click must not submit the same question twice
-// (the live logs showed 3 identical Gemini calls in one second).
-// The server also collapses concurrent identical requests, but the
-// button is the first line of defence.
-function setMcBusy(busy) {
-  state.mcSending = !!busy;
-  const ask = $('mc-ask'); if (ask) ask.disabled = !!busy;
-  document.querySelectorAll('[data-chip]').forEach((b) => { b.disabled = !!busy; });
-}
-function showMcThinking() {
-  const box = $('mc-thread'); if (!box) return;
-  box.innerHTML += `<p class="mc-thinking">${esc(t('mcThinking'))}</p>`;
-  box.scrollTop = box.scrollHeight;
-}
-function hideMcThinking() {
-  const box = $('mc-thread'); if (!box) return;
-  const el = box.querySelector('.mc-thinking'); if (el) el.remove();
-}
-async function sendMasterChat(text) {
-  const q = (text || $('mc-question').value || '').trim();
-  if (!q || state.mcSending) return;
-  if (state.mcLeft <= 0) {
-    state.mcMessages = [...state.mcMessages, { role: 'master', content: t(state.mcExtended ? 'extendedLimit' : 'upgradeOffer'), lang: state.lang, source: 'master' }];
-    const offer = $('mc-upgrade-offer'); if (offer) offer.classList.toggle('hidden', state.mcExtended);
-    renderMcThread();
-    return;
-  }
+$('mc-ask').addEventListener('click',()=>sendMasterChat());
+$('mc-question').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendMasterChat();}});
+$('mc-next').addEventListener('click',async()=>{
+  if(state.mcSending||!masterFlowState?.activeTopicId)return;
   setMcBusy(true);
-  showMcThinking();
-  try {
-    // Transport failure (offline, Railway incident page, …): show a short
-    // friendly message in the user's language — never the raw browser
-    // error (Safari's "The string did not match the expected pattern" is
-    // what res.json() throws on a non-JSON reply). The question stays in
-    // the box for a retry, nothing is stored, and no AI chat is consumed.
-    let res;
-    try {
-      res = await fetch('/api/master-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...authParams(), sessionId: state.sessionId, message: q, lang: state.lang }) });
-    } catch (err) {
-      state.mcMessages = [...state.mcMessages, { role: 'master', content: t('masterUnreachable'), lang: state.lang, source: 'master' }];
-      renderMcThread();
-      return;
-    }
-    let data = null;
-    try { data = await res.json(); } catch { data = null; }
-    if (!res.ok || !data || typeof data.answer !== 'string') {
-      if (data && data.code === 'gemini_unavailable') {
-        const notice = $('mc-ai-rest');
-        if (notice) { notice.textContent = data.error || t('aiRestingNote'); notice.classList.remove('hidden'); }
-        // Do not turn an outage into a fake answer or append the unanswered question.
-        // Keep the input so Retry sends the same question, with the allowance intact.
-        if (typeof data.questionsRemaining === 'number') state.mcLeft = data.questionsRemaining;
-        renderMcCounter();
-        return;
-      }
-      if (!res.ok && data && data.error) {
-        // A real server error (e.g. limit reached): keep the existing
-        // behaviour — the question did reach the server.
-        state.mcMessages = [...state.mcMessages, { role: 'user', content: q, lang: state.lang, source: 'master' }, { role: 'master', content: data.error, lang: state.lang, source: 'master' }];
-        // Only the allowance being used up zeroes the counter — a
-        // rate-limiter 429 must not (7 Nov 2026 fix: the old code
-        // zeroed it on ANY 429). The server marks the allowance 429
-        // with code 'master_limit_reached'.
-        if (res.status === 429 && data.code === 'master_limit_reached') {
-          state.mcLeft = 0; renderMcCounter();
-          const offer = $('mc-upgrade-offer'); if (offer) offer.classList.toggle('hidden', state.mcExtended);
-        }
-      } else {
-        // Non-JSON reply (e.g. a Railway error page) or an empty body:
-        // friendly message only — the question was never answered, so it
-        // is not stored and no chat is consumed.
-        state.mcMessages = [...state.mcMessages, { role: 'master', content: t('masterUnreachable'), lang: state.lang, source: 'master' }];
-      }
-      renderMcThread();
-      return;
-    }
-    state.mcMessages = data.messages || state.mcMessages;
-    state.mcExtended = !!data.extended;
-    state.mcMax = typeof data.max === 'number' ? data.max : (state.mcExtended ? 30 : 5);
-    state.mcLeft = typeof data.questionsRemaining === 'number' ? data.questionsRemaining : 0;
-    renderAiRestNote(!!data.aiResting);
-    renderMcCounter();
-    $('mc-question').value = '';
-    renderMcThread();
-    mcSpeak(data.answer);
-  } catch (err) {
-    state.mcMessages = [...state.mcMessages, { role: 'master', content: t('masterUnreachable'), lang: state.lang, source: 'master' }];
-    renderMcThread();
-  } finally {
-    setMcBusy(false);
-    hideMcThinking();
-  }
-}
-$('mc-ask').addEventListener('click', () => sendMasterChat());
-$('mc-question').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMasterChat(); } });
-document.querySelectorAll('[data-chip]').forEach((b) => {
-  b.onclick = () => {
-    const kind = b.dataset.chip;
-    sendMasterChat(kind === 'explain' ? t('chipExplain') : kind === 'example' ? t('chipExample') : t('chipDeeper'));
-  };
+  try{const res=await fetch('/api/master-chat/next',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...authParams(),topicId:masterFlowState.activeTopicId})});const data=await res.json();if(!res.ok){masterNotice(data.error);return;}pendingMasterRequest=null;$('mc-question').value='';renderAiRestNote();applyMasterFlow(data);$('mc-question').focus();}catch{masterNotice(flowText('Could not move to the next question. Please retry.','暂时无法进入下一题，请重试。'));}finally{setMcBusy(false);}
 });
 /* --- Extended Master Chat upgrade ($3, 30 chats) --------------------------
    Paid token only (the server checks the token and the Stripe payment).
@@ -1458,13 +1353,13 @@ async function buyMasterUpgrade() {
   try {
     const res = await fetch('/api/checkout-upgrade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(authParams()) });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || t('upgradeFail')); if (btn) btn.disabled = false; return; }
-    if (data.alreadyExtended) { state.mcExtended = true; renderMcCounter(); return; }
+    if (!res.ok) { masterNotice(data.error || t('upgradeFail')); await loadMasterChat(); return; }
+    
     location.href = data.checkoutUrl;
   } catch (e) { alert(t('upgradeFail')); if (btn) btn.disabled = false; }
 }
 $('mc-upgrade-btn').addEventListener('click', buyMasterUpgrade);
-$('mc-upgrade-offer-btn').addEventListener('click', buyMasterUpgrade);
+
 $('mc-voice').addEventListener('click', () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { alert(t('voiceUnsupported')); return; }
@@ -1513,3 +1408,4 @@ loadPrice();
 loadReport().then(() => checkUpgradeReturn());
 renderQuizList();
 renderSystems(); // pre-glimpse preview: all six systems visible before any birth date is entered
+
