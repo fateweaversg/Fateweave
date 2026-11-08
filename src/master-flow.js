@@ -28,7 +28,7 @@ function ensureSession(access) {
   try {
     let topic=null,main=0;
     for(const m of old) {
-      if(m.role==='user'&&m.source==='live-reader'&&main<3) {
+      if(m.role==='user'&&m.source==='live-reader'&&m.created_at>='2026-11-07 14:19:31'&&main<3) {
         if(topic)db.prepare('UPDATE master_topics_v2 SET closed=1 WHERE id=?').run(topic);
         topic=Number(db.prepare('INSERT INTO master_topics_v2(email,birth_date,ordinal,question) VALUES(?,?,?,?)').run(email,birth,++main,m.content).lastInsertRowid);
       }
