@@ -74,8 +74,9 @@ const config = {
     // Per-message limit (also enforced in src/ai-master.js).
     maxQuestionChars: 500,
     // Per-exchange budget: ~2,000 input tokens (system prompt + compact
-    // reading summary + last 6 messages + question), max 350 output.
-    maxOutputTokens: intEnv('AI_MAX_OUTPUT_TOKENS', 350),
+    // reading summary + last 6 messages + question), max 700 output.
+    // Gemini 3 includes private reasoning tokens in this ceiling.
+    maxOutputTokens: intEnv('AI_MAX_OUTPUT_TOKENS', 700),
     temperature: 0.7,
     historyMessages: 6,
     // Hard per-attempt deadline for the Gemini call (8 Nov 2026 fix 4):
