@@ -18,6 +18,7 @@
     </div>
   </div>
 </header>
+<div id="preview-environment-banner" class="preview-environment-banner hidden" role="status"></div>
 
 <main>
   <section class="hero editorial-hero" id="brand-hero">
@@ -75,14 +76,18 @@
   </section>
 
   <section class="card" id="unlock-card">
-    <h2 data-i18n="unlockTitle">Unlock the full reading</h2>
+    <h2 id="unlock-title" data-i18n="unlockTitle">Unlock the full reading</h2>
     <p id="price-line">Loading price…</p>
-    <p data-i18n="unlockBody">Pay first, then the full details open — for every system, plus Live Reader (3 questions) and your detailed report by email.</p>
+    <p id="unlock-body" data-i18n="unlockBody">Pay first, then the full details open — for every system, plus Live Reader (3 questions) and your detailed report by email.</p>
     <form id="checkout-form">
       <label><span data-i18n="emailLabel">Email (for your report + daily encouragement)</span> <input type="email" id="email" required></label>
       <button type="submit" id="pay-btn">Pay &amp; unlock</button>
     </form>
-    <p class="small" data-i18n="sameDateNote">Use the same birth date as your free glimpse, and the same email to come back later.</p>
+    <div id="preview-tools" class="preview-tools hidden">
+      <p id="preview-mode-note" class="notice"></p>
+      <button type="button" id="preview-unlock-btn"></button>
+    </div>
+    <p id="unlock-note" class="small" data-i18n="sameDateNote">Use the same birth date as your free glimpse, and the same email to come back later.</p>
   </section>
 
   <section class="card hidden" id="report-card">

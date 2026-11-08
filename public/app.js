@@ -28,7 +28,7 @@ const STEP_ORDER = [
   { key: 'master', route: '/master', section: null, name: 'Ask the Master' },
 ];
 const state = {
-  lang: 'en', teaser: null, report: null, unlocked: false, price: null,
+  lang: 'en', teaser: null, report: null, unlocked: false, price: null, previewMode: false,
   mcExtended: false,
   sessionId: crypto.randomUUID(),
   revealed: {}, tarotFlipped: [false, false, false], ziweiCast: false, yijingCast: false,
@@ -85,6 +85,15 @@ const STR = {
     stepOf: 'Step {n} of 8 — {name}',
     prevStep: '← Previous',
     nextStep: 'Next: {name} →',
+    startWithDate: 'Start with a birth date →',
+    previewEnvironment: 'Staging preview · no live payments or customer data',
+    previewUnlockTitle: 'Preview the full reading',
+    previewOnlyPrice: 'Free review mode · no charge',
+    previewOnlyBody: 'Open a temporary full reading to review the system pages, card flips and casting interactions. This preview does not take payment or send email.',
+    previewOnlyNote: 'Staging preview only. Reading access uses temporary storage and may reset when the free service sleeps.',
+    previewUnlock: 'Open full reading preview',
+    previewAccessFail: 'Could not open the preview. Please try again.',
+    previewProfileNote: 'Your birth details are used only to generate this temporary preview. No email is needed.',
     doneHub: 'Done — back to hub',
     allSystems: 'All six systems',
     masterLockedTitle: 'Ask the Master is locked',
@@ -194,6 +203,15 @@ const STR = {
     stepOf: '第 {n} 步，共 8 步 — {name}',
     prevStep: '← 上一步',
     nextStep: '下一个：{name} →',
+    startWithDate: '先输入出生日期 →',
+    previewEnvironment: '测试预览 · 不接入付款或正式用户数据',
+    previewUnlockTitle: '预览完整解读',
+    previewOnlyPrice: '免费预览 · 不会收费',
+    previewOnlyBody: '打开一份临时完整解读，查看各系统页面、翻牌和起盘互动。此预览不会收款或发送邮件。',
+    previewOnlyNote: '仅供测试预览。解读权限保存在临时空间，免费服务休眠后可能重置。',
+    previewUnlock: '打开完整解读预览',
+    previewAccessFail: '暂时无法打开预览，请重试。',
+    previewProfileNote: '出生资料仅用于生成这份临时预览，不需要输入电邮。',
     doneHub: '完成 — 回到首页',
     allSystems: '全部六个系统',
     masterLockedTitle: '问掌门尚未解锁',
@@ -291,7 +309,22 @@ function setLang(lang) {
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { if (STR[lang][el.dataset.i18nPh]) el.placeholder = STR[lang][el.dataset.i18nPh]; });
   $('lang-en').classList.toggle('active', lang === 'en');
   $('lang-zh').classList.toggle('active', lang === 'zh');
+  applyPreviewModeUI();
   renderSystems(); renderQuizList(); renderReportCard(); renderMcThread(); renderMcCounter();
+}
+function applyPreviewModeUI() {
+  if (!state.previewMode) return;
+  $('preview-environment-banner').textContent = t('previewEnvironment');
+  $('preview-environment-banner').classList.remove('hidden');
+  $('preview-tools').classList.remove('hidden');
+  $('preview-mode-note').textContent = t('previewOnlyNote');
+  $('preview-unlock-btn').textContent = t('previewUnlock');
+  $('checkout-form').classList.add('hidden');
+  $('unlock-title').textContent = t('previewUnlockTitle');
+  $('price-line').textContent = t('previewOnlyPrice');
+  $('unlock-body').textContent = t('previewOnlyBody');
+  $('unlock-note').textContent = t('previewProfileNote');
+  $('unlock-note').dataset.i18n = 'previewProfileNote';
 }
 $('lang-en').onclick = () => setLang('en');
 $('lang-zh').onclick = () => setLang('zh');
@@ -342,6 +375,7 @@ function revealCover(icon, label, sub) {
    only prompts for the birth date — it never shows a reading for a date
    that was not entered, and no reading text leaks in this state. */
 function promptBirthDate() {
+  if (pageSystem) { location.href = '/#hook-card'; return; }
   const card = $('hook-card');
   card.scrollIntoView({ behavior: 'smooth', block: 'start' });
   card.classList.add('attention');
@@ -472,7 +506,8 @@ function pageHeroHTML() {
   if (!pageSystem) return '';
   const meta = SYS_META[pageSystem];
   if (!meta) return '';
-  return `<div class="sys-hero"><h1 class="sys-hero-title">${esc(meta.title)}</h1><p class="lede">${esc(t(meta.descKey))}</p>${heroResultHTML(pageSystem)}</div>`;
+  const start = !state.teaser && !state.report ? `<p><a class="editorial-link" href="/#hook-card">${esc(t('startWithDate'))}</a></p>` : '';
+  return `<div class="sys-hero"><h1 class="sys-hero-title">${esc(meta.title)}</h1><p class="lede">${esc(t(meta.descKey))}</p>${heroResultHTML(pageSystem)}${start}</div>`;
 }
 function pageNavHTML() {
   if (!pageSystem) return '';
@@ -1002,6 +1037,8 @@ async function loadPrice() {
     const res = await fetch('/api/config');
     const data = await res.json();
     state.price = data.price;
+    state.previewMode = data.previewMode === true;
+    if (state.previewMode) { applyPreviewModeUI(); return; }
     const dollars = (data.price.amountCents / 100).toFixed(2);
     $('price-line').textContent = data.price.isPromo
       ? `$${dollars} launch promo \u00B7 ${data.price.promoStart}\u2013${data.price.promoEnd} \u00B7 then $8`
@@ -1063,6 +1100,30 @@ $('checkout-form').addEventListener('submit', async (e) => {
   } catch (err) { alert(t('checkoutError') + err.message); }
 });
 
+async function unlockStagingPreview() {
+  const birthDate = $('birthDate').value || localStorage.getItem('fateweave_birthDate');
+  if (!birthDate) { alert(t('enterDateFirst')); location.href = '/#hook-card'; return; }
+  const button = $('preview-unlock-btn');
+  button.disabled = true;
+  try {
+    const birthTime = $('birthTime').value || localStorage.getItem('fateweave_birthTime') || null;
+    const name = $('name').value || localStorage.getItem('fateweave_name') || null;
+    const res = await fetch('/api/preview-access', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ birthDate, birthTime, name }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.token) { alert(data.error || t('previewAccessFail')); return; }
+    saveProfile(birthDate, birthTime, name);
+    localStorage.setItem('fateweave_token', data.token);
+    localStorage.setItem('fateweave_email', data.email);
+    localStorage.setItem('fateweave_staging_preview', '1');
+    if (!await loadReport(true)) alert(t('previewAccessFail'));
+  } catch { alert(t('previewAccessFail')); }
+  finally { button.disabled = false; }
+}
+$('preview-unlock-btn').addEventListener('click', unlockStagingPreview);
+
 /* --- Post-payment restore: token -> full reading, prefilled, no re-entry --- */
 async function loadReport(quiet, _retried) {
   const { token, email, birthDate } = authParams();
@@ -1090,6 +1151,10 @@ async function loadReport(quiet, _retried) {
     if (r.profile.birthTime) $('birthTime').value = r.profile.birthTime;
     if (r.profile.name) $('name').value = r.profile.name;
     $('email').value = email;
+    if (state.previewMode) {
+      $('resend-btn').classList.add('hidden');
+      $('resend-status').classList.add('hidden');
+    }
     // Persist the paid profile: the token is bound to this birth date, so
     // remember which date it belongs to (returning to it after peeking at
     // another date must restore the paid reading), and keep birth time and
@@ -1122,6 +1187,22 @@ async function loadReport(quiet, _retried) {
     }
     return false;
   }
+}
+
+async function loadSavedTeaser() {
+  const birthDate = localStorage.getItem('fateweave_birthDate');
+  if (!birthDate) return false;
+  try {
+    const res = await fetch('/api/hook', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ birthDate, birthTime: localStorage.getItem('fateweave_birthTime') || null, name: localStorage.getItem('fateweave_name') || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) return false;
+    state.teaser = data;
+    renderSystems();
+    return true;
+  } catch { return false; }
 }
 
 // After payment, re-submit any quizzes taken free so the full breakdown unlocks.
@@ -1372,6 +1453,7 @@ $('mc-next').addEventListener('click',async()=>{
    checkUpgradeReturn() there verifies the session and the counter then
    reads Extended (30 chats). No hub detour, no step flow, no quiz in the way. */
 async function buyMasterUpgrade() {
+  if (state.previewMode) { masterNotice(t('previewOnlyNote')); return; }
   const btn = $('mc-upgrade-btn');
   if (btn) btn.disabled = true;
   try {
@@ -1428,8 +1510,13 @@ async function checkUpgradeReturn() {
 }
 
 prefillForm(); // birth date, time, name, email survive a reload (bug 3)
-loadPrice();
-loadReport().then(() => checkUpgradeReturn());
+async function initializeApp() {
+  await loadPrice();
+  const unlocked = await loadReport(true);
+  if (!unlocked) await loadSavedTeaser();
+  await checkUpgradeReturn();
+}
+initializeApp();
 renderQuizList();
 renderSystems(); // pre-glimpse preview: all six systems visible before any birth date is entered
 
