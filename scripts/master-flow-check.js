@@ -4,7 +4,7 @@ process.env.DATABASE_PATH=path.join(fs.mkdtempSync(path.join(os.tmpdir(),'master
 const {app}=require('../src/server'),{db}=require('../src/db'),{issueAccessToken}=require('../src/auth'),ai=require('../src/ai-master'),flow=require('../src/master-flow');
 const {buildFullReading}=require('../src/readings');const realFetch=global.fetch;let passed=0;
 function check(name,value){assert.ok(value,name);passed++;console.log('PASS '+name);}
-function buyer(email='flow@example.com',birth='1990-05-14'){const o=db.prepare("INSERT INTO orders(email,birth_date,name,amount_cents,currency,price_label,provider,status) VALUES(?,?,'Test',100,'usd','promo','stripe','paid')").run(email,birth);return {email,birthDate:birth,token:issueAccessToken(email,birth,o.lastInsertRowid).token};}
+function buyer(email='flow@example.com',birth='1990-05-14'){const o=db.prepare("INSERT INTO orders(email,birth_date,birth_time,ziwei_gender,name,amount_cents,currency,price_label,provider,status) VALUES(?,?,'08:30','male','Test',100,'usd','promo','stripe','paid')").run(email,birth);return {email,birthDate:birth,token:issueAccessToken(email,birth,o.lastInsertRowid).token};}
 const ok=text=>({ok:true,status:200,json:async()=>({candidates:[{content:{parts:[{text}]}}],usageMetadata:{promptTokenCount:200,candidatesTokenCount:70}})});
 (async()=>{
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));let base='http://127.0.0.1:'+server.address().port;
@@ -17,8 +17,13 @@ const ok=text=>({ok:true,status:200,json:async()=>({candidates:[{content:{parts:
  check('unpaid chat blocked',(await get({...b,token:'wrong'})).status===403);
  check('wrong birth date blocked',(await get({...b,birthDate:'1980-01-01'})).status===403);
  check('legacy separate input retired',(await post('/api/live-reader',b,{question:'work?'})).status===410);
- const hook=await post('/api/hook',{}, {birthDate:b.birthDate,name:'Test'});check('free glimpse remains teaser only',hook.status===200&&hook.data.teaser===true&&!JSON.stringify(hook.data).includes('synthesis'));
- const report=await realFetch(base+'/api/report?'+new URLSearchParams(b));check('paid report still available',report.ok&&(await report.json()).bazi);
+ const hook=await post('/api/hook',{}, {birthDate:b.birthDate,birthTime:'08:30',ziweiGender:'male',name:'Test'});check('free glimpse remains teaser only',hook.status===200&&hook.data.teaser===true&&!JSON.stringify(hook.data).includes('synthesis'));
+ check('Zi Wei glimpse uses a calculated star and palace',!!hook.data.ziwei?.mainStar?.en&&!!hook.data.ziwei?.lifePalace&&!JSON.stringify(hook.data.ziwei).includes('sample'));
+ const hook2=await post('/api/hook',{}, {birthDate:'1985-03-02',birthTime:'22:10',ziweiGender:'female',name:'Another'});check('Zi Wei glimpse changes with another birth profile',hook2.status===200&&JSON.stringify(hook.data.ziwei)!==JSON.stringify(hook2.data.ziwei));
+ const report=await realFetch(base+'/api/report?'+new URLSearchParams(b));const full=await report.json();check('paid report includes all 12 calculated Zi Wei palaces',report.ok&&full.ziwei?.calculated===true&&full.ziwei.palaces.length===12);
+ const legacyChart=buyer('legacy-chart@example.com');const legacyOrder=db.prepare('SELECT id FROM orders WHERE email=?').get(legacyChart.email);db.prepare('UPDATE orders SET birth_time=NULL,ziwei_gender=NULL WHERE id=?').run(legacyOrder.id);
+ let oldReport=await realFetch(base+'/api/report?'+new URLSearchParams(legacyChart));let oldJson=await oldReport.json();check('old paid orders request missing chart inputs',oldReport.status===409&&oldJson.code==='ziwei_inputs_required');
+ r=await post('/api/update-ziwei-inputs',legacyChart,{birthTime:'08:30',ziweiGender:'female'});oldReport=await realFetch(base+'/api/report?'+new URLSearchParams(legacyChart));oldJson=await oldReport.json();check('old paid orders reopen after saving chart inputs',r.status===200&&oldReport.ok&&oldJson.ziwei.palaces.length===12&&oldJson.profile.ziweiGender==='female');
  ai.setGeminiApiKeyForTests('mock');let prompts=[];global.fetch=async(u,o)=>{prompts.push(o.body);return ok('Plain-language answer to the current topic.');};
  let id=crypto.randomUUID();r=await ask(b,'main','What is my career outlook in 2027?',null,id);const career=r.data.activeTopicId;check('main answer is model-backed and uses only main allowance',r.status===200&&r.data.mainUsed===1&&r.data.probesUsed===0);
  check('main has one grouped exchange',r.data.topics.length===1&&r.data.topics[0].messages.length===2);
@@ -43,7 +48,7 @@ const ok=text=>({ok:true,status:200,json:async()=>({candidates:[{content:{parts:
  // Checkout component with a deterministic Stripe fixture: no real keys or payment.
  const express=require('express');const paidSessions=new Map();let checkoutCreates=0;
  const stripe={checkout:{sessions:{create:async args=>{checkoutCreates++;const x={id:'cs_test_'+checkoutCreates,url:'https://checkout.stripe.test/'+checkoutCreates,status:'open',payment_status:'unpaid',args};paidSessions.set(x.id,x);return x;},retrieve:async id=>paidSessions.get(id)}}};
- const cApp=express();cApp.use(express.json());cApp.use('/api',flow.createMasterRouter({stripe,limiter:(_q,_s,n)=>n(),readingFor:()=>({reading:buildFullReading({birthDate:b.birthDate}),personality:null})}));
+ const cApp=express();cApp.use(express.json());cApp.use('/api',flow.createMasterRouter({stripe,limiter:(_q,_s,n)=>n(),readingFor:()=>({reading:buildFullReading({birthDate:b.birthDate,birthTime:'08:30',ziweiGender:'male'}),personality:null})}));
  checkoutServer=cApp.listen(0,'127.0.0.1');await new Promise(r=>checkoutServer.once('listening',r));const oldBase=base;base='http://127.0.0.1:'+checkoutServer.address().port;
  r=await post('/api/checkout-upgrade',b);check('first pack checkout available',r.status===200&&checkoutCreates===1);const firstOrder=db.prepare("SELECT * FROM orders WHERE provider_session_id='cs_test_1'").get();
  await post('/api/checkout-upgrade',b);check('pending checkout reused instead of duplicate payment',checkoutCreates===1);
