@@ -49,7 +49,7 @@ async function sendViaResend(to, subject, html) {
 async function sendViaSmtp(to, subject, html) {
   const nodemailer = require('nodemailer');
   const transporter = nodemailer.createTransport({
-    host: config.smtp.host, port: config.smtp.port, secure: config.smtp.port === 465,
+    host: config.smtp.host, port: config.smtp.port, secure: config.smtp.port === 465, connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 20000,
     auth: config.smtp.user ? { user: config.smtp.user, pass: config.smtp.pass } : undefined,
   });
   await transporter.sendMail({ from: config.smtp.from, to, subject, html });
@@ -67,7 +67,7 @@ async function sendEmail(to, subject, html) {
     e.resendStatus = 403;
     throw e;
   }
-  if (config.resendApiKey) return sendViaResend(to, subject, html);
+  if (config.smtp.host && config.smtp.user && config.smtp.pass) return sendViaSmtp(to, subject, html);
   if (config.smtp.host) return sendViaSmtp(to, subject, html);
   // Dev fallback — loudly visible, so nobody mistakes it for real sending.
   console.log('=== EMAIL NOT SENT (no RESEND_API_KEY / SMTP configured) ===');
