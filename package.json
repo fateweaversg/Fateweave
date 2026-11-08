@@ -6,6 +6,7 @@
     "express": "^4.21.2",
     "express-rate-limit": "^7.4.1",
     "helmet": "^8.0.0",
+    "iztro": "2.6.5",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.16",
     "resend": "^4.0.1",

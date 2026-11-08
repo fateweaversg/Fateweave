@@ -13,11 +13,8 @@ CREATE TABLE IF NOT EXISTS master_messages_v2(id INTEGER PRIMARY KEY,topic_id IN
 CREATE TABLE IF NOT EXISTS master_probe_purchases(order_id INTEGER UNIQUE,email TEXT NOT NULL,birth_date TEXT,slot INTEGER NOT NULL CHECK(slot BETWEEN 1 AND 2),status TEXT NOT NULL,expires_at TEXT);
 CREATE UNIQUE INDEX IF NOT EXISTS master_probe_slot ON master_probe_purchases(email,slot) WHERE status IN ('pending','paid');
 `);
-// Existing paid upgrades are the first $3 pack, never a free fresh purchase.
-for(const row of db.prepare('SELECT * FROM chat_upgrades WHERE expires_at > datetime(\'now\')').all()) {
-  if(new Date(row.expires_at).getTime()<=Date.now())continue;
-  db.prepare("INSERT OR IGNORE INTO master_probe_purchases(order_id,email,birth_date,slot,status) VALUES(?,?,?,1,'paid')").run(row.order_id, row.email.toLowerCase(), row.birth_date);
-}
+// Do not import legacy `chat_upgrades`: those rows were created by the old
+// test-mode flow and are not verified paid packs in this 5 + 15 + 15 plan.
 function purchases(email) { return db.prepare("SELECT COUNT(*) n FROM master_probe_purchases WHERE email=? AND status='paid'").get(email.toLowerCase()).n; }
 function ensureSession(access) {
   const email=access.email.toLowerCase(), birth=access.birth_date;
@@ -102,9 +99,9 @@ function createMasterRouter({stripe,readingFor,limiter}) {
     try {
       const current=s.topics.find(t=>t.id===s.activeTopicId);
       const topicQuestion=kind==='main'?valid.text:current.question;
-      const history=kind==='main'?[]:current.messages.filter(m=>m.kind!=='legacy-probe');
+      const history=kind==='main'?[]:current.messages.filter(m=>m.kind!=='legacy-probe').slice(-6);
       const {reading,personality}=readingFor(a);
-      const message=kind==='main'?valid.text:`Current main question (keep this topic; do not answer a previous topic): ${topicQuestion}\nFollow-up question: ${valid.text}`;
+      const message=kind==='main'?valid.text:`Active main question: ${topicQuestion}\nUser's follow-up question: ${valid.text}`;
       const ai=await resolveAiMaster({email:a.email,birthDate:a.birth_date,extended:false,reading,personality,message,lang:zh?'zh':'en',history});
       if(ai.status!=='ai'){res.set('Retry-After',String(ai.retryAfterSeconds||30));return fail(503,'master_unavailable','The Master could not answer right now. Your question and allowance are kept; please retry shortly.','掌门暂时无法回答，问题和次数均已保留，请稍后重试。');}
       db.exec('BEGIN');

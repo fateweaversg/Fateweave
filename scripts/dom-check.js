@@ -9,6 +9,8 @@ const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
 const appJs = fs.readFileSync(path.join(ROOT, 'public', 'app.js'), 'utf8');
+const htmlShell = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+const chatCss = fs.readFileSync(path.join(ROOT, 'public', 'styles.css'), 'utf8');
 const { buildTeaser, buildFullReading } = require(path.join(ROOT, 'src', 'readings'));
 
 class El {
@@ -40,7 +42,7 @@ class El {
   click() {}
 }
 
-const IDS = ['lang-en', 'lang-zh', 'systems', 'sys-hero', 'quiz-list', 'quiz-area', 'hook-card', 'teaser-status', 'birthDate', 'birthTime', 'name', 'email', 'unlocked-banner', 'unlocked-card', 'unlocked-sub', 'unlock-card', 'price-line', 'pay-btn', 'report-card', 'report', 'lr-used', 'lr-question', 'lr-answers', 'lr-speak', 'lr-stop', 'mc-left', 'mc-left-label', 'mc-left-suffix', 'mc-ai-badge', 'mc-progress', 'mc-mode', 'mc-next', 'mc-ai-rest', 'mc-upgrade-btn', 'mc-upgrade-offer', 'mc-thread', 'mc-question', 'resend-status', 'view-report-btn', 'resend-btn', 'download-report-btn', 'hook-form', 'checkout-form', 'lr-ask', 'lr-voice', 'mc-ask', 'mc-voice', 'mc-upgrade-offer-btn', 'brand-hero', 'hub-next', 'step-nav', 'daily-card', 'limits-card', 'quiz-card', 'master-locked-card', 'live-reader', 'master-chat'];
+const IDS = ['lang-en', 'lang-zh', 'systems', 'sys-hero', 'quiz-list', 'quiz-area', 'hook-card', 'teaser-status', 'birthDate', 'birthTime', 'ziweiGender', 'name', 'email', 'ziwei-input-card', 'ziwei-input-form', 'ziwei-input-status', 'ziwei-birth-time', 'ziwei-birth-gender', 'unlocked-banner', 'unlocked-card', 'unlocked-sub', 'unlock-card', 'price-line', 'pay-btn', 'report-card', 'report', 'lr-used', 'lr-question', 'lr-answers', 'lr-speak', 'lr-stop', 'mc-left', 'mc-left-label', 'mc-left-suffix', 'mc-ai-badge', 'mc-progress', 'mc-mode', 'mc-next', 'mc-ai-rest', 'mc-upgrade-btn', 'mc-upgrade-offer', 'mc-thread', 'mc-question', 'resend-status', 'view-report-btn', 'resend-btn', 'download-report-btn', 'hook-form', 'checkout-form', 'preview-unlock-btn', 'lr-ask', 'lr-voice', 'mc-ask', 'mc-voice', 'mc-upgrade-offer-btn', 'brand-hero', 'hub-next', 'step-nav', 'daily-card', 'limits-card', 'quiz-card', 'master-locked-card', 'live-reader', 'master-chat'];
 
 async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
   const els = {};
@@ -74,6 +76,7 @@ async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
     // incident) — loadReport must retry once and unlock, not leave
     // /master showing "locked" until a reload.
     if (fetchMode === 'reportFailsOnce' && u.startsWith('/api/report') && fetchCalls.report === 1) throw new Error('transient network failure');
+    if (fetchMode === 'ziweiInputsRequired' && u.startsWith('/api/report')) return { ok: false, status: 409, json: async () => ({ code: 'ziwei_inputs_required', error: 'Enter chart inputs.', birthTime: null, ziweiGender: null }) };
     // fetchMode 'throw': the master-chat POST throws (offline / Railway
     // incident). fetchMode 'nonJson': it returns a non-JSON error page
     // (Safari: res.json() throws "The string did not match the expected
@@ -88,10 +91,10 @@ async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
     if (fetchMode === 'hang' && (isMasterPost || isLrPost)) return new Promise(() => {});
     const json = async () => ({});
     if (u.startsWith('/api/config')) return { ok: true, json: async () => ({ price: { amountCents: 100, currency: 'usd', isPromo: true, promoStart: '2026-11-07', promoEnd: '2026-11-24' } }) };
-    if (u.startsWith('/api/hook')) return { ok: true, json: async () => buildTeaser({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' }) };
+    if (u.startsWith('/api/hook')) return { ok: true, json: async () => buildTeaser({ birthDate: '1990-05-14', birthTime: '08:30', ziweiGender: 'male', name: 'Test' }) };
     if (u.startsWith('/api/live-reader')) return { ok: true, json: async () => ({ questionsUsed: 1, questionsRemaining: 2, max: 3 }) };
     if (u.startsWith('/api/report')) return unlocked
-      ? { ok: true, json: async () => buildFullReading({ birthDate: '1990-05-14', birthTime: '08:30', name: 'Test' }) }
+      ? { ok: true, json: async () => buildFullReading({ birthDate: '1990-05-14', birthTime: '08:30', ziweiGender: 'male', name: 'Test' }) }
       : { ok: false, status: 403, json };
     if (u.startsWith('/api/master-chat')) return { ok: true, json: async () => ({topics:[],activeTopicId:null,mainUsed:0,mainRemaining:3,probesUsed:0,probesRemaining:5,probeMax:5,purchases:0,purchasesRemaining:2}) };
     if (u.startsWith('/api/checkout-session/')) return { ok: true, json: async () => ({ paid: true, upgrade: true, email: 'buyer@example.com', birthDate: '1990-05-14' }) };
@@ -124,6 +127,7 @@ async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
   if (submitHook) {
     els.birthDate.value = '1990-05-14';
     els.birthTime.value = '08:30';
+    els.ziweiGender.value = 'male';
     els.name.value = 'Test';
     const h = els['hook-form']._handlers.submit[0];
     await h({ preventDefault() {} });
@@ -140,6 +144,9 @@ function check(n,v){if(v){pass++;console.log('PASS '+n);}else{fail++;console.err
 (async()=>{
  let els=await runCase({page:null,unlocked:false});check('hub preserves free glimpse',!els['hook-card'].hidden&&els['report-card'].hidden);
  els=await runCase({page:'master',unlocked:false});check('unpaid master remains locked',!els['master-locked-card'].hidden);
+ els=await runCase({page:'master',unlocked:true,fetchMode:'ziweiInputsRequired'});check('legacy paid order gets the missing Zi Wei form',!els['ziwei-input-card'].hidden&&els['master-locked-card'].hidden&&els['report-card'].hidden);
+ check('Master conversation scroll has a visible track and full-height replies',chatCss.includes('overflow-y: scroll')&&chatCss.includes('scrollbar-width: auto')&&chatCss.includes('max-height:none; overflow:visible'));
+ check('conversation panel includes a scroll cue and keyboard focus',htmlShell.includes('mcScrollHint')&&htmlShell.includes('id="mc-thread" role="log"')&&htmlShell.includes('tabindex="0"'));
  els=await runCase({page:'master',unlocked:true});check('one input begins at first main question',els['mc-mode'].textContent.includes('Question 1 of 3')&&els['mc-question'].placeholder.includes('Master'));
  check('Next disabled until a main answer exists',els['mc-next'].disabled===true);
  check('initial shared follow-up balance is 5',els['mc-left'].textContent==='5');

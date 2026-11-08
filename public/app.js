@@ -28,7 +28,7 @@ const STEP_ORDER = [
   { key: 'master', route: '/master', section: null, name: 'Ask the Master' },
 ];
 const state = {
-  lang: 'en', teaser: null, report: null, unlocked: false, price: null, previewMode: false,
+  lang: 'en', teaser: null, report: null, unlocked: false, ziweiInputsNeeded: false, price: null, previewMode: false,
   mcExtended: false,
   sessionId: crypto.randomUUID(),
   revealed: {}, tarotFlipped: [false, false, false], ziweiCast: false, yijingCast: false,
@@ -49,7 +49,8 @@ const STR = {
     masterLine: 'Six traditions, six guides. You remain the author of your choices.',
     hookKicker: 'Begin with a small clue',
     hookTitle: 'Your first glimpse', hookLede: 'Enter your birth date to see a first clue from each tradition. Open the perspectives that interest you, then continue when you are ready.',
-    birthDate: 'Birth date', birthTime: 'Birth time (optional)', name: 'Name (optional)', hookCta: 'Create my free glimpse',
+    birthDate: 'Birth date', birthTime: 'Birth time', chartSex: 'Chart sex', chartSexChoose: 'Choose chart sex', chartSexMale: 'Male', chartSexFemale: 'Female', name: 'Name (optional)', hookCta: 'Create my free glimpse',
+    ziweiInputTitle: 'Complete your chart details', ziweiInputBody: 'Enter your birth time and chart sex to calculate your full Zi Wei chart.', ziweiInputSave: 'Save details and open reading', mcScrollHint: 'Scroll inside the conversation panel to read full replies and earlier messages.',
     quizTitle: 'Know yourself \u2014 two quizzes', quizLede: 'Take them free \u2014 they are part of the hook. You will see your type and one line right away; the full breakdown unlocks with your reading.',
     unlockedTitle: 'Your reading is unlocked', viewReport: 'View my full reading', resendReport: 'Resend report email',
     unlockedBanner: '\u2713 Unlocked \u2014 no need to pay again',
@@ -111,7 +112,7 @@ const STR = {
     dailyTitle: 'Free daily encouragement', dailyBody: 'One short email at 7:00am SGT \u2014 a word of encouragement, a tarot card, and a line for your day. Free with your unlock. Unsubscribe anytime.',
     limitsTitle: 'Honest limits',
     limit1: 'Bazi is a simplified demo engine \u2014 no true solar-time correction yet.',
-    limit2: 'Zi Wei content in the paid reading is illustrative sample content, not a fully computed chart.',
+    limit2: 'Zi Wei is calculated from your birth date, birth time and chart sex. Clock time is used without a true-solar-time location correction.',
     limit3: 'For self-reflection and entertainment only \u2014 not medical, financial or legal advice.',
     limit4: 'Moon / Rising are approximations from the original prototype.',
     moreDetail: 'More detail', strongest: 'Strongest', weakest: 'Weakest',
@@ -134,7 +135,7 @@ const STR = {
     checkoutFail: 'Checkout failed.', checkoutError: 'Checkout error: ',
     voiceUnsupported: 'Voice input is not supported in this browser \u2014 please type your question.',
     portraitTitle: 'Complete Portrait', synthesisTitle: 'Where the six systems agree \u2014 and where they pull apart',
-    sampleNote: 'Illustrative sample content, not a computed chart.',
+    sampleNote: 'Calculated from your birth details.',
     simplifiedNote: 'Simplified engine \u2014 no true solar-time correction yet.',
     reversed: 'Reversed', past: 'Past', present: 'Present', path: 'Near future',
     sysDescBazi: 'Your Chinese birth chart — Day Master, five elements and luck, from your year, month, day and hour.',
@@ -167,7 +168,8 @@ const STR = {
     masterLine: '\u516d\u79cd\u4f20\u7edf\uff0c\u516d\u4f4d\u6307\u5357\u3002\u4f60\u4ecd\u7136\u662f\u81ea\u5df1\u9009\u62e9\u7684\u4e3b\u4eba\u3002',
     hookKicker: '\u4ece\u4e00\u4e2a\u5c0f\u7ebf\u7d22\u5f00\u59cb',
     hookTitle: '\u5148\u770b\u4e00\u773c', hookLede: '\u8f93\u5165\u51fa\u751f\u65e5\u671f\uff0c\u5148\u770b\u770b\u516d\u79cd\u4f20\u7edf\u5404\u81ea\u6ce8\u610f\u5230\u7684\u7ebf\u7d22\u3002\u9009\u62e9\u611f\u5174\u8da3\u7684\u89c6\u89d2\uff0c\u51c6\u5907\u597d\u4e86\u518d\u7ee7\u7eed\u3002',
-    birthDate: '\u51fa\u751f\u65e5\u671f', birthTime: '\u51fa\u751f\u65f6\u95f4\uff08\u53ef\u9009\uff09', name: '\u540d\u5b57\uff08\u53ef\u9009\uff09', hookCta: '\u751f\u6210\u514d\u8d39\u9884\u89c8',
+    birthDate: '\u51fa\u751f\u65e5\u671f', birthTime: '\u51fa\u751f\u65f6\u95f4', chartSex: '\u6392\u76d8\u6027\u522b', chartSexChoose: '\u8bf7\u9009\u62e9\u6392\u76d8\u6027\u522b', chartSexMale: '\u7537', chartSexFemale: '\u5973', name: '\u540d\u5b57\uff08\u53ef\u9009\uff09', hookCta: '\u751f\u6210\u514d\u8d39\u9884\u89c8',
+    ziweiInputTitle: '\u8865\u5168\u547d\u76d8\u8d44\u6599', ziweiInputBody: '\u8bf7\u8f93\u5165\u51fa\u751f\u65f6\u95f4\u4e0e\u6392\u76d8\u6027\u522b\uff0c\u4ee5\u8ba1\u7b97\u5b8c\u6574\u7d2b\u5fae\u547d\u76d8\u3002', ziweiInputSave: '\u4fdd\u5b58\u8d44\u6599\u5e76\u6253\u5f00\u62a5\u544a', mcScrollHint: '\u5728\u5bf9\u8bdd\u6846\u5185\u6eda\u52a8\uff0c\u67e5\u770b\u5b8c\u6574\u56de\u590d\u548c\u65e9\u524d\u7684\u6d88\u606f\u3002',
     quizTitle: '\u8ba4\u8bc6\u81ea\u5df1\u2014\u2014\u4e24\u4e2a\u6d4b\u9a8c', quizLede: '\u514d\u8d39\u505a\u2014\u2014\u8fd9\u4e5f\u662f\u9884\u89c8\u7684\u4e00\u90e8\u5206\u3002\u4f60\u4f1a\u5373\u65f6\u770b\u5230\u4f60\u7684\u7c7b\u578b\u4e0e\u4e00\u53e5\u8bdd\uff1b\u5b8c\u6574\u89e3\u6790\u968f\u62a5\u544a\u89e3\u9501\u3002',
     unlockedTitle: '\u4f60\u7684\u62a5\u544a\u5df2\u89e3\u9501', viewReport: '\u67e5\u770b\u5b8c\u6574\u62a5\u544a', resendReport: '\u91cd\u5bc4\u62a5\u544a\u7535\u90ae',
     unlockedBanner: '\u2713 \u5df2\u89e3\u9501\u2014\u2014\u65e0\u9700\u518d\u6b21\u4ed8\u6b3e',
@@ -229,7 +231,7 @@ const STR = {
     dailyTitle: '\u514d\u8d39\u6bcf\u65e5\u9f13\u52b1', dailyBody: '\u6bcf\u5929\u65e9\u4e0a 7:00\uff08\u65b0\u52a0\u5761\u65f6\u95f4\uff09\u4e00\u5c01\u77ed\u4fe1\u2014\u2014\u4e00\u53e5\u9f13\u52b1\u3001\u4e00\u5f20\u5854\u7f57\u724c\u3001\u4e00\u53e5\u4eca\u65e5\u63d0\u9192\u3002\u89e3\u9501\u540e\u514d\u8d39\uff0c\u968f\u65f6\u53ef\u4ee5\u53d6\u6d88\u8ba2\u9605\u3002',
     limitsTitle: '\u8bda\u5b9e\u8bf4\u660e',
     limit1: '\u516b\u5b57\u4e3a\u7b80\u5316\u6f14\u793a\u5f15\u64ce\u2014\u2014\u5c1a\u672a\u505a\u771f\u592a\u9633\u65f6\u6821\u6b63\u3002',
-    limit2: '\u4ed8\u8d39\u62a5\u544a\u4e2d\u7684\u7d2b\u5fae\u5185\u5bb9\u4e3a\u793a\u8303\u6837\u672c\uff0c\u5e76\u975e\u5b8c\u6574\u6392\u76d8\u3002',
+    limit2: '\u7d2b\u5fae\u6839\u636e\u51fa\u751f\u65e5\u671f\u3001\u51fa\u751f\u65f6\u95f4\u53ca\u6392\u76d8\u6027\u522b\u8ba1\u7b97\uff1b\u4f7f\u7528\u8f93\u5165\u7684\u949f\u8868\u65f6\u95f4\uff0c\u672a\u4f5c\u771f\u592a\u9633\u65f6\u5730\u70b9\u6821\u6b63\u3002',
     limit3: '\u4ec5\u4f9b\u81ea\u6211\u53cd\u601d\u4e0e\u5a31\u4e50\u2014\u2014\u4e0d\u662f\u533b\u7597\u3001\u8d22\u52a1\u6216\u6cd5\u5f8b\u5efa\u8bae\u3002',
     limit4: '\u6708\u4eae\u4e0e\u4e0a\u5347\u661f\u5ea7\u4e3a\u539f\u578b\u7684\u8fd1\u4f3c\u8ba1\u7b97\u3002',
     moreDetail: '\u66f4\u591a\u8be6\u60c5', strongest: '\u6700\u65fa', weakest: '\u6700\u5f31',
@@ -252,7 +254,7 @@ const STR = {
     checkoutFail: '\u7ed3\u5e10\u5931\u8d25\u3002', checkoutError: '\u7ed3\u5e10\u9519\u8bef\uff1a',
     voiceUnsupported: '\u6b64\u6d4f\u89c8\u5668\u4e0d\u652f\u63f4\u8bed\u97f3\u8f93\u5165\u2014\u2014\u8bf7\u6253\u5b57\u63d0\u95ee\u3002',
     portraitTitle: '\u5b8c\u6574\u8096\u50cf', synthesisTitle: '\u516d\u4e2a\u7cfb\u7edf\u4e00\u81f4\u4e4b\u5904\u2014\u2014\u4ee5\u53ca\u5f20\u529b\u6240\u5728',
-    sampleNote: '\u793a\u8303\u6837\u672c\u5185\u5bb9\uff0c\u5e76\u975e\u5b8c\u6574\u8ba1\u7b97\u3002',
+    sampleNote: '\u6839\u636e\u4f60\u7684\u51fa\u751f\u8d44\u6599\u8ba1\u7b97\u3002',
     simplifiedNote: '\u7b80\u5316\u5f15\u64ce\u2014\u2014\u5c1a\u672a\u505a\u771f\u592a\u9633\u65f6\u6821\u6b63\u3002',
     reversed: '\u9006\u4f4d', past: '\u8fc7\u53bb', present: '\u73b0\u5728', path: '\u8fd1\u671f\u672a\u6765',
     sysDescBazi: '\u516b\u5b57\u547d\u76d8\u2014\u2014\u4ece\u51fa\u751f\u5e74\u3001\u6708\u3001\u65e5\u3001\u65f6\u770b\u65e5\u4e3b\u3001\u4e94\u884c\u4e0e\u8fd0\u52bf\u3002',
@@ -385,7 +387,7 @@ function promptBirthDate() {
 function previewSystemsHTML() {
   let html = '';
   html += `<section class="card" id="sys-bazi">${sysHead('\uD83C\uDF3F', 'Bazi \u516b\u5b57')}<p class="lede sys-desc">${esc(t('sysDescBazi'))}</p>${revealCover('\uD83C\uDF3F', `${t('tapReveal')} \u2014 ${t('dayMaster')}`, t('enterDateFirst'))}</section>`;
-  html += `<section class="card" id="sys-ziwei">${sysHead('\u2B50', 'Zi Wei \u7d2b\u5fae\u6597\u6570')}<p class="lede sys-desc">${esc(t('sysDescZiwei'))}</p><p class="lede">${esc(t('lifePalace'))} \u00B7 ${esc(L({ en: 'Tian Ji', zh: '\u5929\u673a' }))}</p><button type="button" data-preview="ziwei">\u2728 ${esc(t('castChart'))}</button></section>`;
+  html += `<section class="card" id="sys-ziwei">${sysHead('\u2B50', 'Zi Wei \u7d2b\u5fae\u6597\u6570')}<p class="lede sys-desc">${esc(t('sysDescZiwei'))}</p><p class="lede">${esc(t('lifePalace'))} \u00B7 ${esc(t('enterDateFirst'))}</p><button type="button" data-preview="ziwei">\u2728 ${esc(t('castChart'))}</button></section>`;
   html += `<section class="card" id="sys-horo">${sysHead('\uD83C\uDF19', 'Horoscope \u661f\u5ea7')}<p class="lede sys-desc">${esc(t('sysDescHoro'))}</p>${revealCover('\uD83C\uDF19', `${t('tapReveal')} \u2014 ${t('sun')}`, t('enterDateFirst'))}</section>`;
   html += `<section class="card" id="sys-yijing">${sysHead('\u262F\uFE0F', 'Yi-Jing \u6613\u7ecf')}<p class="lede sys-desc">${esc(t('sysDescYijing'))}</p><p class="lede">${esc(t('yijingHow'))}</p><button type="button" data-preview="yijing">\uD83E\uDE99 ${esc(t('castCoins'))}</button></section>`;
   html += `<section class="card" id="sys-tarot">${sysHead('\uD83C\uDCCF', 'Tarot \u5854\u7f57')}<p class="lede sys-desc">${esc(t('sysDescTarot'))}</p><p class="lede">${esc(t('tapFlip'))}</p><div class="tarot-row">${['past', 'present', 'path'].map((p) => `<div><div class="tarot-card" data-preview="tarot" role="button" tabindex="0" aria-label="${esc(t('tapFlip'))}"><div class="tarot-inner"><div class="tarot-face tarot-back"><div class="star">\u2726</div><p>${esc(t('flipping'))}</p></div></div></div><p class="tarot-pos">${esc(t(p))}</p></div>`).join('')}</div></section>`;
@@ -476,7 +478,10 @@ function heroResultHTML(key) {
     }
     case 'ziwei': {
       const pal = unlocked ? r.ziwei.palaces[0] : null;
-      return `<div class="hero-result">★ ${esc(unlocked ? L(pal.star) : L({ en: 'Tian Ji', zh: '天机' }))}</div><p class="hero-sub">${esc(L({ en: 'Tian Ji Palace', zh: '天机宫' }))} · ${esc(L(unlocked ? pal.text : src.ziwei.hook))}</p>`;
+      const star = unlocked ? L(pal.star) : L(src.ziwei.mainStar);
+      const palaceName = unlocked ? L(pal) : L({ en: src.ziwei.lifePalace, zh: src.ziwei.lifePalaceZh });
+      const localizedPalace = unlocked ? (state.lang === 'zh' ? r.ziwei.lifePalaceZh : r.ziwei.lifePalace) : palaceName;
+      return `<div class="hero-result">★ ${esc(star)}</div><p class="hero-sub">${esc(localizedPalace)} · ${esc(L(unlocked ? pal.text : src.ziwei.hook))}</p>`;
     }
     case 'horoscope': {
       const sun = unlocked ? r.horoscope.sun : { en: src.horoscope.sunSign, zh: src.horoscope.sunSignZh, symbol: '☉' };
@@ -580,7 +585,9 @@ function applyPageLayout() {
   show('report-card', onMaster && state.unlocked);
   const reportDiv = $('report');
   if (reportDiv) reportDiv.classList.toggle('hidden', onMaster);
-  show('master-locked-card', onMaster && !state.unlocked);
+  show('master-locked-card', onMaster && !state.unlocked && !state.ziweiInputsNeeded);
+  show('ziwei-input-card', (onMaster || onHub) && state.unlocked && state.ziweiInputsNeeded);
+  if (onMaster && state.ziweiInputsNeeded) show('report-card', false);
   const hubNext = $('hub-next');
   if (hubNext) hubNext.innerHTML = hubNextHTML();
   const stepNav = $('step-nav');
@@ -647,18 +654,16 @@ function renderSystems() {
   /* Zi Wei — cast the chart */
   html += `<section class="card" id="sys-ziwei">${sysHead('\u2B50', 'Zi Wei \u7d2b\u5fae\u6597\u6570')}<p class="lede sys-desc">${esc(t('sysDescZiwei'))}</p>`;
   if (!state.ziweiCast) {
-    html += `<p class="lede">${esc(t('lifePalace'))} \u00B7 ${esc(L({ en: 'Tian Ji', zh: '\u5929\u673a' }))}</p><button type="button" data-act="cast-ziwei">\u2728 ${esc(t('castChart'))}</button>`;
+    const life = unlocked ? r.ziwei.mainStar : src.ziwei.mainStar;
+    const palace = unlocked ? r.ziwei.lifePalace : src.ziwei.lifePalace;
+    html += `<p class="lede">${esc(t('lifePalace'))} · ${esc(L(life))} · ${esc(palace)}</p><button type="button" data-act="cast-ziwei">\u2728 ${esc(t('castChart'))}</button>`;
   } else {
     html += `<p class="small">${esc(t('sampleNote'))}</p>`;
-    const palaces = unlocked ? r.ziwei.palaces : [
-      { key: 'life', en: 'Life Palace', zh: '\u547d\u5bab', star: { en: 'Tian Ji', zh: '\u5929\u673a' }, text: src.ziwei.hook },
-      { key: 'wealth', en: 'Wealth Palace', zh: '\u8d22\u5e1b\u5bab', star: { en: 'Wu Qu', zh: '\u6b66\u66f2' }, text: null },
-      { key: 'career', en: 'Career Palace', zh: '\u5b98\u7984\u5bab', star: { en: 'Tai Yang', zh: '\u592a\u9633' }, text: null },
-      { key: 'spouse', en: 'Spouse Palace', zh: '\u592b\u59bb\u5bab', star: { en: 'Tai Yin', zh: '\u592a\u9634' }, text: null },
-    ];
+    const palaces = unlocked ? r.ziwei.palaces : [{ key: 'soul', en: 'Life Palace', zh: '\u547d\u5bab', star: src.ziwei.mainStar, text: src.ziwei.hook }];
     html += `<div class="palace-grid">${palaces.map((p) => {
-      const readable = unlocked || p.key === 'life';
-      return `<div class="palace cast-item ${p.key === 'life' ? 'main' : ''}"><div class="pname">${esc(L(p))}</div><div class="star">${esc(L(p.star))}</div>${readable && p.text ? `<p>${esc(L(p.text))}</p>` : `<div class="skel"></div><div class="skel short"></div>`}</div>`;
+      const isLife = p.key === 'life' || p.key === 'soul';
+      const readable = unlocked || isLife;
+      return `<div class="palace cast-item ${isLife ? 'main' : ''}"><div class="pname">${esc(L(p))}</div><div class="star">${esc(L(p.star))}</div>${readable && p.text ? `<p>${esc(L(p.text))}</p>` : `<div class="skel"></div><div class="skel short"></div>`}</div>`;
     }).join('')}</div>`;
     if (unlocked) html += sectionHTML(r.ziwei.sections);
     else html += lockBlock();
@@ -857,10 +862,11 @@ function authParams() {
    not — after a reload both fields came back empty even though the banner
    promises "no need to re-enter anything". Persist time + name alongside
    them, and prefill the form from storage on every load. */
-function saveProfile(birthDate, birthTime, name) {
+function saveProfile(birthDate, birthTime, name, ziweiGender) {
   try {
     if (birthDate) localStorage.setItem('fateweave_birthDate', birthDate);
     localStorage.setItem('fateweave_birthTime', birthTime || '');
+    localStorage.setItem('fateweave_ziweiGender', ziweiGender || '');
     localStorage.setItem('fateweave_name', name || '');
   } catch {}
 }
@@ -868,10 +874,12 @@ function prefillForm() {
   try {
     const birthDate = localStorage.getItem('fateweave_birthDate');
     const birthTime = localStorage.getItem('fateweave_birthTime');
+    const ziweiGender = localStorage.getItem('fateweave_ziweiGender');
     const name = localStorage.getItem('fateweave_name');
     const email = localStorage.getItem('fateweave_email');
     if (birthDate) $('birthDate').value = birthDate;
     if (birthTime) $('birthTime').value = birthTime;
+    if (ziweiGender) $('ziweiGender').value = ziweiGender;
     if (name) $('name').value = name;
     if (email) $('email').value = email;
   } catch {}
@@ -1050,18 +1058,19 @@ async function loadPrice() {
 $('hook-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const birthDate = $('birthDate').value;
-  const birthTime = $('birthTime').value || null;
+  const birthTime = $('birthTime').value;
+  const ziweiGender = $('ziweiGender').value;
   const name = $('name').value || null;
   const status = $('teaser-status');
   status.textContent = t('readingGlimpse');
   try {
-    const res = await fetch('/api/hook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ birthDate, birthTime, name }) });
+    const res = await fetch('/api/hook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ birthDate, birthTime, ziweiGender, name }) });
     const data = await res.json();
     if (!res.ok) { status.textContent = data.error || t('couldNotRead'); return; }
     // The profile the user just asked about is the current profile from now
     // on — persist date, time and name so a reload prefills all three.
     const prevBirthDate = state.report?.profile?.birthDate || localStorage.getItem('fateweave_birthDate');
-    saveProfile(birthDate, birthTime, name);
+    saveProfile(birthDate, birthTime, name, ziweiGender);
     state.teaser = data;
     status.textContent = '';
     if (prevBirthDate && birthDate !== prevBirthDate) {
@@ -1081,19 +1090,38 @@ $('hook-form').addEventListener('submit', async (e) => {
   } catch (err) { status.textContent = t('networkError') + err.message; }
 });
 
+$('ziwei-input-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const status = $('ziwei-input-status');
+  const birthTime = $('ziwei-birth-time').value;
+  const ziweiGender = $('ziwei-birth-gender').value;
+  status.textContent = t('readingGlimpse');
+  try {
+    const res = await fetch('/api/update-ziwei-inputs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...authParams(), birthTime, ziweiGender }) });
+    const data = await res.json();
+    if (!res.ok) { status.textContent = data.error || t('couldNotRead'); return; }
+    saveProfile(authParams().birthDate, birthTime, $('name').value || localStorage.getItem('fateweave_name') || '', ziweiGender);
+    $('birthTime').value = birthTime; $('ziweiGender').value = ziweiGender;
+    status.textContent = '';
+    if (!await loadReport(true)) status.textContent = t('couldNotRead');
+  } catch (err) { status.textContent = t('networkError') + err.message; }
+});
+
 $('checkout-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = $('email').value;
   const birthDate = $('birthDate').value;
   if (!birthDate) { alert(t('enterDateFirst')); return; }
-  const birthTime = $('birthTime').value || null;
+  const birthTime = $('birthTime').value;
+  const ziweiGender = $('ziweiGender').value;
+  if (!birthTime || !ziweiGender) { $('birthTime').reportValidity(); $('ziweiGender').reportValidity(); return; }
   const name = $('name').value || null;
   // Persist the profile (and email) now, so a reload or an abandoned
   // checkout never loses what the user already typed.
-  saveProfile(birthDate, birthTime, name);
+  saveProfile(birthDate, birthTime, name, ziweiGender);
   try { localStorage.setItem('fateweave_email', email); } catch {}
   try {
-    const res = await fetch('/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, birthDate, birthTime, name }) });
+    const res = await fetch('/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, birthDate, birthTime, ziweiGender, name }) });
     const data = await res.json();
     if (!res.ok) { alert(data.error || t('checkoutFail')); return; }
     location.href = data.checkoutUrl;
@@ -1107,14 +1135,15 @@ async function unlockStagingPreview() {
   button.disabled = true;
   try {
     const birthTime = $('birthTime').value || localStorage.getItem('fateweave_birthTime') || null;
+    const ziweiGender = $('ziweiGender').value || localStorage.getItem('fateweave_ziweiGender') || null;
     const name = $('name').value || localStorage.getItem('fateweave_name') || null;
     const res = await fetch('/api/preview-access', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ birthDate, birthTime, name }),
+      body: JSON.stringify({ birthDate, birthTime, ziweiGender, name }),
     });
     const data = await res.json();
     if (!res.ok || !data.token) { alert(data.error || t('previewAccessFail')); return; }
-    saveProfile(birthDate, birthTime, name);
+    saveProfile(birthDate, birthTime, name, ziweiGender);
     localStorage.setItem('fateweave_token', data.token);
     localStorage.setItem('fateweave_email', data.email);
     localStorage.setItem('fateweave_staging_preview', '1');
@@ -1131,6 +1160,17 @@ async function loadReport(quiet, _retried) {
   try {
     const res = await fetch(`/api/report?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}&birthDate=${encodeURIComponent(birthDate)}`);
     if (!res.ok) {
+      if (res.status === 409) {
+        const problem = await res.json();
+        if (problem.code === 'ziwei_inputs_required') {
+          state.unlocked = true;
+          state.ziweiInputsNeeded = true;
+          $('ziwei-birth-time').value = problem.birthTime || localStorage.getItem('fateweave_birthTime') || '';
+          $('ziwei-birth-gender').value = problem.ziweiGender || localStorage.getItem('fateweave_ziweiGender') || '';
+          applyPageLayout();
+          return false;
+        }
+      }
       // A 403 is a real "not paid / expired" — never retry it. Any other
       // failure (5xx, or a dropped request during a network incident)
       // gets ONE retry after 1.5 s: a single transient failure used to
@@ -1146,6 +1186,7 @@ async function loadReport(quiet, _retried) {
     const r = await res.json();
     state.report = r;
     state.unlocked = true;
+    state.ziweiInputsNeeded = false;
     // Prefill the form from the stored order — the reading belongs to this birth date.
     $('birthDate').value = r.profile.birthDate || birthDate;
     if (r.profile.birthTime) $('birthTime').value = r.profile.birthTime;
@@ -1162,6 +1203,7 @@ async function loadReport(quiet, _retried) {
     try {
       localStorage.setItem('fateweave_tokenBirthDate', r.profile.birthDate || birthDate);
       localStorage.setItem('fateweave_birthTime', r.profile.birthTime || $('birthTime').value || '');
+      localStorage.setItem('fateweave_ziweiGender', r.profile.ziweiGender || '');
       localStorage.setItem('fateweave_name', r.profile.name || $('name').value || '');
     } catch {}
     $('unlocked-banner').innerHTML = `${esc(t('unlockedBanner'))}<small>${esc(t('unlockedBannerSub'))}</small>`;
@@ -1195,7 +1237,7 @@ async function loadSavedTeaser() {
   try {
     const res = await fetch('/api/hook', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ birthDate, birthTime: localStorage.getItem('fateweave_birthTime') || null, name: localStorage.getItem('fateweave_name') || null }),
+      body: JSON.stringify({ birthDate, birthTime: localStorage.getItem('fateweave_birthTime') || null, ziweiGender: localStorage.getItem('fateweave_ziweiGender') || null, name: localStorage.getItem('fateweave_name') || null }),
     });
     const data = await res.json();
     if (!res.ok) return false;
@@ -1275,7 +1317,7 @@ function reportDownloadHTML(r) {
   h += `<h1>FateWeave 天机汇 — ${esc(t('fullReadingTitle'))}</h1><p>${esc(r.profile.birthDate || '')}${r.profile.name ? ' · ' + esc(r.profile.name) : ''}</p>`;
   h += `<p><em>${esc(L(r.portrait.essenceLine))}</em></p><p>${esc(L(r.portrait.character))}</p>`;
   h += sec('Bazi 八字 — ' + L(r.bazi.dayMaster), `<p>${esc(L(r.bazi.dayMasterText))}</p>` + dlSecs(r.bazi.sections));
-  h += sec('Zi Wei 紫微 — ' + r.ziwei.lifePalace, `<p><em>${esc(t('sampleNote'))}</em></p>` + dlSecs(r.ziwei.sections));
+  h += sec('Zi Wei 紫微 — ' + r.ziwei.lifePalace, `<p><em>${esc(t('limit2'))}</em></p>` + r.ziwei.palaces.map((p) => `<h3>${esc(L(p))} · ${esc(L(p.branch))}${p.isBodyPalace ? ' · ' + (state.lang === 'zh' ? '身宫' : 'Body Palace') : ''}</h3><p><strong>${esc((p.majorStars || []).map((s) => L(s)).join(', ') || L(p.star))}</strong>${p.minorStars?.length ? '<br>' + esc(state.lang === 'zh' ? '辅曜' : 'Supporting stars') + ': ' + esc(p.minorStars.map((s) => L(s)).join(', ')) : ''}${p.decadal ? '<br>' + esc(state.lang === 'zh' ? '大限年龄' : 'Decadal ages') + ': ' + p.decadal.startAge + '–' + p.decadal.endAge : ''}</p><p>${esc(L(p.text))}</p>`).join('') + dlSecs(r.ziwei.sections));
   h += sec('Horoscope 星座 — ' + L(r.horoscope.sun), `<p>Sun ${esc(L(r.horoscope.sun))} · Moon ${esc(L(r.horoscope.moon))} · Rising ${esc(L(r.horoscope.rising))}</p>` + dlSecs(r.horoscope.sections));
   h += sec('Numerology 生命灵数 — Life Path ' + r.numerology.lifePath, dlSecs(r.numerology.sections));
   h += sec('Yi-Jing 易经 — ' + r.yijing.hexagram, `<p>${esc(L(r.yijing.theme))}</p>` + dlSecs(r.yijing.sections));

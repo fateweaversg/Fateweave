@@ -18,13 +18,14 @@
  *
  * HONEST LIMITS (must stay in UI copy):
  * - Bazi is a SIMPLIFIED engine, no true solar-time correction yet.
- * - Zi Wei paid content is ILLUSTRATIVE sample content, not a computed
- *   chart (original prototype hard-codes the palace stars shown here).
+ * - Zi Wei is calculated from birth date, birth time and chart sex using
+ *   iztro; entered clock time is not corrected to true solar time.
  * - Moon / Rising are approximations from the original prototype.
  * - Self-reflection / entertainment only. No medical, financial or legal claims.
  */
 const crypto = require('crypto');
 const D = require('./original-data');
+const { buildZiweiChart } = require('./ziwei');
 
 function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return Math.abs(h); }
 function seededRand(seed) { let x = seed % 2147483647; if (x <= 0) x += 2147483646; return () => { x = x * 16807 % 2147483647; return (x - 1) / 2147483646; }; }
@@ -301,25 +302,6 @@ function tarotSections(draw, lang) {
     timing: sec(`Take one small action this week that matches the Present card, ${theCard(cards[1].name.en)}, and watch what changes. That is how a reading earns its keep.`, `本周做一件与现在这张牌「${cards[1].name.zh}」相符的小事，看看什么改变了。`),
   };
 }
-// Zi Wei palaces — verbatim from the original prototype (sample, NOT computed).
-const ZIWEI_PALACES = [
-  { key: 'life', en: 'Life Palace', zh: '命宫', star: { en: 'Tian Ji', zh: '天机' }, text: { en: 'Tian Ji — strategy and adaptability lead', zh: '天机——以谋略与变化见长' } },
-  { key: 'wealth', en: 'Wealth Palace', zh: '财帛宫', star: { en: 'Wu Qu', zh: '武曲' }, text: { en: 'Wu Qu — wealth through skill and execution', zh: '武曲化禄：财来自专业与执行' } },
-  { key: 'career', en: 'Career Palace', zh: '官禄宫', star: { en: 'Tai Yang', zh: '太阳' }, text: { en: 'The Sun — a reputation-led career', zh: '太阳：名声型事业，宜公开场合' } },
-  { key: 'spouse', en: 'Spouse Palace', zh: '夫妻宫', star: { en: 'Tai Yin', zh: '太阴' }, text: { en: 'The Moon — emotional safety first in partners', zh: '太阴：伴侣重情绪安全感' } },
-];
-function ziweiSections(lang) {
-  return {
-    overview: sec(
-      'Your Life Palace star is Tian Ji, the strategist: your operating core is think it through, then move. Strategy and adaptability are your strongest assets, and you perform better amid change than inside fixed routines. The shadow of Tian Ji is over-thinking and slow starts — a personal rule of act at seventy percent clarity serves this star better than waiting for one hundred.',
-      '命宫主星天机：你的行事核心是「先想通、再行动」——谋略与适应力是你最强的资产，在变化中比在固定流程中表现更好。天机的阴影是想得太多、启动太慢：给自己一个「想通七成便动手」的规则，比追求想通十成更合这颗星。'),
-    career: sec('Career Palace — Tai Yang, the Sun: a reputation-led career. Work that is seen, named and trusted in public suits this palace; work done entirely in the background starves it.', '官禄宫——太阳：名声型事业，宜公开场合。能被看见、被指名、被信任的工作适合此宫；完全在幕后的工作会令它挨饿。'),
-    relationships: sec('Spouse Palace — Tai Yin, the Moon: emotional safety first in partners. The relationship works when both people feel safe enough to say the plain thing, not only the polished one.', '夫妻宫——太阴：伴侣重情绪安全感。关系要好，双方都要感到安全，敢说平实的话，而不只说漂亮的话。'),
-    wealth: sec('Wealth Palace — Wu Qu: wealth through skill and execution. Money follows demonstrated competence and finished work, not speculation or waiting to be discovered.', '财帛宫——武曲化禄：财来自专业与执行。金钱跟随被证明的专业与完成的工作，而不是投机或等待被发现。'),
-    health: sec('Life Palace energy is mental: Tian Ji thinks first and acts second. Protect thinking time and sleep — when the mind is tired, the strategist starts second-guessing instead of deciding.', '命宫能量是心智型的：天机先想后动。保护思考时间与睡眠——心累时，谋略家会开始反复质疑，而不是作决定。'),
-    timing: sec('Tian Ji timing is seasonal: think in the quiet season, move in the open one. A full twelve-palace computed chart with decade luck is a Phase 2 layer — this sample does not claim to be it.', '天机的时机是季节性的：安静的季节思考，公开的季节行动。完整十二宫排盘与大限走势属第二阶段——此样本并不声称是它。'),
-  };
-}
 
 /* --- Full reading (paid only — NEVER returned by /api/hook) ---------------- */
 // Canonical birth time for the tarot / Yi-Jing seed (8 Nov 2026 fix 4):
@@ -347,7 +329,7 @@ function canonicalBirthTime(birthTime) {
   return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
 }
 function buildFullReading(profile, personality) {
-  const { birthDate, birthTime, name, focus, question } = profile;
+  const { birthDate, birthTime, name, focus, question, ziweiGender } = profile;
   const { year, month, day, date } = parseBirth(birthDate, birthTime);
   const b = calcBazi(date, birthTime);
   const a = calcAstro(date, birthTime);
@@ -379,17 +361,7 @@ function buildFullReading(profile, personality) {
     note: 'Simplified engine — no true solar-time correction yet.',
     noteZh: '简化引擎——尚未做真太阳时校正。',
   };
-  const ziwei = {
-    system: 'Zi Wei Dou Shu',
-    lifePalace: 'Tian Ji Palace', lifePalaceZh: '天机宫',
-    mainStar: { en: 'Tian Ji', zh: '天机' },
-    palaces: ZIWEI_PALACES,
-    guidance: { en: 'Illustrative sample reading — Zi Wei content here is a sample, not a fully computed chart. Read it as a reflection prompt, not a prediction.', zh: '示范样本内容——此处紫微内容为样本，并非完整排盘。请当作反思提示，而非预测。' },
-    sections: ziweiSections('en'),
-    note: 'Illustrative sample content, not computed.',
-    noteZh: '示范样本内容，并非完整计算。',
-    sample: true,
-  };
+  const ziwei = buildZiweiChart({ birthDate, birthTime, ziweiGender });
   const horoscope = {
     system: 'Western Horoscope',
     sunSign: { en: a.sun.en, zh: a.sun.zh, symbol: a.sun.sym },
@@ -441,13 +413,13 @@ function buildFullReading(profile, personality) {
   };
 
   return {
-    profile: { name: name || null, birthDate, birthTime: birthTime || null, focus: focus || 'general', question: question || null },
+    profile: { name: name || null, birthDate, birthTime: birthTime || null, ziweiGender: ziweiGender || null, focus: focus || 'general', question: question || null },
     generatedAt: new Date().toISOString(),
     bazi, ziwei, horoscope, numerology, yijing: yijingOut, tarot: tarotOut,
     portrait, synthesis,
     limits: [
       'Bazi simplified engine, no true solar-time correction yet.',
-      'Zi Wei paid content is illustrative sample, not computed.',
+    'Zi Wei chart is calculated from birth date, birth time and chart sex; entered clock time is not adjusted to true solar time.',
       'Moon / Rising are approximations from the original prototype.',
       'Self-reflection / entertainment only — no medical, financial or legal claims.',
     ],
@@ -540,6 +512,7 @@ function buildTeaser(profile) {
     },
     ziwei: {
       lifePalace: full.ziwei.lifePalace, lifePalaceZh: full.ziwei.lifePalaceZh,
+      mainStar: full.ziwei.mainStar,
       hook: { en: full.ziwei.palaces[0].text.en, zh: full.ziwei.palaces[0].text.zh },
     },
     horoscope: {
@@ -716,27 +689,33 @@ function lockedPersonalitySummary(enneagram, mbti) {
    message names the date, today's card (seeded draw), today's hexagram
    (seeded cast), and the profile's own computed values. */
 function buildDailyMessage(profile, dateStr) {
-  const date = dateStr || new Intl.DateTimeFormat('en-CA', {
+  const today = dateStr || new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date());
-  const full = buildFullReading(profile);
-  const seed = `${profile.birthDate}|${date}`;
+  const { date: birthDateValue } = parseBirth(profile.birthDate, profile.birthTime);
+  const birth = calcBazi(birthDateValue, profile.birthTime);
+  const counts = birth.counts;
+  const dominant = Object.keys(counts).reduce((x, y) => counts[x] >= counts[y] ? x : y);
+  const weakest = Object.keys(counts).reduce((x, y) => counts[x] <= counts[y] ? x : y);
+  const numbers = calcNumbers(birthDateValue, profile.name);
+  const lifePath = numbers.lp;
+  const seed = `${profile.birthDate}|${today}`;
   const draw = drawTarot(`${seed}|daily`);
   const card = D.TAROT[draw[0].idx];
   const cast = castYijing(`${seed}|daily-yi`);
   const hex = cast.hex;
-  const d = new Date(`${date}T00:00:00Z`);
+  const d = new Date(`${today}T00:00:00Z`);
   const wdEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getUTCDay()];
   const wdZh = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][d.getUTCDay()];
-  const domEn = elName(full.bazi.dominant, 'en'), domZh = elName(full.bazi.dominant, 'zh');
-  const weakEn = elName(full.bazi.weakest, 'en'), weakZh = elName(full.bazi.weakest, 'zh');
+  const domEn = elName(dominant, 'en'), domZh = elName(dominant, 'zh');
+  const weakEn = elName(weakest, 'en'), weakZh = elName(weakest, 'zh');
   return {
-    date,
-    en: `Today, ${wdEn} ${date}: your card is ${card[1]} — ${card[4]}. ${D.HEX_THEME.en[hex[0]]} Your strongest element is ${domEn}; lean on it today, and give your lightest element, ${weakEn}, one small break. Life Path ${full.numerology.lifePath} sets the theme: ${firstSentence(full.numerology.lifePathText.en)}`,
-    zh: `今天${date}${wdZh}：你的牌是「${card[2]}」——${D.TAROT_ZH_KEYWORDS[draw[0].idx]}。${D.HEX_THEME.zh[hex[0]]}你最旺的五行是${domZh}，今天就靠它；最弱的${weakZh}，给它留一点空。生命灵数 ${full.numerology.lifePath}定下今天的主题：${firstSentence(full.numerology.lifePathText.zh)}`,
+    date: today,
+    en: `Today, ${wdEn} ${today}: your card is ${card[1]} — ${card[4]}. ${D.HEX_THEME.en[hex[0]]} Your strongest element is ${domEn}; lean on it today, and give your lightest element, ${weakEn}, one small break. Life Path ${lifePath} sets the theme: ${firstSentence(D.LP.en[String(lifePath)])}`,
+    zh: `今天${today}${wdZh}：你的牌是「${card[2]}」——${D.TAROT_ZH_KEYWORDS[draw[0].idx]}。${D.HEX_THEME.zh[hex[0]]}你最旺的五行是${domZh}，今天就靠它；最弱的${weakZh}，给它留一点空。生命灵数 ${lifePath}定下今天的主题：${firstSentence(D.LP.zh[String(lifePath)])}`,
     card: { idx: draw[0].idx, number: card[0], name: { en: card[1], zh: card[2] }, emoji: card[3], reversed: draw[0].rev },
     hexagram: { number: hex[0], en: hex[1], zh: hex[2], theme: { en: D.HEX_THEME.en[hex[0]], zh: D.HEX_THEME.zh[hex[0]] } },
-    dayMaster: full.bazi.dayMaster, lifePath: full.numerology.lifePath,
+    dayMaster: { en: STEM_EN[birth.dayMaster], zh: STEM_ZH[birth.dayMaster] }, lifePath,
   };
 }
 
