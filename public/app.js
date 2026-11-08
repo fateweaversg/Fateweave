@@ -1208,7 +1208,7 @@ async function loadReport(quiet, _retried) {
     } catch {}
     $('unlocked-banner').innerHTML = `${esc(t('unlockedBanner'))}<small>${esc(t('unlockedBannerSub'))}</small>`;
     $('unlocked-banner').classList.remove('hidden');
-    $('unlocked-sub').textContent = `${esc(r.profile.birthDate)} \u00B7 ${email}`;
+    $('unlocked-sub').textContent = `${state.lang === 'zh' ? '出生日期' : 'Birth date'}: ${r.profile.birthDate} \u00B7 ${state.lang === 'zh' ? '邮箱' : 'Email'}: ${email}`;
     $('unlocked-card').classList.remove('hidden');
     $('unlock-card').classList.add('hidden');
     // Live Reader + Ask the Master live on /master only — a single-system
