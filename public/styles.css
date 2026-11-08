@@ -182,7 +182,13 @@ ul.clean.plist { padding-left: 0; }
 
 /* --- Ask the Master (follow-up chat, 7 Nov 2026) --- */
 #master-chat { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 6px; }
-#mc-thread { max-height: 320px; overflow-y: auto; margin: 12px 0; }
+#mc-thread { height: min(62vh, 560px); min-height: 260px; overflow-y: scroll; overscroll-behavior: contain; scrollbar-gutter: stable; margin: 12px 0; padding: 12px; border: 1px solid var(--line); background: #f4f0e7; }
+#mc-thread:focus-visible { outline: 3px solid #ad4233; outline-offset: 2px; }
+#mc-thread::-webkit-scrollbar { width: 12px; }
+#mc-thread::-webkit-scrollbar-track { background: #ded7c8; }
+#mc-thread::-webkit-scrollbar-thumb { background: #405762; border: 2px solid #ded7c8; }
+#mc-thread { scrollbar-color: #405762 #ded7c8; scrollbar-width: auto; }
+.mc-scroll-hint { margin: 0 0 6px; }
 /* AI Master badge (7 Nov 2026): shown only when the AI Master is live
    (GEMINI_API_KEY set server-side). Hidden in rule-based mode. */
 .ai-badge { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .04em; color: #1a1405; background: var(--gold); border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; }
@@ -190,8 +196,14 @@ ul.clean.plist { padding-left: 0; }
    instead of the AI (no key, quota, caps, cooldown). */
 .mc-rb-tag { display: block; margin-top: 6px; font-size: .78rem; color: var(--gold-dim); font-style: italic; }
 #mc-thread p { border-radius: 10px; padding: 10px 12px; white-space: pre-line; }
-#mc-thread p.mc-user { background: rgba(212,175,55,.14); border: 1px solid var(--gold-dim); margin-left: 24px; }
-#mc-thread p.mc-master { background: var(--card-2); margin-right: 24px; }
+#mc-thread p.mc-user { background: #25485a; color: #fff; border: 1px solid #193545; margin-left: 24px; }
+#mc-thread p.mc-master { background: #fffdf7; color: #20251f; border: 1px solid #c5aa75; margin-right: 24px; }
+#mc-thread > .master-topic { max-width:100%; }
+#mc-thread .mc-user,#mc-thread .mc-master { display:block; max-width:100%; padding:8px 14px; margin:10px 0; border-radius:0; overflow:visible; }
+#mc-thread .mc-user { background:#25485a; color:#fff; border-left:4px solid #c99a54; }
+#mc-thread .mc-master { background:#fffdf7; color:#20251f; border:1px solid #c5aa75; }
+#mc-thread .mc-master p { max-height:none; overflow:visible; white-space:pre-wrap; overflow-wrap:anywhere; margin:6px 0; }
+#mc-thread .mc-user p { color:#fff; white-space:pre-wrap; overflow-wrap:anywhere; margin:6px 0; }
 /* "Thinking…" line while a Master / Live Reader answer is in flight —
    the chat must never sit silent while waiting (7 Nov 2026 fix). */
 #mc-thread p.mc-thinking, #lr-answers p.lr-thinking { background: transparent; font-style: italic; color: var(--gold-dim); }
@@ -323,5 +335,5 @@ body.theme-tarot .tarot-front .cname { font-size: 1.25rem; }
 }
 
 /* Unified Master conversation: legacy inputs are never displayed. */
-#live-reader{display:none!important}.master-topic{padding:16px 0;border-top:1px solid #66522c}.master-topic summary{cursor:pointer;padding:12px 0;font-weight:600}.master-topic h4{font-size:1.15rem}.master-topic .mc-user,.master-topic .mc-master{padding:12px 16px;margin:10px 0;border-radius:12px}.master-topic .mc-user{background:#302616}.master-topic .mc-master{background:#271c3b}.master-topic p{white-space:normal;line-height:1.7;margin:6px 0}#mc-next{margin-top:14px}#mc-question{min-width:0}
+#live-reader{display:none!important}.master-topic{padding:16px 0;border-top:1px solid #66522c}.master-topic summary{cursor:pointer;padding:12px 0;font-weight:600}.master-topic h4{font-size:1.15rem}.master-topic .mc-user,.master-topic .mc-master{padding:8px 14px;margin:10px 0;border-radius:12px}.master-topic .mc-user{background:#25485a;color:#fff;border-left:4px solid #c99a54}.master-topic .mc-master{background:#fffdf7;color:#20251f;border:1px solid #c5aa75}.master-topic p{white-space:normal;line-height:1.75;margin:6px 0;overflow-wrap:anywhere}.master-topic .mc-master strong{color:#554325}.master-topic .mc-user strong{color:#fff}#mc-next{margin-top:14px}#mc-question{min-width:0}
 .theme-master #report-card>h2,.theme-master #master-chat>h3{display:none}

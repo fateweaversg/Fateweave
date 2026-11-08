@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FateWeave 天机汇 — One birthday in. Six systems answer.</title>
-<link rel="stylesheet" href="/styles.css">
-<link rel="stylesheet" href="/editorial.css">
+<link rel="stylesheet" href="/styles.css?v=20261108-ziwei-chatfix">
+<link rel="stylesheet" href="/editorial.css?v=20261108-ziwei-chatfix">
 </head>
 <body>
 <header class="topbar">
@@ -41,7 +41,8 @@
     <p class="lede" data-i18n="hookLede">Enter your birth date, then tap each card to reveal a little detail from every system. The full reading unlocks after payment.</p>
     <form id="hook-form">
       <label><span data-i18n="birthDate">Birth date</span> <input type="date" id="birthDate" required></label>
-      <label><span data-i18n="birthTime">Birth time (optional)</span> <input type="time" id="birthTime"></label>
+      <label><span data-i18n="birthTime">Birth time</span> <input type="time" id="birthTime" required></label>
+      <label><span data-i18n="chartSex">Chart sex</span> <select id="ziweiGender" required><option value="" data-i18n="chartSexChoose">Choose chart sex</option><option value="male" data-i18n="chartSexMale">Male</option><option value="female" data-i18n="chartSexFemale">Female</option></select></label>
       <label><span data-i18n="name">Name (optional)</span> <input type="text" id="name" placeholder="How should we address you?"></label>
       <button type="submit" data-i18n="hookCta">See my free glimpse</button>
     </form>
@@ -73,6 +74,17 @@
     <button type="button" class="ghost" id="download-report-btn" data-i18n="downloadReport">Download my report</button>
     <p id="resend-status" class="small"></p>
     <p class="small" data-i18n="downloadNote">If the report email never arrives, download it here instead — no email needed.</p>
+  </section>
+
+  <section class="card hidden" id="ziwei-input-card">
+    <h2 data-i18n="ziweiInputTitle">Complete your chart details</h2>
+    <p class="lede" data-i18n="ziweiInputBody">Enter your birth time and chart sex to calculate your full Zi Wei chart.</p>
+    <form id="ziwei-input-form" class="ziwei-input-form">
+      <label><span data-i18n="birthTime">Birth time</span> <input type="time" id="ziwei-birth-time" required></label>
+      <label><span data-i18n="chartSex">Chart sex</span> <select id="ziwei-birth-gender" required><option value="" data-i18n="chartSexChoose">Choose chart sex</option><option value="male" data-i18n="chartSexMale">Male</option><option value="female" data-i18n="chartSexFemale">Female</option></select></label>
+      <button type="submit" data-i18n="ziweiInputSave">Save details and open reading</button>
+    </form>
+    <p id="ziwei-input-status" class="small" role="status"></p>
   </section>
 
   <section class="card" id="unlock-card">
@@ -114,7 +126,8 @@
       <p class="small" data-i18n="upgradeBody">5 follow-ups included. Add 15 for $3, at most twice: 20 then 35 total.</p>
       <button type="button" class="ghost" id="mc-upgrade-btn">Add 15 follow-ups — $3</button>
       <p id="mc-upgrade-offer" class="notice hidden"></p>
-      <div id="mc-thread" aria-live="polite"></div>
+      <p class="small mc-scroll-hint" data-i18n="mcScrollHint">Scroll inside the conversation panel to read full replies and earlier messages.</p>
+      <div id="mc-thread" role="log" aria-live="polite" aria-label="Master conversation" tabindex="0"></div>
       <p id="mc-mode" class="small"></p>
       <p id="mc-ai-rest" class="notice hidden" role="status"></p>
       <div class="lr-row">
@@ -143,7 +156,7 @@
     <h2 data-i18n="limitsTitle">Honest limits</h2>
     <ul>
       <li data-i18n="limit1">Bazi is a simplified demo engine — no true solar-time correction yet.</li>
-      <li data-i18n="limit2">Zi Wei content in the paid reading is illustrative sample content, not a fully computed chart.</li>
+      <li data-i18n="limit2">Zi Wei is calculated from your birth date, birth time and chart sex, using entered clock time without a true-solar-time location correction.</li>
       <li data-i18n="limit3">For self-reflection and entertainment only — not medical, financial or legal advice.</li>
       <li data-i18n="limit4">Moon / Rising are approximations from the original prototype.</li>
     </ul>
@@ -151,7 +164,7 @@
 </main>
 
 <footer><p>FateWeave 天机汇 — for self-reflection and entertainment.</p></footer>
-<script src="/app.js"></script>
+<script src="/app.js?v=20261108-ziwei-chatfix"></script>
 <script src="/music.js" defer></script>
 </body>
 </html>
