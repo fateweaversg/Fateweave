@@ -78,6 +78,13 @@ function requireFields(body, fields) {
   return fields.filter((f) => !body || body[f] === undefined || body[f] === '');
 }
 
+const masterFlow = require('./master-flow');
+app.use('/api', masterFlow.createMasterRouter({ stripe, limiter: masterChatLimiter, readingFor: (access) => {
+  const order=access.order_id?db.prepare('SELECT * FROM orders WHERE id=?').get(access.order_id):null;
+  const personality=loadPersonality(access.email,access.birth_date);
+  return {personality,reading:buildFullReading({birthDate:access.birth_date,birthTime:order?.birth_time||null,name:order?.name||null},personality)};
+}}));
+
 // --- Public config (safe to expose) ---------------------------------------
 app.get('/api/config', (req, res) => {
   const price = currentPrice();
@@ -90,7 +97,8 @@ app.get('/api/config', (req, res) => {
     // AI Master (Gemini): true only when GEMINI_API_KEY is set server-side.
     // The key itself is never exposed — only whether the AI is live.
     aiMasterLive: aiMasterLive(),
-    masterChatExtendedTotal: config.ai.extendedChatTotalMax,
+    masterChatExtendedTotal: 20,
+    masterFlow: {mainQuestions:3,includedProbes:5,probesPerPack:15,maxPurchases:2,maxProbes:35},
   });
 });
 
@@ -208,13 +216,8 @@ function isChatExtended(email, birthDate) {
   return new Date(row.expires_at) > new Date() ? row : false;
 }
 function grantChatExtended(email, birthDate, orderId) {
-  const tokenRow = db.prepare('SELECT expires_at FROM access_tokens WHERE email = ? AND birth_date = ? AND revoked = 0 ORDER BY id DESC').get(String(email).toLowerCase(), birthDate);
-  const expiresAt = tokenRow ? tokenRow.expires_at : new Date(Date.now() + config.accessTokenDays * 24 * 60 * 60 * 1000).toISOString();
-  db.prepare(`INSERT INTO chat_upgrades (email, birth_date, order_id, expires_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(email, birth_date) DO UPDATE SET order_id = excluded.order_id, expires_at = excluded.expires_at`)
-    .run(String(email).toLowerCase(), birthDate, orderId || null, expiresAt);
-  return expiresAt;
+  masterFlow.grantPurchase(email,birthDate,orderId);
+  return new Date(Date.now()+config.accessTokenDays*86400000).toISOString();
 }
 
 // --- Exchange a paid Checkout Session for an access token (server-verified) -
