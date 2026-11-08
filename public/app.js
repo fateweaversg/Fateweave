@@ -1562,3 +1562,15 @@ initializeApp();
 renderQuizList();
 renderSystems(); // pre-glimpse preview: all six systems visible before any birth date is entered
 
+
+
+// Clean test URL: bypass browser-saved report/profile restore without deleting it.
+if (new URLSearchParams(location.search).get('fresh') === '1') {
+  $('birthDate').value = '';
+  $('birthTime').value = '';
+  $('ziweiGender').value = '';
+  $('name').value = '';
+  $('email').value = '';
+  loadReport = async () => false;
+  loadSavedTeaser = async () => false;
+}
