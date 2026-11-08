@@ -91,6 +91,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     price: { amountCents: price.amountCents, currency: price.currency, isPromo: price.isPromo, promoStart: price.promoStart, promoEnd: price.promoEnd },
     stripePublishableKey: config.stripePublishableKey || null,
+    previewMode: config.previewMode,
     liveReaderMax: config.liveReaderMaxPerSession,
     masterChatMax: config.masterChatMaxPerSession,
     masterChatUpgrade: { amountCents: config.masterChatUpgradePriceCents, currency: config.currency },
@@ -322,6 +323,23 @@ app.get('/api/report', (req, res) => {
   const personality = loadPersonality(access.email, access.birth_date);
   const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order?.birth_time || null, name: order?.name || null }, personality);
   return res.json({ ...reading, personality: personality || undefined, access: { email: access.email, expiresAt: access.expires_at, liveReaderMax: config.liveReaderMaxPerSession } });
+});
+
+// Staging-only preview unlock. It is inert unless explicitly enabled on
+// Render. The fixture order and access token live in the disposable staging
+// database; this route never grants access on Railway or in normal production.
+app.post('/api/preview-access', (req, res) => {
+  if (!config.previewMode) return res.status(404).json({ error: 'Not found.' });
+  const missing = requireFields(req.body, ['birthDate']);
+  if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(', ')}` });
+  try { parseBirth(req.body.birthDate, req.body.birthTime); }
+  catch (e) { return res.status(400).json({ error: e.message }); }
+  const email = `preview-${crypto.randomBytes(8).toString('hex')}@fateweave.invalid`;
+  const order = db.prepare(
+    "INSERT INTO orders (email, birth_date, birth_time, name, amount_cents, currency, price_label, provider, status, paid_at) VALUES (?, ?, ?, ?, 0, 'usd', 'staging-preview', 'preview', 'paid', datetime('now'))"
+  ).run(email, req.body.birthDate, req.body.birthTime || null, req.body.name || null);
+  const { token, expiresAt } = issueAccessToken(email, req.body.birthDate, order.lastInsertRowid);
+  return res.json({ token, email, birthDate: req.body.birthDate, expiresAt, preview: true });
 });
 
 // --- Resend the detailed report email (paid token only) ----------------------

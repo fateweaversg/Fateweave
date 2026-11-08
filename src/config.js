@@ -14,6 +14,8 @@ const config = {
   port: intEnv('PORT', 3000),
   baseUrl: (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, ''),
   nodeEnv: process.env.NODE_ENV || 'development',
+  // Free Render staging only; do not set PREVIEW_MODE in production.
+  previewMode: process.env.PREVIEW_MODE === '1' && process.env.RENDER === 'true',
   databasePath: process.env.DATABASE_PATH || './data/fateweave.db',
   promoPriceCents: intEnv('PROMO_PRICE_CENTS', 100),
   fullPriceCents: intEnv('FULL_PRICE_CENTS', 800),
