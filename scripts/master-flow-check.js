@@ -67,6 +67,7 @@ const ok=text=>({ok:true,status:200,json:async()=>({candidates:[{content:{parts:
  check('36th probe is blocked',(await ask(b,'probe','One beyond the maximum?',third)).status===429);
  // Import an existing two-topic conversation without confusing the active topic.
  const legacy=buyer('legacy@example.com');
+ db.prepare("INSERT INTO master_chat_messages(token_hash,session_id,email,birth_date,role,content,lang,source,created_at) VALUES('test','test',?,?,'user','Pre-cutoff trial','en','live-reader','2026-11-07 14:18:00')").run(legacy.email,legacy.birthDate);
  const oldInsert=db.prepare("INSERT INTO master_chat_messages(token_hash,session_id,email,birth_date,role,content,lang,source) VALUES('test','test',?,?,?,?, 'en',?)");
  for(const [role,text,source] of [['user','Career question','live-reader'],['master','Career answer','live-reader'],['user','Finance question','live-reader'],['master','Finance answer','live-reader'],['user','Explain finance','master'],['master','Finance explanation','ai']]) oldInsert.run(legacy.email,legacy.birthDate,role,text,source);
  const imported=flow.snapshot({email:legacy.email,birth_date:legacy.birthDate});
