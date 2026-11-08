@@ -262,11 +262,10 @@ async function callGemini({ systemInstruction, contents, fetchImpl, model = conf
       temperature: config.ai.temperature,
       maxOutputTokens: config.ai.maxOutputTokens,
       // Gemini 3 counts private thinking tokens against maxOutputTokens.
-      // Medium default thinking consumed almost the entire 350-token cap
-      // and left live replies at 11–12 visible tokens. Low thinking keeps
-      // this chat inexpensive while reserving tokens for a complete answer.
-      // Gemini 3 uses thinkingLevel; do not send the legacy thinkingBudget.
-      thinkingConfig: { thinkingLevel: 'low' },
+      // Low thinking still hit the 350-token cap in production; minimal
+      // thinking plus a larger hard cap preserves room for the reply while
+      // keeping the expected token use low. Do not use legacy thinkingBudget.
+      thinkingConfig: { thinkingLevel: 'minimal' },
     },
   };
   let lastErr = null;
@@ -352,9 +351,9 @@ async function callGemini({ systemInstruction, contents, fetchImpl, model = conf
         .filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
       if (candidate?.finishReason === 'MAX_TOKENS') {
         const e = new Error(`Gemini answer reached maxOutputTokens (${config.ai.maxOutputTokens}); refusing to save a truncated reply`);
-        e.status = 502;
-        await retryOrFail(e, attempt);
-        continue;
+        e.status = 422;
+        e.code = 'truncated_master_reply';
+        throw e;
       }
       if (!text) {
         const e = new Error('Gemini returned no text');
@@ -526,7 +525,7 @@ async function resolveAiMaster({ email, birthDate, extended, reading, message, l
       } catch (error) {
         // An overload/quota/model-specific failure may leave a lighter model available.
         // Never retry authentication failures with the same key.
-        if ([401, 403].includes(error.status) || i === models.length - 1) throw error;
+        if (error.code === 'truncated_master_reply' || [401, 403].includes(error.status) || i === models.length - 1) throw error;
         console.warn(`AI Master: ${selectedModel} unavailable (${error.status || 'network'}); trying ${models[i + 1]}`);
       }
     }
