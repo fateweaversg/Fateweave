@@ -28,7 +28,7 @@
       // (A plain '/' redirect would drop those params and the page could
       // never tell the upgrade had happened.)
       heading.textContent = '✓ Follow-up pack added';
-      status.textContent = '15 follow-up questions added. Your previous usage is kept. Taking you straight to Ask the Master now…';
+      status.textContent = 'Your follow-up add-on has been activated. Previous usage is preserved. Taking you straight to Ask the Master now…';
       actions.classList.remove('hidden');
       actions.querySelector('a').href = '/master?upgraded=1&session_id=' + encodeURIComponent(sessionId);
       actions.querySelector('button').textContent = 'Ask the Master →';

@@ -98,16 +98,20 @@ app.get('/api/config', (req, res) => {
   const price = currentPrice();
   res.json({
     price: { amountCents: price.amountCents, currency: price.currency, isPromo: price.isPromo, promoStart: price.promoStart, promoEnd: price.promoEnd },
+    fullPriceCents: config.fullPriceCents,
     stripePublishableKey: config.stripePublishableKey || null,
     previewMode: config.previewMode,
     liveReaderMax: config.liveReaderMaxPerSession,
     masterChatMax: config.masterChatMaxPerSession,
-    masterChatUpgrade: { amountCents: config.masterChatUpgradePriceCents, currency: config.currency },
+    masterProbePacks: [
+      { additionalFollowups: 5, amountCents: config.masterProbe5PriceCents },
+      { additionalFollowups: 10, amountCents: config.masterProbe10PriceCents },
+    ],
     // AI Master (Gemini): true only when GEMINI_API_KEY is set server-side.
     // The key itself is never exposed — only whether the AI is live.
     aiMasterLive: aiMasterLive(),
-    masterChatExtendedTotal: 35,
-    masterFlow: {mainQuestions:3,includedProbes:5,probesPerPack:15,maxPurchases:2,maxProbes:35},
+    masterChatExtendedTotal: 15,
+    masterFlow: {mainQuestions:3,includedProbes:5,packOptions:[5,10],maxPurchases:1,maxProbes:15},
   });
 });
 
@@ -167,55 +171,9 @@ app.post('/api/checkout', async (req, res) => {
   }
 });
 
-// --- Checkout: Extended Master Chat upgrade ($3, paid token only) ----------
-// Same $1/$8 unlock is untouched. The upgrade is a separate Stripe
-// Checkout session created with inline price_data (no dashboard price ID,
-// exactly like /api/checkout). Only a buyer with a VALID paid token can
-// buy it; the token's email + birth date are the buyer, never the body.
-// Success lands DIRECTLY on /master?upgraded=1 (7 Nov 2026 fix): the old
-// success.html → hub redirect forced the buyer to walk the whole guided
-// flow (Bazi → … → Portrait quizzes → Master) just to reach the chat
-// they had just paid for. /master restores the reading from the stored
-// token at init (loadReport), so no re-entry and no quiz is needed —
-// checkUpgradeReturn() on that page verifies the session and flips the
-// counter to Extended (30 chats). Cancel returns to /master too, for the same reason.
-// Price: config.masterChatUpgradePriceCents ($3 default).
-app.post('/api/checkout-upgrade', async (req, res) => {
-  const { token, email, birthDate } = req.body || {};
-  const access = verifyAccessToken(token, email, birthDate);
-  if (!access) return res.status(403).json({ error: 'A valid paid access token is required to buy the Extended Master Chat upgrade.' });
-  if (!stripe) return res.status(503).json({ error: 'Payments are not configured yet (STRIPE_SECRET_KEY missing).' });
-  const buyerEmail = access.email;
-  const buyerBirthDate = access.birth_date;
-  const already = isChatExtended(buyerEmail, buyerBirthDate);
-  if (already) return res.json({ alreadyExtended: true, chatExtendedUntil: already.expires_at });
-  const priceCents = config.masterChatUpgradePriceCents;
-  const order = db.prepare(
-    'INSERT INTO orders (email, birth_date, birth_time, name, amount_cents, currency, price_label, provider, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(buyerEmail, buyerBirthDate, null, null, priceCents, config.currency, 'master-chat-upgrade', 'stripe', 'pending');
-  try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      customer_email: buyerEmail,
-      line_items: [{
-        price_data: {
-          currency: config.currency,
-          product_data: { name: 'FateWeave — Extended Master Chat' },
-          unit_amount: priceCents,
-        },
-        quantity: 1,
-      }],
-      metadata: { orderId: String(order.lastInsertRowid), email: buyerEmail, birthDate: buyerBirthDate, upgrade: '1' },
-      success_url: `${config.baseUrl}/master?upgraded=1&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${config.baseUrl}/master?upgrade_cancelled=1`,
-    });
-    db.prepare('UPDATE orders SET provider_session_id = ? WHERE id = ?').run(session.id, order.lastInsertRowid);
-    return res.json({ checkoutUrl: session.url, orderId: order.lastInsertRowid, price: { amountCents: priceCents, currency: config.currency } });
-  } catch (e) {
-    console.error('Stripe upgrade checkout error:', e.message);
-    return res.status(502).json({ error: 'Could not create a checkout session. Check Stripe keys.' });
-  }
-});
+// The active one-time 5/10 pack endpoint is mounted above in master-flow.
+// Keep a hard stop here as a guard in case route ordering changes later.
+app.post('/api/checkout-upgrade', (_req, res) => res.status(410).json({ error: 'Refresh FateWeave to load the current follow-up packs.' }));
 
 // --- Extended Master Chat upgrade (7 Nov 2026) --------------------------
 // A paid $3 upgrade lifts the 5-follow-up limit for the same 90-day window

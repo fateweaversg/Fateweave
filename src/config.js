@@ -17,7 +17,7 @@ const config = {
   // Free Render staging only; do not set PREVIEW_MODE in production.
   previewMode: process.env.PREVIEW_MODE === '1' && process.env.RENDER === 'true',
   databasePath: process.env.DATABASE_PATH || './data/fateweave.db',
-  promoPriceCents: intEnv('PROMO_PRICE_CENTS', 100),
+  promoPriceCents: intEnv('PROMO_PRICE_CENTS', 299),
   fullPriceCents: intEnv('FULL_PRICE_CENTS', 800),
   currency: 'usd',
   promoStart: process.env.PROMO_START || '2026-11-07',
@@ -51,11 +51,9 @@ const config = {
   accessTokenDays: intEnv('ACCESS_TOKEN_DAYS', 90),
   liveReaderMaxPerSession: 3,
   masterChatMaxPerSession: 5, // Ask the Master follow-ups per paid session (separate from Live Reader's 3)
-  // Extended Master Chat upgrade (7 Nov 2026):
-  // 7 Nov 2026 20:04 SGT): one-line price change.
-  // Change MASTER_CHAT_UPGRADE_PRICE_CENTS (env) or this default to change
-  // the upgrade price everywhere — checkout, config and the UI read it.
-  masterChatUpgradePriceCents: intEnv('MASTER_CHAT_UPGRADE_PRICE_CENTS', 300),
+  // One optional Master follow-up purchase. A buyer chooses one pack only.
+  masterProbe5PriceCents: intEnv('MASTER_CHAT_5_PACK_PRICE_CENTS', 199),
+  masterProbe10PriceCents: intEnv('MASTER_CHAT_10_PACK_PRICE_CENTS', 349),
 
   // --- AI Master (Gemini) — 7 Nov 2026 -------------------------------------
   // The Master chat is AI-powered when GEMINI_API_KEY is set; without it
@@ -94,17 +92,14 @@ const config = {
     // $1.50 / 1M input tokens, $9.00 / 1M output tokens. One reply costs
     // 2,000 x $1.50/1M + 350 x $9.00/1M = $0.003 + $0.00315
     // ≈ $0.0062 (about 0.6 US cents).
-    //   $1 unlock with 5 AI chats ≈ $0.031 cost vs $1.00 revenue.
-    //   $3 Extended upgrade, 30 chats total: 30 x $0.0062 ≈ $0.19 cost
-    //   vs $3.00 revenue — a ~16x margin on AI cost, so the fee covers
-    //   the AI many times over and leaves a decent profit.
-    //   Break-even: $1 covers ~160 replies, $3 covers ~490 replies.
+    //   $2.99 launch unlock includes 5 follow-ups; a 10-answer add-on
+    //   costs roughly $0.09 in AI at these estimates, before Stripe fees.
+    //   Optional add-ons are $1.99 for 5 or $3.49 for 10 follow-ups.
     //   A normal user is far below these caps.
     // NOTE (7 Nov 2026): the original brief quoted ~$0.0012/reply,
     // $0.036 for 30 chats and break-evens of 830 / 2,500 — that
     // arithmetic was wrong (it under-counted the output leg). The
-    // correct figures above come from aiCostUsd; the conclusion is
-    // unchanged — the $3 fee still covers the AI many times over.
+    // correct figures above come from aiCostUsd.
     // NOTE (7 Nov 2026, live failure): gemini-2.5-flash and
     // gemini-2.5-flash-lite return HTTP 404 on generateContent for
     // this key — verified by direct API test, even though ListModels

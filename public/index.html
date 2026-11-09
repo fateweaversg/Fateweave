@@ -123,8 +123,11 @@
       <h3 data-i18n="masterChatTitle">Ask the Master</h3><span id="mc-ai-badge" class="hidden"></span>
       <p id="mc-progress" class="small">Loading your conversation…</p>
       <p><span id="mc-left-label">Follow-ups left</span>: <span id="mc-left">…</span><span id="mc-left-suffix"></span></p>
-      <p class="small" data-i18n="upgradeBody">5 follow-ups included. Add 15 for $3, at most twice: 20 then 35 total.</p>
-      <button type="button" class="ghost" id="mc-upgrade-btn">Add 15 follow-ups — $3</button>
+      <p class="small" data-i18n="upgradeBody">5 follow-ups included. Choose one add-on: 5 more for $1.99 or 10 more for $3.49.</p>
+      <div id="mc-upgrade-options" class="lr-row">
+        <button type="button" class="ghost" id="mc-upgrade-5-btn">Add 5 follow-ups — $1.99</button>
+        <button type="button" class="ghost" id="mc-upgrade-10-btn">Add 10 follow-ups — $3.49</button>
+      </div>
       <p id="mc-upgrade-offer" class="notice hidden"></p>
       <p class="small mc-scroll-hint" data-i18n="mcScrollHint">Scroll inside the conversation panel to read full replies and earlier messages.</p>
       <div id="mc-thread" role="log" aria-live="polite" aria-label="Master conversation" tabindex="0"></div>

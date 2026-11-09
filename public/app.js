@@ -28,7 +28,7 @@ const STEP_ORDER = [
   { key: 'master', route: '/master', section: null, name: 'Ask the Master' },
 ];
 const state = {
-  lang: 'en', teaser: null, report: null, unlocked: false, ziweiInputsNeeded: false, price: null, previewMode: false,
+  lang: 'en', teaser: null, report: null, unlocked: false, ziweiInputsNeeded: false, price: null, masterPacks: [], previewMode: false,
   mcExtended: false,
   sessionId: crypto.randomUUID(),
   revealed: {}, tarotFlipped: [false, false, false], ziweiCast: false, yijingCast: false,
@@ -71,13 +71,13 @@ const STR = {
     masterChatNote: 'Follow-ups are answered from your own reading only — no predictions, and no medical, financial or legal advice.',
     masterChatExplainer: 'Three main questions, one conversation at a time. Ask follow-ups until you are ready, then choose Next question.',
     upgradeTitle: 'Need more follow-ups?',
-    upgradeBody: '5 follow-ups included. Each $3 pack adds 15: 20 after one pack, 35 after two. Maximum two packs per user.',
-    upgradeBtn: 'Upgrade to Extended Master Chat — $3',
-    upgradeExtended: 'Extended Master Chat',
-    upgradeOffer: 'Add 15 follow-ups, or continue to the next main question.',
-    upgradeDone: '15 follow-ups added. Your previous usage is kept.',
+    upgradeBody: '5 follow-ups included. Choose one add-on: 5 more for $1.99 or 10 more for $3.49. One purchase per user.',
+    upgradeBtn: 'Add follow-ups',
+    upgradeExtended: 'Follow-up add-on',
+    upgradeOffer: 'Choose one add-on pack, or continue to the next main question.',
+    upgradeDone: 'Your follow-up pack has been added. Previous usage is preserved.',
     upgradeFail: 'Could not start the upgrade checkout. Please try again.',
-    upgradePending: 'Your Extended Master Chat is being activated — if the counter still shows a limit, refresh this page in a moment.',
+    upgradePending: 'Your follow-up pack is being activated — if the counter has not updated, refresh this page in a moment.',
     skipToMaster: 'Skip to Master →',
     sysOpen: 'Open the full page',
     backToHub: '← All six systems',
@@ -122,7 +122,7 @@ const STR = {
     readingGlimpse: 'Reading your glimpse\u2026', enterDateFirst: 'Enter your birth date in the free glimpse form first.',
     couldNotRead: 'Could not read that birth date.', networkError: 'Network error: ',
     masterUnreachable: 'The Master couldn\u2019t be reached just now \u2014 please try again in a moment.',
-    extendedLimit: 'All 30 Master follow-ups have been used.',
+    extendedLimit: 'Your available Master follow-ups have been used.',
     aiRestingNote: 'Master is temporarily unavailable. Please retry shortly; no follow-up was used.',
     unreachable: 'Couldn\u2019t be reached just now \u2014 please try again in a moment.',
     mcThinking: 'The Master is thinking\u2026',
@@ -190,13 +190,13 @@ const STR = {
     masterChatNote: '\u8ffd\u95ee\u53ea\u6839\u636e\u4f60\u81ea\u5df1\u7684\u62a5\u544a\u56de\u7b54\u2014\u2014\u6ca1\u6709\u9884\u6d4b\uff0c\u4e5f\u4e0d\u7ed9\u533b\u7597\u3001\u8d22\u52a1\u6216\u6cd5\u5f8b\u5efa\u8bae\u3002',
     masterChatExplainer: '三个主要问题，逐题交流。可继续追问，满意后点击下一题。',
     upgradeTitle: '需要更多追问？',
-    upgradeBody: '包含 5 次追问。每次 $3 加购 15 次：一次共 20 次，两次共 35 次。每位用户最多购买两次。',
-    upgradeBtn: '\u5347\u7ea7\u4e3a\u52a0\u957f\u638c\u95e8\u8ffd\u95ee \u2014 $3',
-    upgradeExtended: '\u52a0\u957f\u638c\u95e8\u8ffd\u95ee',
-    upgradeOffer: '加购 15 次追问，或继续下一个主要问题。',
-    upgradeDone: '已增加 15 次追问，之前的使用次数保留。',
+    upgradeBody: '已包含 5 次追问。任选一次加购：$1.99 增加 5 次，或 $3.49 增加 10 次。每位用户限购一次。',
+    upgradeBtn: '加购追问',
+    upgradeExtended: '\u638c\u95e8\u8ffd\u95ee\u52a0\u8d2d',
+    upgradeOffer: '任选一个加购包，或继续下一个主要问题。',
+    upgradeDone: '追问次数已增加，之前的使用次数保留。',
     upgradeFail: '\u65e0\u6cd5\u5f00\u59cb\u5347\u7ea7\u7ed3\u8d26\uff0c\u8bf7\u518d\u8bd5\u4e00\u6b21\u3002',
-    upgradePending: '\u52a0\u957f\u638c\u95e8\u8ffd\u95ee\u6b63\u5728\u5f00\u901a\u4e2d\u2014\u2014\u5982\u679c\u8ba1\u6570\u4ecd\u663e\u793a\u4e0a\u9650\uff0c\u8bf7\u7a0d\u540e\u5237\u65b0\u672c\u9875\u3002',
+    upgradePending: '追问加购正在开通中——如果计数尚未更新，请稍后刷新本页。',
     skipToMaster: '\u76f4\u63a5\u53bb\u627e\u638c\u95e8 \u2192',
     sysOpen: '打开完整页面',
     backToHub: '← 回到六个系统',
@@ -241,7 +241,7 @@ const STR = {
     readingGlimpse: '\u6b63\u5728\u8bfb\u53d6\u4f60\u7684\u9884\u89c8\u2026\u2026', enterDateFirst: '\u8bf7\u5148\u5728\u514d\u8d39\u4e00\u77a5\u8868\u5355\u8f93\u5165\u51fa\u751f\u65e5\u671f\u3002',
     couldNotRead: '\u65e0\u6cd5\u8bfb\u53d6\u8be5\u51fa\u751f\u65e5\u671f\u3002', networkError: '\u7f51\u7edc\u9519\u8bef\uff1a',
     masterUnreachable: '\u638c\u95e8\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
-    extendedLimit: '30 次 Master 追问已用完。',
+    extendedLimit: '掌门追问次数已用完。',
     aiRestingNote: 'Master 暂时无法回答，请稍后重试。追问次数未扣除。',
     unreachable: '\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     mcThinking: '\u638c\u95e8\u6b63\u5728\u601d\u8003\u2026',
@@ -1045,11 +1045,13 @@ async function loadPrice() {
     const res = await fetch('/api/config');
     const data = await res.json();
     state.price = data.price;
+    state.masterPacks = data.masterProbePacks || [];
     state.previewMode = data.previewMode === true;
     if (state.previewMode) { applyPreviewModeUI(); return; }
     const dollars = (data.price.amountCents / 100).toFixed(2);
+    const fullPrice = ((data.fullPriceCents || 800) / 100).toFixed(2);
     $('price-line').textContent = data.price.isPromo
-      ? `$${dollars} launch promo \u00B7 ${data.price.promoStart}\u2013${data.price.promoEnd} \u00B7 then $8`
+      ? `$${dollars} launch offer \u00B7 ${data.price.promoStart}\u2013${data.price.promoEnd} \u00B7 then $${fullPrice}`
       : `$${dollars} full unlock`;
     $('pay-btn').textContent = `Pay $${dollars} & unlock`;
   } catch { $('price-line').textContent = t('priceUnavailable'); }
@@ -1419,7 +1421,8 @@ $('lr-stop').addEventListener('click', () => { speechSynthesis.cancel(); $('lr-s
 
 /* --- Ask the Master — follow-up chat on the buyer's own reading -----------
    Paid-only (the section lives inside #report-card, hidden until unlocked).
-   5 follow-ups per BUYER (Extended: 30 chats in total), server-enforced,
+   5 included follow-ups per buyer, plus one optional 5- or 10-question pack,
+   server-enforced,
    separate from Live Reader's 3 questions. History loads from the server
    on unlock, so a reload restores the thread — the server keys it by the
    buyer, not by the browser session, so a fresh sessionId never wipes
@@ -1435,17 +1438,22 @@ function renderMcCounter() {
   const f=masterFlowState, active=f.topics.find(x=>x.id===f.activeTopicId);
   $('mc-left-label').textContent=flowText('Follow-ups left','剩余追问');
   $('mc-left').textContent=String(f.probesRemaining);$('mc-left-suffix').textContent=' / '+f.probeMax;
-  $('mc-progress').textContent=flowText(`Main questions: ${f.mainUsed} / 3 · Follow-up packs: ${f.purchases} / 2`,`主要问题：${f.mainUsed} / 3 · 追问加购：${f.purchases} / 2`);
+  $('mc-progress').textContent=flowText(`Main questions: ${f.mainUsed} / 3 · Add-on purchased: ${f.purchases>0?'yes':'no'}`,`主要问题：${f.mainUsed} / 3 · 已加购追问：${f.purchases>0?'是':'否'}`);
   $('mc-mode').textContent=active?flowText(`Continue question ${active.number}. Follow-ups share one balance across all three questions.`,`继续第 ${active.number} 题。三题共用追问次数。`):flowText(`Question ${f.mainUsed+1} of 3 — ask about a new topic.`,`第 ${f.mainUsed+1} 题，共 3 题：请输入新问题。`);
   $('mc-question').placeholder=active?flowText('Ask about this answer…','继续追问这条回答……'):flowText('What would you like to ask the Master?','你想问掌门什么问题？');
   $('mc-next').disabled=state.mcSending||!active||!f.mainRemaining;
   $('mc-next').textContent=f.mainRemaining?flowText('Next question →','下一题 →'):flowText('All 3 main questions started','已使用全部 3 个主要问题');
   $('mc-ask').disabled=state.mcSending||(!active&&!f.mainRemaining)||(!!active&&!f.probesRemaining);
   $('mc-ask').textContent=active?flowText('Ask follow-up','追问'):flowText('Ask the Master','问掌门');
-  const btn=$('mc-upgrade-btn');btn.disabled=state.mcSending||f.purchasesRemaining===0;
-  btn.textContent=f.purchasesRemaining?flowText('Add 15 follow-ups — $3','加购 15 次追问 — $3'):flowText('35 follow-ups maximum reached','已达到 35 次追问上限');
+  const pack5=$('mc-upgrade-5-btn'),pack10=$('mc-upgrade-10-btn');
+  const options=state.masterPacks.length?state.masterPacks:[{additionalFollowups:5,amountCents:199},{additionalFollowups:10,amountCents:349}];
+  const pack5Data=options.find(p=>p.additionalFollowups===5),pack10Data=options.find(p=>p.additionalFollowups===10);
+  pack5.textContent=flowText(`Add 5 follow-ups — $${((pack5Data?.amountCents||199)/100).toFixed(2)}`,`加购 5 次追问 — $${((pack5Data?.amountCents||199)/100).toFixed(2)}`);
+  pack10.textContent=flowText(`Add 10 follow-ups — $${((pack10Data?.amountCents||349)/100).toFixed(2)}`,`加购 10 次追问 — $${((pack10Data?.amountCents||349)/100).toFixed(2)}`);
+  pack5.disabled=pack10.disabled=state.mcSending||f.purchasesRemaining===0;
+  $('mc-upgrade-options').classList.toggle('hidden',f.purchasesRemaining===0);
   $('mc-upgrade-offer').classList.toggle('hidden',!active||f.probesRemaining>0);
-  $('mc-upgrade-offer').textContent=f.purchasesRemaining?flowText('No follow-ups left. Add a pack, or use Next question if you have main questions remaining.','追问已用完。可加购，或点击下一题使用剩余主要问题。'):flowText('All follow-ups are used. Any remaining main questions are still available.','追问已用完，仍可使用尚未用完的主要问题。');
+  $('mc-upgrade-offer').textContent=f.purchasesRemaining?flowText('No follow-ups left. Choose one add-on pack, or use Next question if you have main questions remaining.','追问已用完。可任选一个加购包，或点击下一题使用剩余主要问题。'):flowText('Your one add-on has been used. Any remaining main questions are still available.','已使用唯一一次追问加购机会，仍可使用尚未用完的主要问题。');
   const badge=$('mc-ai-badge');if(badge)badge.classList.add('hidden');
 }
 function renderMcThread() {
@@ -1489,24 +1497,24 @@ $('mc-next').addEventListener('click',async()=>{
   setMcBusy(true);
   try{const res=await fetch('/api/master-chat/next',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...authParams(),topicId:masterFlowState.activeTopicId})});const data=await res.json();if(!res.ok){masterNotice(data.error);return;}pendingMasterRequest=null;$('mc-question').value='';renderAiRestNote();applyMasterFlow(data);$('mc-question').focus();}catch{masterNotice(flowText('Could not move to the next question. Please retry.','暂时无法进入下一题，请重试。'));}finally{setMcBusy(false);}
 });
-/* --- Extended Master Chat upgrade ($3, 30 chats) --------------------------
+/* --- Master follow-up add-on: choose one 5- or 10-question pack ----------
    Paid token only (the server checks the token and the Stripe payment).
    On success Stripe lands the buyer DIRECTLY on /master?upgraded=1 —
    checkUpgradeReturn() there verifies the session and the counter then
-   reads Extended (30 chats). No hub detour, no step flow, no quiz in the way. */
-async function buyMasterUpgrade() {
+   restores the selected follow-up allowance. No hub detour or quiz. */
+async function buyMasterUpgrade(packSize) {
   if (state.previewMode) { masterNotice(t('previewOnlyNote')); return; }
-  const btn = $('mc-upgrade-btn');
-  if (btn) btn.disabled = true;
+  $('mc-upgrade-5-btn').disabled = $('mc-upgrade-10-btn').disabled = true;
   try {
-    const res = await fetch('/api/checkout-upgrade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(authParams()) });
+    const res = await fetch('/api/checkout-upgrade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({...authParams(),packSize}) });
     const data = await res.json();
     if (!res.ok) { masterNotice(data.error || t('upgradeFail')); await loadMasterChat(); return; }
     
     location.href = data.checkoutUrl;
-  } catch (e) { alert(t('upgradeFail')); if (btn) btn.disabled = false; }
+  } catch (e) { alert(t('upgradeFail')); $('mc-upgrade-5-btn').disabled = $('mc-upgrade-10-btn').disabled = false; }
 }
-$('mc-upgrade-btn').addEventListener('click', buyMasterUpgrade);
+$('mc-upgrade-5-btn').addEventListener('click', () => buyMasterUpgrade(5));
+$('mc-upgrade-10-btn').addEventListener('click', () => buyMasterUpgrade(10));
 
 $('mc-voice').addEventListener('click', () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1521,8 +1529,7 @@ $('mc-voice').addEventListener('click', () => {
    /master?upgraded=1&session_id=… (7 Nov 2026 fix — the old hub landing
    forced the buyer through the whole guided flow, quizzes included, to
    reach the chat). Confirm the upgrade on the server (the webhook may not
-   have landed yet) and refresh the Master counter so it reads Extended
-   (30 chats).
+   have landed yet) and refresh the Master follow-up counter.
    Runs at init on every page, after loadReport() restores the token —
    /master works standalone: no re-entry, no quiz required. If the session
    cannot be verified yet (payment still settling), say so plainly instead
