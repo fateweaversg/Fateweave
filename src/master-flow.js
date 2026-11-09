@@ -122,11 +122,15 @@ function createMasterRouter({stripe,readingFor,limiter}) {
       if(pending){
         const existing=pending.provider_session_id?await stripe.checkout.sessions.retrieve(pending.provider_session_id):null;
         if(existing?.status==='open'){
-          if(Number(pending.additional_probes)!==packSize)return res.status(409).json({error:'A different add-on checkout is already open. Finish or cancel it before choosing another pack.'});
-          return res.json({checkoutUrl:existing.url});
+          if(Number(pending.additional_probes)===packSize)return res.json({checkoutUrl:existing.url});
+          // Let the buyer switch between the 5- and 10-follow-up packs.
+          // A canceled Checkout page can remain "open" in Stripe; retaining
+          // that reservation used to block the other pack until it expired.
+          await stripe.checkout.sessions.expire(existing.id);
         }
         if(existing?.payment_status==='paid'){grantPurchase(email,a.birth_date,pending.order_id);return res.status(409).json({error:'Your previous pack is paid. Refresh the chat before buying another.'});}
         db.prepare("UPDATE master_probe_purchases SET status='expired' WHERE order_id=?").run(pending.order_id);
+        db.prepare("UPDATE orders SET status='expired' WHERE id=? AND status='pending'").run(pending.order_id);
       }
       if(purchases(a.order_id)>=1)return res.status(409).json({error:'You have already purchased your one follow-up add-on for this reading.'});
       const slot=1;
