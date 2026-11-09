@@ -1,7 +1,7 @@
 'use strict';
 /**
- * Email — Resend if RESEND_API_KEY is set, else SMTP (nodemailer),
- * else a clear console log fallback (dev only — never launch like this).
+ * Email — configured SMTP first, then Resend, else a clear console log
+ * fallback in development only. Production fails closed without a provider.
  * Every email includes an unsubscribe link.
  */
 const { config } = require('./config');
@@ -11,18 +11,8 @@ function unsubscribeUrl(email) {
   return `${config.baseUrl}/api/unsubscribe?email=${encodeURIComponent(email)}`;
 }
 
-// Resend sandbox restriction (verified 7 Nov 2026, against Resend's docs
-// and third-party write-ups): the shared sender onboarding@resend.dev
-// only delivers to the Resend account owner's own email address. Any other
-// recipient is rejected with 403 validation_error: "You can only send
-// testing emails to your own email address". That is why the resend failed
-// for jasonhunghp@hotmail.com (not the Resend account owner) while the
-// first report email to fateweaver.sg@gmail.com (the account owner)
-// delivered. The fix is a verified sending domain — NOT a code change,
-// NOT a new provider, NOT a different sender address (do not change it
-// without the owner's say-so). What code CAN do: name the failure
-// precisely (code below) so the frontend can say so, and the in-app
-// Download report fallback covers the buyer either way.
+// Classify the known Resend sandbox restriction so the page can explain
+// the failure and point the buyer to the already-unlocked download.
 function classifyResendError(error) {
   const msg = String((error && error.message) || '');
   const status = error && (error.statusCode || error.status);
@@ -48,11 +38,29 @@ async function sendViaResend(to, subject, html) {
 
 async function sendViaSmtp(to, subject, html) {
   const nodemailer = require('nodemailer');
+  // Google displays App Passwords in four-character groups. Users may paste
+  // those display spaces into Railway; Gmail expects the compact 16-character
+  // value. Leave other SMTP providers' passwords untouched.
+  const pass = /(^|\.)gmail\.com$/i.test(config.smtp.host)
+    ? config.smtp.pass.replace(/\s+/g, '')
+    : config.smtp.pass;
   const transporter = nodemailer.createTransport({
     host: config.smtp.host, port: config.smtp.port, secure: config.smtp.port === 465, connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 20000,
-    auth: config.smtp.user ? { user: config.smtp.user, pass: config.smtp.pass } : undefined,
+    auth: { user: config.smtp.user, pass },
   });
-  await transporter.sendMail({ from: config.smtp.from, to, subject, html });
+  try {
+    await transporter.sendMail({ from: config.smtp.from, to, subject, html });
+  } catch (err) {
+    const response = String(err && err.response || '');
+    if ((err && err.code === 'EAUTH') || /535|5\.7\.8|authentication/i.test(response)) {
+      err.code = 'smtp_auth_error';
+    } else if (['ETIMEDOUT', 'ECONNECTION', 'ESOCKET', 'ECONNREFUSED'].includes(err && err.code)) {
+      err.code = 'smtp_connection_error';
+    } else if (!err.code || err.code === 'EAUTH') {
+      err.code = 'smtp_error';
+    }
+    throw err;
+  }
   return { provider: 'smtp' };
 }
 
@@ -67,9 +75,24 @@ async function sendEmail(to, subject, html) {
     e.resendStatus = 403;
     throw e;
   }
-  if (config.smtp.host && config.smtp.user && config.smtp.pass) return sendViaSmtp(to, subject, html);
-  if (config.smtp.host) return sendViaSmtp(to, subject, html);
+  // Prefer the configured Gmail SMTP route so the app can send from the
+  // existing mailbox without owning a custom domain. Resend remains a
+  // fallback only when SMTP is not configured.
+  if (config.smtp.host) {
+    if (!config.smtp.user || !config.smtp.pass) {
+      const e = new Error('SMTP is selected but SMTP_USER or SMTP_PASS is missing.');
+      e.code = 'smtp_config_error';
+      throw e;
+    }
+    return sendViaSmtp(to, subject, html);
+  }
+  if (config.resendApiKey) return sendViaResend(to, subject, html);
   // Dev fallback — loudly visible, so nobody mistakes it for real sending.
+  if (config.nodeEnv === 'production') {
+    const e = new Error('No SMTP or Resend email provider is configured.');
+    e.code = 'email_provider_not_configured';
+    throw e;
+  }
   console.log('=== EMAIL NOT SENT (no RESEND_API_KEY / SMTP configured) ===');
   console.log(`To: ${to}\nSubject: ${subject}\n${html.slice(0, 2000)}`);
   console.log('=== END EMAIL (dev fallback) ===');

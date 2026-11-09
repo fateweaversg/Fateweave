@@ -383,14 +383,7 @@ app.post('/api/preview-access', (req, res) => {
 
 // --- Resend the detailed report email (paid token only) ----------------------
 // On failure the response carries a machine-readable code so the frontend
-// can say something useful instead of the generic "Could not resend":
-//   resend_sandbox_recipient — the sender is still Resend's sandbox
-//   (onboarding@resend.dev), which only delivers to the Resend account
-//   owner's own email. Any other recipient is rejected with 403. The fix
-//   is a verified sending domain (owner decision, not a code change);
-//   until then the buyer uses Download report on the unlocked page.
-//   resend_error — any other send failure (network, key, provider).
-// The real error is always logged server-side with the recipient.
+// can give a useful next step. Raw provider responses are kept in server logs.
 app.post('/api/resend-report', async (req, res) => {
   const { token, email, birthDate } = req.body || {};
   const access = verifyAccessToken(token, email, birthDate);
@@ -407,8 +400,14 @@ app.post('/api/resend-report', async (req, res) => {
     console.error('Resend report email failed:', { email: access.email, code, message: e.message });
     const friendly = code === 'resend_sandbox_recipient'
       ? 'This email address cannot receive the report yet — the sender is still in Resend test mode, which only delivers to the Resend account owner’s own email. Your reading is unlocked on this page: use Download report below to get it now, no email needed.'
-      : 'Could not resend the report email. Your reading is still unlocked on this page — use Download report below to get it now.';
-    return res.status(502).json({ error: friendly, code, detail: e.message });
+      : code === 'smtp_auth_error'
+        ? 'The report email service could not sign in. Your reading is unlocked on this page — use Download report below, and contact support if you still need the email.'
+        : code === 'smtp_connection_error'
+          ? 'The report email service could not connect. Your reading is unlocked on this page — use Download report below and try again later.'
+          : code === 'smtp_config_error' || code === 'email_provider_not_configured'
+            ? 'Report email is temporarily unavailable. Your reading is unlocked on this page — use Download report below.'
+            : 'Could not resend the report email. Your reading is still unlocked on this page — use Download report below to get it now.';
+    return res.status(502).json({ error: friendly, code });
   }
 });
 
@@ -1407,14 +1406,12 @@ if (require.main === module) {
     console.log(`Price in force: ${JSON.stringify(currentPrice())}`);
     if (!config.stripeSecretKey) console.log('WARNING: STRIPE_SECRET_KEY is not set — checkout will return 503 until it is configured.');
     console.log(`AI Master: ${aiMasterLive() ? `live (Gemini ${config.ai.model})` : 'rule-based only — set GEMINI_API_KEY to light up the AI Master (see src/ai-master.js).'}`);
-    if (!config.resendApiKey && !config.smtp.host) console.log('WARNING: No email provider configured — emails will use the console log fallback (dev only).');
+    const emailProvider = config.smtp.host ? 'SMTP' : config.resendApiKey ? 'Resend' : 'none';
+    console.log(`Email provider selected: ${emailProvider}${config.smtp.host ? ` (${config.smtp.host}:${config.smtp.port})` : ''}`);
+    if (config.smtp.host && (!config.smtp.user || !config.smtp.pass)) console.log('WARNING: SMTP host selected but SMTP_USER or SMTP_PASS is missing.');
+    if (emailProvider === 'none') console.log('WARNING: No email provider configured — emails are unavailable in production.');
     if (!config.ownerPasswordHash) console.log('WARNING: OWNER_PASSWORD_HASH is not set — owner login is disabled.');
-    // Sandbox sender (7 Nov 2026): Resend's onboarding@resend.dev only
-    // delivers to the Resend account owner's own email. Until a verified
-    // domain is set as RESEND_FROM_EMAIL, report emails to any other
-    // address will be rejected with 403 — buyers are covered by the
-    // in-app Download report fallback, not by email.
-    if (config.resendFrom === 'onboarding@resend.dev') console.log('WARNING: RESEND_FROM_EMAIL is still the Resend sandbox sender (onboarding@resend.dev) — report emails will only deliver to the Resend account owner’s own email until a verified domain is set.');
+    if (emailProvider === 'Resend' && config.resendFrom === 'onboarding@resend.dev') console.log('WARNING: Resend sandbox sender selected; delivery is restricted to the Resend account owner.');
   });
 }
 module.exports = { app, liveReaderAnswer, masterChatAnswer };
