@@ -95,6 +95,15 @@
       <label><span data-i18n="emailLabel">Email (to access your reading)</span> <input type="email" id="email" required></label>
       <button type="submit" id="pay-btn">Pay &amp; unlock</button>
     </form>
+    <details class="promo-access hidden" id="promo-access">
+      <summary data-i18n="promoAccessSummary">Have an invited free-access code?</summary>
+      <form id="promo-access-form">
+        <label><span data-i18n="promoCodeLabel">Promo code</span> <input type="text" id="promo-code" autocomplete="off" autocapitalize="characters" required></label>
+        <button type="submit" id="promo-access-btn" data-i18n="promoAccessButton">Unlock with code</button>
+      </form>
+      <p id="promo-access-status" class="small" role="status"></p>
+      <p class="small" data-i18n="promoAccessNote">One complimentary reading per email and birth date.</p>
+    </details>
     <div id="preview-tools" class="preview-tools hidden">
       <p id="preview-mode-note" class="notice"></p>
       <button type="button" id="preview-unlock-btn"></button>
@@ -167,7 +176,7 @@
 </main>
 
 <footer><p>FateWeave 天机汇 — for self-reflection and entertainment.</p></footer>
-    <script src="/app.js?v=20261109-email-display"></script>
+    <script src="/app.js?v=20261109-promo-order-chat"></script>
 <script src="/music.js" defer></script>
 </body>
 </html>

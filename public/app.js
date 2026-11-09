@@ -28,7 +28,7 @@ const STEP_ORDER = [
   { key: 'master', route: '/master', section: null, name: 'Ask the Master' },
 ];
 const state = {
-  lang: 'en', teaser: null, report: null, unlocked: false, ziweiInputsNeeded: false, price: null, masterPacks: [], previewMode: false,
+  lang: 'en', teaser: null, report: null, unlocked: false, ziweiInputsNeeded: false, price: null, masterPacks: [], previewMode: false, promoAccessEnabled: false,
   mcExtended: false,
   sessionId: crypto.randomUUID(),
   revealed: {}, tarotFlipped: [false, false, false], ziweiCast: false, yijingCast: false,
@@ -58,6 +58,7 @@ const STR = {
     unlockTitle: 'Unlock the full reading',
     unlockBody: 'Unlock all reading details, 3 main questions and 5 follow-ups with the Master.',
     emailLabel: 'Email (for your reading access)', sameDateNote: 'Use the same birth date as your free glimpse, and the same email to return to your reading.',
+    promoAccessSummary: 'Have an invited free-access code?', promoCodeLabel: 'Promo code', promoAccessButton: 'Unlock with code', promoAccessNote: 'One complimentary reading per email and birth date.', promoCodeWorking: 'Checking your code…', promoCodeSuccess: 'Your complimentary reading is unlocked.',
     fullReadingTitle: 'Your full reading', liveReaderTitle: 'Regular questions (3)',
     liveReaderBody: 'All questions are now in the Master conversation.',
     masterChatTitle: 'Ask the Master',
@@ -71,7 +72,7 @@ const STR = {
     masterChatNote: 'Follow-ups are answered from your own reading only — no predictions, and no medical, financial or legal advice.',
     masterChatExplainer: 'Three main questions, one conversation at a time. Ask follow-ups until you are ready, then choose Next question.',
     upgradeTitle: 'Need more follow-ups?',
-    upgradeBody: '5 follow-ups included. Choose one add-on: 5 more for $1.99 or 10 more for $3.49. One purchase per user.',
+    upgradeBody: '5 follow-ups included with this reading. Choose one add-on: 5 more for $1.99 or 10 more for $3.49.',
     upgradeBtn: 'Add follow-ups',
     upgradeExtended: 'Follow-up add-on',
     upgradeOffer: 'Choose one add-on pack, or continue to the next main question.',
@@ -177,6 +178,7 @@ const STR = {
     unlockTitle: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a',
     unlockBody: '解锁全部报告、3 个主要问题和 5 次掌门追问。',
     emailLabel: '\u7535\u90ae\uff08\u7528\u4e8e\u67e5\u9605\u62a5\u544a\uff09', sameDateNote: '\u8bf7\u4f7f\u7528\u4e0e\u514d\u8d39\u9884\u89c8\u76f8\u540c\u7684\u51fa\u751f\u65e5\u671f\u548c\u7535\u90ae\uff0c\u65b9\u4fbf\u8fd4\u56de\u67e5\u770b\u62a5\u544a\u3002',
+    promoAccessSummary: '\u6709\u53d7\u9080\u8bf7\u7684\u514d\u8d39\u4f7f\u7528\u7801\uff1f', promoCodeLabel: '\u4f18\u60e0\u7801', promoAccessButton: '\u4f7f\u7528\u4ee3\u7801\u89e3\u9501', promoAccessNote: '\u6bcf\u4e2a\u90ae\u7bb1\u548c\u51fa\u751f\u65e5\u671f\u53ef\u514d\u8d39\u89e3\u9501\u4e00\u6b21\u3002', promoCodeWorking: '\u6b63\u5728\u9a8c\u8bc1\u4ee3\u7801\u2026', promoCodeSuccess: '\u4f60\u7684\u514d\u8d39\u62a5\u544a\u5df2\u89e3\u9501\u3002',
     fullReadingTitle: '\u4f60\u7684\u5b8c\u6574\u62a5\u544a', liveReaderTitle: '普通提问（3 次）',
     liveReaderBody: '所有问题现已合并至掌门聊天。',
     masterChatTitle: '\u95ee\u638c\u95e8',
@@ -190,7 +192,7 @@ const STR = {
     masterChatNote: '\u8ffd\u95ee\u53ea\u6839\u636e\u4f60\u81ea\u5df1\u7684\u62a5\u544a\u56de\u7b54\u2014\u2014\u6ca1\u6709\u9884\u6d4b\uff0c\u4e5f\u4e0d\u7ed9\u533b\u7597\u3001\u8d22\u52a1\u6216\u6cd5\u5f8b\u5efa\u8bae\u3002',
     masterChatExplainer: '三个主要问题，逐题交流。可继续追问，满意后点击下一题。',
     upgradeTitle: '需要更多追问？',
-    upgradeBody: '已包含 5 次追问。任选一次加购：$1.99 增加 5 次，或 $3.49 增加 10 次。每位用户限购一次。',
+    upgradeBody: '本次报告已包含 5 次追问。可任选一次加购：$1.99 增加 5 次，或 $3.49 增加 10 次。',
     upgradeBtn: '加购追问',
     upgradeExtended: '\u638c\u95e8\u8ffd\u95ee\u52a0\u8d2d',
     upgradeOffer: '任选一个加购包，或继续下一个主要问题。',
@@ -1047,6 +1049,8 @@ async function loadPrice() {
     state.price = data.price;
     state.masterPacks = data.masterProbePacks || [];
     state.previewMode = data.previewMode === true;
+    state.promoAccessEnabled = data.promoAccessEnabled === true;
+    $('promo-access').classList.toggle('hidden', !state.promoAccessEnabled);
     if (state.previewMode) { applyPreviewModeUI(); return; }
     const dollars = (data.price.amountCents / 100).toFixed(2);
     const fullPrice = ((data.fullPriceCents || 800) / 100).toFixed(2);
@@ -1128,6 +1132,36 @@ $('checkout-form').addEventListener('submit', async (e) => {
     if (!res.ok) { alert(data.error || t('checkoutFail')); return; }
     location.href = data.checkoutUrl;
   } catch (err) { alert(t('checkoutError') + err.message); }
+});
+
+$('promo-access-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = $('email').value.trim();
+  const birthDate = $('birthDate').value;
+  const birthTime = $('birthTime').value;
+  const ziweiGender = $('ziweiGender').value;
+  const status = $('promo-access-status');
+  if (!birthDate || !birthTime || !ziweiGender) {
+    status.textContent = flowText('Complete your birth date, birth time and chart sex above first.','请先填写上方的出生日期、时间和排盘性别。');
+    return;
+  }
+  const button = $('promo-access-btn');
+  button.disabled = true;
+  status.textContent = t('promoCodeWorking');
+  try {
+    const res = await fetch('/api/redeem-promo', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,birthDate,birthTime,ziweiGender,name:$('name').value||null,promoCode:$('promo-code').value})});
+    const data = await res.json();
+    if (!res.ok || !data.token) { status.textContent = data.error || t('previewAccessFail'); return; }
+    saveProfile(birthDate,birthTime,$('name').value||'',ziweiGender);
+    localStorage.setItem('fateweave_token',data.token);
+    localStorage.setItem('fateweave_email',data.email);
+    localStorage.setItem('fateweave_tokenBirthDate',birthDate);
+    localStorage.removeItem('fateweave_staging_preview');
+    status.textContent = t('promoCodeSuccess');
+    $('promo-code').value = '';
+    if (!await loadReport(true)) status.textContent = flowText('The code was accepted, but your report did not load. Refresh this page to reopen it.','代码已接受，但报告未能加载。刷新页面后即可重新打开。');
+  } catch { status.textContent = t('networkError'); }
+  finally { button.disabled = false; }
 });
 
 async function unlockStagingPreview() {
@@ -1424,9 +1458,9 @@ $('lr-stop').addEventListener('click', () => { speechSynthesis.cancel(); $('lr-s
    5 included follow-ups per buyer, plus one optional 5- or 10-question pack,
    server-enforced,
    separate from Live Reader's 3 questions. History loads from the server
-   on unlock, so a reload restores the thread — the server keys it by the
-   buyer, not by the browser session, so a fresh sessionId never wipes
-   it. Voice in reuses the Live Reader pattern (zh-CN/en-US); voice out
+   on unlock, so a reload restores the thread. Each paid reading order has
+   its own conversation, so a new purchase never inherits an old thread.
+   Voice in reuses the Live Reader pattern (zh-CN/en-US); voice out
    reuses the Live Reader speak checkbox. */
 
 let masterFlowState = null;

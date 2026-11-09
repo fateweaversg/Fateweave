@@ -99,6 +99,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     price: { amountCents: price.amountCents, currency: price.currency, isPromo: price.isPromo, promoStart: price.promoStart, promoEnd: price.promoEnd },
     fullPriceCents: config.fullPriceCents,
+    promoAccessEnabled: Boolean(config.promoAccessCode),
     stripePublishableKey: config.stripePublishableKey || null,
     previewMode: config.previewMode,
     liveReaderMax: config.liveReaderMaxPerSession,
@@ -128,6 +129,52 @@ app.post('/api/hook', (req, res) => {
   } catch (e) {
     return res.status(400).json({ error: e.message });
   }
+});
+
+// Private complimentary access for invited testers. The code is configured
+// only in the server environment; redemptions are limited to one per email
+// and birth date, and each redemption receives its own paid-style order/token.
+const promoAccessLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 8, standardHeaders: true, legacyHeaders: false,
+  handler: (_req, res) => res.status(429).json({ error: 'Too many code attempts. Please try again in an hour.' }),
+});
+db.exec(`CREATE TABLE IF NOT EXISTS promo_redemptions(
+  email TEXT NOT NULL,birth_date TEXT NOT NULL,order_id INTEGER NOT NULL UNIQUE,
+  redeemed_at TEXT NOT NULL DEFAULT(datetime('now')),PRIMARY KEY(email,birth_date)
+);`);
+app.post('/api/redeem-promo', promoAccessLimiter, (req, res) => {
+  const { email: rawEmail, birthDate, birthTime, ziweiGender, name, promoCode } = req.body || {};
+  if (!config.promoAccessCode) return res.status(503).json({ error: 'Complimentary access is not enabled.' });
+  if (!isValidEmail(rawEmail)) return res.status(400).json({ error: 'Enter a valid email address.' });
+  if (!birthDate || !birthTime || !ziweiGender) return res.status(400).json({ error: 'Complete your birth date, birth time and chart sex first.' });
+  const chartError = validateZiweiInputs({ birthTime, ziweiGender });
+  if (chartError) return res.status(400).json({ error: chartError });
+  try { parseBirth(birthDate, birthTime); } catch (e) { return res.status(400).json({ error: e.message }); }
+  const submitted = Buffer.from(String(promoCode || '').trim().toUpperCase());
+  const expected = Buffer.from(config.promoAccessCode.trim().toUpperCase());
+  if (!submitted.length || submitted.length !== expected.length || !crypto.timingSafeEqual(submitted, expected)) {
+    return res.status(403).json({ error: 'That promo code is not valid.' });
+  }
+  const email = rawEmail.trim().toLowerCase();
+  let orderId;
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    const prior = db.prepare('SELECT order_id FROM promo_redemptions WHERE email=? AND birth_date=?').get(email, birthDate);
+    if (prior) orderId = prior.order_id;
+    else {
+      const order = db.prepare("INSERT INTO orders(email,birth_date,birth_time,ziwei_gender,name,amount_cents,currency,price_label,provider,status,paid_at) VALUES(?,?,?,?,?,0,'usd','private-promo','promo','paid',datetime('now'))")
+        .run(email, birthDate, birthTime, ziweiGender, name || null);
+      orderId = Number(order.lastInsertRowid);
+      db.prepare('INSERT INTO promo_redemptions(email,birth_date,order_id) VALUES(?,?,?)').run(email, birthDate, orderId);
+    }
+    db.exec('COMMIT');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch {}
+    console.error('Promo redemption failed:', e.message);
+    return res.status(500).json({ error: 'Could not unlock this reading. Please try again.' });
+  }
+  const { token, expiresAt } = issueAccessToken(email, birthDate, orderId);
+  return res.json({ paid: true, freeAccess: true, email, birthDate, token, expiresAt });
 });
 
 // --- Checkout: Stripe Checkout Session, price decided server-side ----------
