@@ -21,6 +21,7 @@ const config = {
   fullPriceCents: intEnv('FULL_PRICE_CENTS', 800),
   // Optional private free-access code. Keep it in Railway variables only.
   promoAccessCode: process.env.PROMO_ACCESS_CODE || '',
+  promoAccessMaxRedemptions: intEnv('PROMO_ACCESS_MAX_REDEMPTIONS', 10),
   currency: 'usd',
   promoStart: process.env.PROMO_START || '2026-11-07',
   promoEnd: process.env.PROMO_END || '2026-11-24',

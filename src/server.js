@@ -162,6 +162,11 @@ app.post('/api/redeem-promo', promoAccessLimiter, (req, res) => {
     const prior = db.prepare('SELECT order_id FROM promo_redemptions WHERE email=? AND birth_date=?').get(email, birthDate);
     if (prior) orderId = prior.order_id;
     else {
+      const redeemed = db.prepare('SELECT COUNT(*) n FROM promo_redemptions').get().n;
+      if (redeemed >= config.promoAccessMaxRedemptions) {
+        db.exec('ROLLBACK');
+        return res.status(409).json({ error: 'All complimentary access codes have been used.' });
+      }
       const order = db.prepare("INSERT INTO orders(email,birth_date,birth_time,ziwei_gender,name,amount_cents,currency,price_label,provider,status,paid_at) VALUES(?,?,?,?,?,0,'usd','private-promo','promo','paid',datetime('now'))")
         .run(email, birthDate, birthTime, ziweiGender, name || null);
       orderId = Number(order.lastInsertRowid);
