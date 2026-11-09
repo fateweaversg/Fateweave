@@ -24,69 +24,64 @@
     <h1>Email delivery check</h1>
     <p>This owner-only check sends one plain message to the two approved FateWeave test addresses. It contains no reading or birth details.</p>
     <p id="recipients">Sign in to see the configured recipients.</p>
-    <form id="login-form">
-      <label for="password">Owner password</label>
-      <input id="password" type="password" autocomplete="current-password" required>
-      <button id="login-button" type="submit">Sign in</button>
+    <form id="key-form">
+      <label for="test-key">Temporary test key</label>
+      <input id="test-key" type="password" autocomplete="off" required>
+      <button id="verify-button" type="submit">Verify key</button>
     </form>
     <button id="send-button" type="button" disabled>Send test email to both addresses</button>
     <p id="status" role="status" aria-live="polite"></p>
   </main>
   <script>
     'use strict';
-    let ownerToken = '';
-    const form = document.getElementById('login-form');
-    const password = document.getElementById('password');
-    const loginButton = document.getElementById('login-button');
+    let testKey = '';
+    const form = document.getElementById('key-form');
+    const keyInput = document.getElementById('test-key');
+    const verifyButton = document.getElementById('verify-button');
     const sendButton = document.getElementById('send-button');
     const status = document.getElementById('status');
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      loginButton.disabled = true;
-      status.textContent = 'Signing in…';
+      verifyButton.disabled = true;
+      status.textContent = 'Checking the temporary key…';
       try {
-        const response = await fetch('/api/owner/login', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: password.value }),
-        });
-        password.value = '';
+        testKey = keyInput.value;
+        const response = await fetch('/api/owner/test-email', { headers: { 'x-email-test-token': testKey } });
+        keyInput.value = '';
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Owner sign-in failed.');
-        ownerToken = data.ownerToken;
-        const recipientResponse = await fetch('/api/owner/test-email', { headers: { 'x-owner-token': ownerToken } });
-        const recipientData = await recipientResponse.json();
-        if (!recipientResponse.ok) throw new Error(recipientData.error || 'Could not load test recipients.');
-        document.getElementById('recipients').textContent = recipientData.recipients.length
-          ? `The test will be sent to: ${recipientData.recipients.join(' and ')}`
+        if (!response.ok) throw new Error(data.error || 'The temporary key was rejected.');
+        document.getElementById('recipients').textContent = data.recipients.length
+          ? `The test will be sent to: ${data.recipients.join(' and ')}`
           : 'No temporary test recipients are configured.';
-        sendButton.disabled = recipientData.recipients.length !== 2;
+        sendButton.disabled = data.recipients.length !== 2;
         status.textContent = sendButton.disabled
-          ? 'Owner signed in, but the two temporary test addresses are not configured.'
-          : 'Signed in. Select the test button once to send the two checks.';
+          ? 'The two temporary test addresses are not configured.'
+          : 'Key verified. Select the test button once to send the two checks.';
       } catch (error) {
-        status.textContent = error.message || 'Owner sign-in failed.';
+        testKey = '';
+        status.textContent = error.message || 'The temporary key was rejected.';
       } finally {
-        loginButton.disabled = false;
+        verifyButton.disabled = false;
       }
     });
     sendButton.addEventListener('click', async () => {
-      if (!ownerToken || sendButton.disabled) return;
+      if (!testKey || sendButton.disabled) return;
       sendButton.disabled = true;
       status.textContent = 'Sending the delivery checks…';
       try {
         const response = await fetch('/api/owner/test-email', {
-          method: 'POST', headers: { 'x-owner-token': ownerToken },
+          method: 'POST', headers: { 'x-email-test-token': testKey },
         });
         const data = await response.json();
-        ownerToken = '';
+        testKey = '';
         const results = (data.results || []).map((item) => `${item.email}: ${item.accepted ? `accepted by ${item.provider}` : `failed (${item.code})`}`).join(' · ');
         status.textContent = results || data.error || 'No delivery result was returned.';
       } catch {
-        ownerToken = '';
+        testKey = '';
         status.textContent = 'The request failed. Check Railway logs before retrying; the test is limited to one request per hour.';
       }
     });
-    window.addEventListener('pagehide', () => { ownerToken = ''; });
+    window.addEventListener('pagehide', () => { testKey = ''; });
   </script>
 </body>
 </html>

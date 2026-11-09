@@ -47,6 +47,9 @@ const config = {
   // Temporary owner-only delivery check recipients. Remove this Railway
   // variable after the one-off test; recipient addresses never live in git.
   emailTestRecipients: (process.env.EMAIL_TEST_RECIPIENTS || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean),
+  // Temporary single-purpose credential for the email delivery check only.
+  // Remove it from Railway immediately after the test.
+  emailTestToken: process.env.EMAIL_TEST_TOKEN || '',
   hitpay: {
     apiKey: process.env.HITPAY_API_KEY || '',
     salt: process.env.HITPAY_SALT || '',

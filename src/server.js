@@ -83,6 +83,15 @@ if (config.stripeSecretKey) {
 function isValidEmail(email) {
   return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
+function validEmailTestCredential(candidate) {
+  if (!config.emailTestToken || typeof candidate !== 'string') return false;
+  const supplied = Buffer.from(candidate);
+  const expected = Buffer.from(config.emailTestToken);
+  return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+}
+function canRunEmailTest(req) {
+  return verifyOwnerToken(req.headers['x-owner-token']) || validEmailTestCredential(req.headers['x-email-test-token']);
+}
 function requireFields(body, fields) {
   return fields.filter((f) => !body || body[f] === undefined || body[f] === '');
 }
@@ -1342,12 +1351,12 @@ app.post('/api/owner/login', ownerLoginLimiter, async (req, res) => {
 // temporarily in Railway variables. Owner token required, one batch per
 // source IP per hour. No reading or profile data is included.
 app.get('/api/owner/test-email', (req, res) => {
-  if (!verifyOwnerToken(req.headers['x-owner-token'])) return res.status(401).json({ error: 'Owner token required.' });
+  if (!canRunEmailTest(req)) return res.status(401).json({ error: 'Owner or temporary email-test key required.' });
   res.set('Cache-Control', 'no-store');
   return res.json({ recipients: config.emailTestRecipients });
 });
 app.post('/api/owner/test-email', ownerEmailTestLimiter, async (req, res) => {
-  if (!verifyOwnerToken(req.headers['x-owner-token'])) return res.status(401).json({ error: 'Owner token required.' });
+  if (!canRunEmailTest(req)) return res.status(401).json({ error: 'Owner or temporary email-test key required.' });
   res.set('Cache-Control', 'no-store');
   const recipients = config.emailTestRecipients;
   if (recipients.length !== 2 || recipients.some((email) => !isValidEmail(email))) {
