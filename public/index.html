@@ -141,13 +141,14 @@
       <p class="small mc-scroll-hint" data-i18n="mcScrollHint">Scroll inside the conversation panel to read full replies and earlier messages.</p>
       <div id="mc-thread" role="log" aria-live="polite" aria-label="Master conversation" tabindex="0"></div>
       <p id="mc-mode" class="small"></p>
+      <p id="mc-topic-warning" class="small hidden" role="note"></p>
       <p id="mc-ai-rest" class="notice hidden" role="status"></p>
       <div class="lr-row">
         <input type="text" id="mc-question" placeholder="What would you like to ask the Master?" maxlength="500" aria-label="Question for the Master">
         <button id="mc-voice" type="button" title="Voice input">🎤</button>
         <button id="mc-ask" type="button" disabled>Ask the Master</button>
       </div>
-      <button type="button" class="ghost" id="mc-next" disabled>Next question →</button>
+      <button type="button" class="ghost" id="mc-next" aria-describedby="mc-topic-warning" disabled>Next question →</button>
       <p class="small" data-i18n="masterChatNote">For reflection, not guaranteed predictions or professional advice.</p>
     </div>
   </section>
@@ -176,7 +177,7 @@
 </main>
 
 <footer><p>FateWeave 天机汇 — for self-reflection and entertainment.</p></footer>
-    <script src="/app.js?v=20261109-promo-order-chat"></script>
+    <script src="/app.js?v=20261109-next-question-reminder"></script>
 <script src="/music.js" defer></script>
 </body>
 </html>

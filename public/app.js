@@ -1474,6 +1474,10 @@ function renderMcCounter() {
   $('mc-left').textContent=String(f.probesRemaining);$('mc-left-suffix').textContent=' / '+f.probeMax;
   $('mc-progress').textContent=flowText(`Main questions: ${f.mainUsed} / 3 · Add-on purchased: ${f.purchases>0?'yes':'no'}`,`主要问题：${f.mainUsed} / 3 · 已加购追问：${f.purchases>0?'是':'否'}`);
   $('mc-mode').textContent=active?flowText(`Continue question ${active.number}. Follow-ups share one balance across all three questions.`,`继续第 ${active.number} 题。三题共用追问次数。`):flowText(`Question ${f.mainUsed+1} of 3 — ask about a new topic.`,`第 ${f.mainUsed+1} 题，共 3 题：请输入新问题。`);
+  const nextReminder=flowText('Follow-ups apply only to this question. Clicking Next closes it, and you cannot return to continue it.','追问仅针对当前问题。点击“下一题”后此题将关闭，之后无法返回继续追问。');
+  $('mc-topic-warning').textContent=nextReminder;
+  $('mc-topic-warning').classList.toggle('hidden',!active);
+  $('mc-next').title=nextReminder;
   $('mc-question').placeholder=active?flowText('Ask about this answer…','继续追问这条回答……'):flowText('What would you like to ask the Master?','你想问掌门什么问题？');
   $('mc-next').disabled=state.mcSending||!active||!f.mainRemaining;
   $('mc-next').textContent=f.mainRemaining?flowText('Next question →','下一题 →'):flowText('All 3 main questions started','已使用全部 3 个主要问题');
@@ -1528,6 +1532,7 @@ $('mc-ask').addEventListener('click',()=>sendMasterChat());
 $('mc-question').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendMasterChat();}});
 $('mc-next').addEventListener('click',async()=>{
   if(state.mcSending||!masterFlowState?.activeTopicId)return;
+  if(!window.confirm(flowText('Follow-ups apply only to the current question. Once you move to the next question, this one closes and you cannot return to it. Continue?','追问仅针对当前问题。进入下一题后，当前问题将关闭，之后无法返回继续追问。确定继续吗？')))return;
   setMcBusy(true);
   try{const res=await fetch('/api/master-chat/next',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...authParams(),topicId:masterFlowState.activeTopicId})});const data=await res.json();if(!res.ok){masterNotice(data.error);return;}pendingMasterRequest=null;$('mc-question').value='';renderAiRestNote();applyMasterFlow(data);$('mc-question').focus();}catch{masterNotice(flowText('Could not move to the next question. Please retry.','暂时无法进入下一题，请重试。'));}finally{setMcBusy(false);}
 });
