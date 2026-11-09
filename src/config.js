@@ -44,6 +44,9 @@ const config = {
     pass: process.env.SMTP_PASS || '',
     from: process.env.SMTP_FROM_EMAIL || 'noreply@fateweave.example',
   },
+  // Temporary owner-only delivery check recipients. Remove this Railway
+  // variable after the one-off test; recipient addresses never live in git.
+  emailTestRecipients: (process.env.EMAIL_TEST_RECIPIENTS || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean),
   hitpay: {
     apiKey: process.env.HITPAY_API_KEY || '',
     salt: process.env.HITPAY_SALT || '',

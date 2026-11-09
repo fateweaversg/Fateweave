@@ -28,7 +28,7 @@ const { config, currentPrice } = require('./config');
 const { db } = require('./db');
 const { buildFullReading, buildTeaser, parseBirth, scoreEnneagramFromChoices, scoreMbti, getPersonalityQuestions, lockedPersonalitySummary, elName, elementMeaning } = require('./readings');
 const { strings } = require('./i18n');
-const { sendReportEmail } = require('./email');
+const { sendEmail, sendReportEmail } = require('./email');
 const { issueAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword, hashToken } = require('./auth');
 const {
   aiMasterLive, validateMasterMessage, resolveAiMaster, aiUsageSummary,
@@ -62,6 +62,15 @@ const apiLimiter = rateLimit({
 const masterChatLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false,
   handler: (req, res) => res.status(429).json({ error: 'Too many questions in a short time — please wait a few minutes and try again.' }),
+});
+const ownerLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  handler: (_req, res) => res.status(429).json({ error: 'Too many owner login attempts. Please wait 15 minutes.' }),
+});
+const ownerEmailTestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 1, standardHeaders: true, legacyHeaders: false,
+  handler: (_req, res) => res.status(429).json({ error: 'An email delivery check was already requested from this connection. Please wait an hour.' }),
 });
 app.use('/api/', apiLimiter);
 
@@ -1323,11 +1332,41 @@ app.post('/api/personality', (req, res) => {
 });
 
 // --- Owner: login (server-checked bcrypt hash) + manual access issue -------
-app.post('/api/owner/login', async (req, res) => {
+app.post('/api/owner/login', ownerLoginLimiter, async (req, res) => {
   const ok = await checkOwnerPassword(req.body?.password);
   if (!ok) return res.status(401).json({ error: 'Invalid owner password.' });
   const { token, expiresAt } = issueOwnerToken();
   return res.json({ ownerToken: token, expiresAt });
+});
+// Send a plain delivery check to the two owner-approved addresses stored
+// temporarily in Railway variables. Owner token required, one batch per
+// source IP per hour. No reading or profile data is included.
+app.get('/api/owner/test-email', (req, res) => {
+  if (!verifyOwnerToken(req.headers['x-owner-token'])) return res.status(401).json({ error: 'Owner token required.' });
+  res.set('Cache-Control', 'no-store');
+  return res.json({ recipients: config.emailTestRecipients });
+});
+app.post('/api/owner/test-email', ownerEmailTestLimiter, async (req, res) => {
+  if (!verifyOwnerToken(req.headers['x-owner-token'])) return res.status(401).json({ error: 'Owner token required.' });
+  res.set('Cache-Control', 'no-store');
+  const recipients = config.emailTestRecipients;
+  if (recipients.length !== 2 || recipients.some((email) => !isValidEmail(email))) {
+    return res.status(503).json({ error: 'The two temporary test addresses are not configured.' });
+  }
+  const subject = 'FateWeave email delivery check';
+  const html = '<p>This is a plain email delivery check for FateWeave.</p><p>No reading or birth details are included.</p>';
+  const results = [];
+  for (const email of recipients) {
+    try {
+      const result = await sendEmail(email, subject, html);
+      results.push({ email, accepted: true, provider: result.provider });
+    } catch (e) {
+      results.push({ email, accepted: false, code: e.code || 'email_error' });
+    }
+  }
+  console.log('Owner email delivery check:', results.map(({ email, accepted, provider, code }) => ({ email, accepted, provider, code })));
+  const accepted = results.every((result) => result.accepted);
+  return res.status(accepted ? 200 : 502).json({ accepted, results });
 });
 app.post('/api/owner/issue-access', (req, res) => {
   if (!verifyOwnerToken(req.headers['x-owner-token'])) return res.status(401).json({ error: 'Owner token required.' });
@@ -1396,6 +1435,10 @@ app.get(Object.keys(SYSTEM_PAGES).map((k) => '/' + k), (req, res) => {
 });
 
 // --- Static frontend ----------------------------------------------------------
+app.get('/owner/email-test', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, '..', 'public', 'owner-email-test.html'));
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
 

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>FateWeave email delivery check</title>
+  <style>
+    :root { color-scheme: light; font-family: Arial, sans-serif; color: #263d49; background: #f3eee2; }
+    body { margin: 0; padding: 32px 18px; }
+    main { box-sizing: border-box; max-width: 620px; margin: 8vh auto; padding: 32px; background: #fffdf8; border: 1px solid #d7cdbb; }
+    h1 { margin-top: 0; color: #132a37; font: 600 28px Georgia, serif; }
+    p { line-height: 1.6; }
+    label { display: block; margin: 24px 0 8px; font-weight: 700; }
+    input { box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid #bcb4a6; font-size: 16px; }
+    button { margin-top: 16px; padding: 12px 18px; border: 0; background: #172c35; color: white; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    #status { min-height: 1.5em; margin-top: 20px; }
+    #recipients { color: #536c76; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Email delivery check</h1>
+    <p>This owner-only check sends one plain message to the two approved FateWeave test addresses. It contains no reading or birth details.</p>
+    <p id="recipients">Sign in to see the configured recipients.</p>
+    <form id="login-form">
+      <label for="password">Owner password</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <button id="login-button" type="submit">Sign in</button>
+    </form>
+    <button id="send-button" type="button" disabled>Send test email to both addresses</button>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+  <script>
+    'use strict';
+    let ownerToken = '';
+    const form = document.getElementById('login-form');
+    const password = document.getElementById('password');
+    const loginButton = document.getElementById('login-button');
+    const sendButton = document.getElementById('send-button');
+    const status = document.getElementById('status');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      loginButton.disabled = true;
+      status.textContent = 'Signing in…';
+      try {
+        const response = await fetch('/api/owner/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: password.value }),
+        });
+        password.value = '';
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Owner sign-in failed.');
+        ownerToken = data.ownerToken;
+        const recipientResponse = await fetch('/api/owner/test-email', { headers: { 'x-owner-token': ownerToken } });
+        const recipientData = await recipientResponse.json();
+        if (!recipientResponse.ok) throw new Error(recipientData.error || 'Could not load test recipients.');
+        document.getElementById('recipients').textContent = recipientData.recipients.length
+          ? `The test will be sent to: ${recipientData.recipients.join(' and ')}`
+          : 'No temporary test recipients are configured.';
+        sendButton.disabled = recipientData.recipients.length !== 2;
+        status.textContent = sendButton.disabled
+          ? 'Owner signed in, but the two temporary test addresses are not configured.'
+          : 'Signed in. Select the test button once to send the two checks.';
+      } catch (error) {
+        status.textContent = error.message || 'Owner sign-in failed.';
+      } finally {
+        loginButton.disabled = false;
+      }
+    });
+    sendButton.addEventListener('click', async () => {
+      if (!ownerToken || sendButton.disabled) return;
+      sendButton.disabled = true;
+      status.textContent = 'Sending the delivery checks…';
+      try {
+        const response = await fetch('/api/owner/test-email', {
+          method: 'POST', headers: { 'x-owner-token': ownerToken },
+        });
+        const data = await response.json();
+        ownerToken = '';
+        const results = (data.results || []).map((item) => `${item.email}: ${item.accepted ? `accepted by ${item.provider}` : `failed (${item.code})`}`).join(' · ');
+        status.textContent = results || data.error || 'No delivery result was returned.';
+      } catch {
+        ownerToken = '';
+        status.textContent = 'The request failed. Check Railway logs before retrying; the test is limited to one request per hour.';
+      }
+    });
+    window.addEventListener('pagehide', () => { ownerToken = ''; });
+  </script>
+</body>
+</html>
