@@ -36,7 +36,6 @@ const state = {
   quiz: { kind: null, questions: null, idx: 0, answers: [], result: null },
   quizCache: null,
   mcMessages: [], mcLeft: 5, mcMax: 5, mcSending: false, lrSending: false,
-  guestLrToken: null, guestLrMessages: [], guestLrUsed: 0, guestLrSending: false, guestLrStatus: '',
   yijingResult: null,
 };
 
@@ -58,12 +57,10 @@ const STR = {
     unlockedBanner: '\u2713 Unlocked \u2014 no need to pay again',
     unlockedBannerSub: 'Your full reading is open below. It is saved on this device \u2014 refresh any time, no need to re-enter anything.',
     unlockTitle: 'Unlock the full reading',
-    unlockBody: 'Unlock the complete reading across all 8 systems, with 5 Master follow-up chats included. The separate Live Reader is free for 3 questions per session. Optional Master packs: $1.99 for 5 chats or $3.49 for 10.',
-    liveReaderLink: 'Free Live Reader', guestReaderTitle: 'Free Live Reader · 3 questions per session', guestReaderPrivacy: 'Your profile and conversation are saved for 24 hours so this session can resume after a reload.',
-    guestReaderIntakeTitle: 'Start your free 3-question conversation', guestReaderIntakeBody: 'Enter your birth date, birth time and chart sex. The Live Reader answers three questions from your reading.', guestReaderStart: 'Start my free Live Reader session',
-    guestReaderLimit: 'You have used all 3 free questions in this session.', guestReaderError: 'Could not load this Live Reader session. Start a new one below.',
+    unlockBody: 'Unlock the full reading across all 8 systems, including 3 main Master questions and 5 follow-up chats. Add one follow-up pack if needed: $1.99 for 5 or $3.49 for 10. Master chat opens after payment or an invited trial.',
+    liveReaderLink: 'Ask the Master',
     emailLabel: 'Email (for your reading access)', sameDateNote: 'Use the same birth date as your free glimpse, and the same email to return to your reading.',
-    promoAccessSummary: 'Have an invited free-access code?', promoCodeLabel: 'Promo code', promoAccessButton: 'Unlock with code', promoAccessNote: 'One complimentary reading per email and birth date.', promoCodeWorking: 'Checking your code…', promoCodeSuccess: 'Your complimentary reading is unlocked.',
+    promoAccessSummary: 'Have an invited trial code?', promoCodeLabel: 'Trial code', promoAccessButton: 'Unlock trial', promoAccessNote: 'Invited codes expire after 7 days. Each trial lasts 7 or 14 days and is tied to one email and birth date.', promoCodeWorking: 'Checking your code…', promoCodeSuccess: 'Your limited-time trial is unlocked.',
     fullReadingTitle: 'Your full reading', liveReaderTitle: 'Regular questions (3)',
     liveReaderBody: 'All questions are now in the Master conversation.',
     masterChatTitle: 'Ask the Master',
@@ -181,12 +178,10 @@ const STR = {
     unlockedBanner: '\u2713 \u5df2\u89e3\u9501\u2014\u2014\u65e0\u9700\u518d\u6b21\u4ed8\u6b3e',
     unlockedBannerSub: '\u5b8c\u6574\u62a5\u544a\u5df2\u5728\u4e0b\u65b9\u5f00\u542f\uff0c\u5e76\u4fdd\u5b58\u5728\u6b64\u88c5\u7f6e\u2014\u2014\u968f\u65f6\u91cd\u65b0\u6574\u7406\uff0c\u4e0d\u7528\u518d\u8f93\u5165\u4efb\u4f55\u8d44\u6599\u3002',
     unlockTitle: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a',
-    unlockBody: '解锁全部 8 个系统的完整报告，并包含 5 次掌门追问。Live Reader 是独立的免费功能，每个会话可提问 3 次。掌门追问加购包：$1.99 增加 5 次，或 $3.49 增加 10 次。',
-    liveReaderLink: '免费 Live Reader', guestReaderTitle: '免费 Live Reader（每次会话 3 问）', guestReaderPrivacy: '你的资料与对话会保存 24 小时，方便刷新后继续本次会话。',
-    guestReaderIntakeTitle: '开始免费的 3 问对话', guestReaderIntakeBody: '请输入出生日期、时间和排盘性别。Live Reader 会根据你的报告回答 3 个问题。', guestReaderStart: '开始免费 Live Reader 会话',
-    guestReaderLimit: '本会话的 3 次免费提问已用完。', guestReaderError: '无法载入这次 Live Reader 会话。请在下方开始新会话。',
+    unlockBody: '解锁全部 8 个系统的完整报告，包含 3 个掌门主问题和 5 次追问。需要更多时，可加购一个追问包：$1.99 增加 5 次，或 $3.49 增加 10 次。付款或使用受邀试用后即可使用掌门聊天。',
+    liveReaderLink: '问掌门',
     emailLabel: '\u7535\u90ae\uff08\u7528\u4e8e\u67e5\u9605\u62a5\u544a\uff09', sameDateNote: '\u8bf7\u4f7f\u7528\u4e0e\u514d\u8d39\u9884\u89c8\u76f8\u540c\u7684\u51fa\u751f\u65e5\u671f\u548c\u7535\u90ae\uff0c\u65b9\u4fbf\u8fd4\u56de\u67e5\u770b\u62a5\u544a\u3002',
-    promoAccessSummary: '\u6709\u53d7\u9080\u8bf7\u7684\u514d\u8d39\u4f7f\u7528\u7801\uff1f', promoCodeLabel: '\u4f18\u60e0\u7801', promoAccessButton: '\u4f7f\u7528\u4ee3\u7801\u89e3\u9501', promoAccessNote: '\u6bcf\u4e2a\u90ae\u7bb1\u548c\u51fa\u751f\u65e5\u671f\u53ef\u514d\u8d39\u89e3\u9501\u4e00\u6b21\u3002', promoCodeWorking: '\u6b63\u5728\u9a8c\u8bc1\u4ee3\u7801\u2026', promoCodeSuccess: '\u4f60\u7684\u514d\u8d39\u62a5\u544a\u5df2\u89e3\u9501\u3002',
+    promoAccessSummary: '有受邀试用码？', promoCodeLabel: '试用码', promoAccessButton: '解锁试用', promoAccessNote: '受邀试用码在 7 天后过期。试用权限为 7 天或 14 天，并绑定一个邮箱和出生日期。', promoCodeWorking: '正在验证试用码…', promoCodeSuccess: '你的限时试用已解锁。',
     fullReadingTitle: '\u4f60\u7684\u5b8c\u6574\u62a5\u544a', liveReaderTitle: '普通提问（3 次）',
     liveReaderBody: '所有问题现已合并至掌门聊天。',
     masterChatTitle: '\u95ee\u638c\u95e8',
@@ -485,7 +480,7 @@ function heroResultHTML(key) {
   switch (key) {
     case 'bazi': {
       const dm = unlocked ? r.bazi.dayMaster : { en: src.bazi.dayMaster, zh: src.bazi.dayMasterZh };
-      return `<div class="hero-result">${esc(L(dm))}</div><p class="hero-sub">${esc(L(unlocked ? r.bazi.dayMasterText : src.bazi.hook))}</p>`;
+      return `<div class="hero-result">${esc(L(dm))}</div><p class="hero-sub">${esc(L(unlocked ? r.bazi.dayMasterText : (src.bazi.workPreview || src.bazi.hook)))}</p>${!unlocked && src.bazi.strongestElement ? `<p class="hero-sub">${esc(t('strongest'))}: ${esc(L(src.bazi.strongestElement))}</p>` : ''}`;
     }
     case 'ziwei': {
       const pal = unlocked ? r.ziwei.palaces[0] : null;
@@ -578,19 +573,12 @@ function applyPageLayout() {
   const show = (id, on) => { const el = $(id); if (el) el.classList.toggle('hidden', !on); };
   const onHub = !pageSystem;
   const onMaster = pageSystem === 'master';
-  const onGuestReader = pageSystem === 'live-reader';
   const onPortrait = pageSystem === 'portrait';
   show('brand-hero', onHub);
-  show('hook-card', onHub || (onGuestReader && !state.guestLrToken));
-  show('guest-live-reader-card', onGuestReader && !!state.guestLrToken);
-  if (onGuestReader) {
-    $('hook-title').textContent = t('guestReaderIntakeTitle');
-    $('hook-lede').textContent = t('guestReaderIntakeBody');
-    $('hook-form').querySelector('[type="submit"]').textContent = t('guestReaderStart');
-  }
-  show('systems', !onGuestReader);
-  show('sys-hero', !onGuestReader);
-  show('step-nav', !onGuestReader && !!pageSystem);
+  show('hook-card', onHub);
+  show('systems', true);
+  show('sys-hero', !!pageSystem);
+  show('step-nav', !!pageSystem);
   show('daily-card', onHub);
   show('limits-card', onHub);
   // Quizzes live on the Portrait page only — never on the hub or another system page.
@@ -599,7 +587,7 @@ function applyPageLayout() {
   show('unlocked-card', onHub && state.unlocked);
   // The unlock/pay card stays on a system page ONLY while locked (it is
   // the pay step for that system); on Master the locked prompt replaces it.
-  show('unlock-card', !onMaster && !onGuestReader && !state.unlocked);
+  show('unlock-card', !onMaster && !state.unlocked);
   // The full reading (summary + Live Reader + Ask the Master) opens only
   // on /master — and there only the Live Reader + Master chat blocks,
   // never the full-reading summary div. The hub never shows it.
@@ -610,7 +598,7 @@ function applyPageLayout() {
   show('ziwei-input-card', (onMaster || onHub) && state.unlocked && state.ziweiInputsNeeded);
   if (onMaster && state.ziweiInputsNeeded) show('report-card', false);
   const hubNext = $('hub-next');
-  if (hubNext) { hubNext.innerHTML = hubNextHTML(); show('hub-next', !onGuestReader); }
+  if (hubNext) { hubNext.innerHTML = hubNextHTML(); show('hub-next', !onMaster); }
   const stepNav = $('step-nav');
   if (stepNav) stepNav.innerHTML = stepNavHTML();
 }
@@ -648,7 +636,7 @@ function renderSystems() {
   // Hook lines: from the teaser when present, else from the full reading
   // (a fresh load with a stored token never fetched a teaser).
   const hookOf = (sys, fallback) => (src[sys] && src[sys].hook) || fallback;
-  const baziHook = hookOf('bazi', unlocked ? r.bazi.dayMasterText : null);
+  const baziHook = unlocked ? r.bazi.dayMasterText : (src.bazi.workPreview || src.bazi.hook);
   const horoHook = hookOf('horoscope', unlocked ? r.horoscope.sun.trait : null);
   const numHook = hookOf('numerology', unlocked ? r.numerology.lifePathText : null);
   const yijingHook = state.yijingResult?.theme || hookOf('yijing', unlocked ? r.yijing.theme : null);
@@ -660,7 +648,7 @@ function renderSystems() {
     html += revealCover('\uD83C\uDF3F', `${t('tapReveal')} \u2014 ${t('dayMaster')}`, t('tapReveal'));
   } else {
     const dm = unlocked ? r.bazi.dayMaster : { en: src.bazi.dayMaster, zh: src.bazi.dayMasterZh };
-    html += `<div class="reveal-in"><p class="essence">${esc(t('dayMaster'))}: ${esc(L(dm))}</p><p class="hook-line">${esc(L(baziHook))}</p>`;
+    html += `<div class="reveal-in"><p class="essence">${esc(t('dayMaster'))}: ${esc(L(dm))}</p>${!unlocked && src.bazi.strongestElement ? `<p class="lede">${esc(t('strongest'))}: ${esc(L(src.bazi.strongestElement))}</p>` : ''}<p class="hook-line">${esc(L(baziHook))}</p>`;
     if (unlocked) {
       html += `<div class="pillars">${r.bazi.pillars.map((p) => `<div class="pillar cast-item"><div class="plabel">${esc(L(p.label))}</div><div class="pchars">${esc(p.stem.char)}${esc(p.branch.char)}</div><div class="pelem">${esc(L(p.stem))} \u00B7 ${esc(L(p.branch))}</div></div>`).join('')}</div>`;
       html += `<div class="elbar">${Object.entries(r.bazi.counts).map(([k, v]) => `<div class="${k === r.bazi.dominant ? 'hot' : k === r.bazi.weakest ? 'cold' : ''}">${esc(EL_NAMES[state.lang][k] || k)} \u00D7${v}</div>`).join('')}</div>`;
@@ -743,7 +731,7 @@ function renderSystems() {
     if (unlocked) {
       return `<div class="tarot-detail reveal-in"><h3>${esc(t(posKeys[i]))} \u2014 ${esc(L(c.name))}${c.reversed ? ` (${esc(t('reversed'))})` : ''}</h3><p>${esc(L(c.meaning))}</p><p class="hook-line">${esc(L(c.positionText))}</p><p>${esc(L(c.forQuestion))}</p></div>`;
     }
-    return `<div class="tarot-detail"><p class="hook-line"><strong>${esc(L(c.name))}</strong> \u2014 ${esc(tarotKeywords(c))}</p>${lockBlock()}</div>`;
+    return `<div class="tarot-detail"><p class="hook-line"><strong>${esc(L(c.name))}</strong> \u2014 ${esc(tarotKeywords(c))}</p>${c.meaningPreview ? `<p>${esc(L(c.meaningPreview))}</p>` : ''}${lockBlock()}</div>`;
   }).join('')}</div>`;
   if (unlocked && state.tarotFlipped.every(Boolean)) {
     // The story names all three cards and the sections discuss them in
@@ -772,7 +760,10 @@ function renderSystems() {
   html += `</section>`;
 
   /* Complete Portrait */
-  html += `<section class="card" id="sys-portrait">${sysHead('\uD83E\uDE9E', t('portraitTitle'))}<p class="lede sys-desc">${esc(t('sysDescPortrait'))}</p><p class="essence">${esc(L(src.portrait.essenceLine))}</p>`;
+  const portraitPreview = !unlocked && Array.isArray(src.portrait.previewLines?.[state.lang])
+    ? src.portrait.previewLines[state.lang].map((line) => `<p class="essence">${esc(line)}</p>`).join('')
+    : `<p class="essence">${esc(L(src.portrait.essenceLine))}</p>`;
+  html += `<section class="card" id="sys-portrait">${sysHead('\uD83E\uDE9E', t('portraitTitle'))}<p class="lede sys-desc">${esc(t('sysDescPortrait'))}</p>${portraitPreview}`;
   if (unlocked) {
     const pChips = [`${esc(t('dayMaster'))}: <b>${esc(L(r.bazi.dayMaster))}</b>`, `${esc(t('sun'))}: <b>${esc(L(r.horoscope.sun))}</b>`, `${esc(t('lifePath'))}: <b>${r.numerology.lifePath}</b>`];
     if (r.personality?.enneagram) pChips.push(`Enneagram: <b>${r.personality.enneagram.core}w${r.personality.enneagram.wing}</b>`);
@@ -881,7 +872,6 @@ function saveProfile(birthDate, birthTime, name, ziweiGender) {
   } catch {}
 }
 function prefillForm() {
-  if (pageSystem === 'live-reader') return;
   try {
     const birthDate = localStorage.getItem('fateweave_birthDate');
     const birthTime = localStorage.getItem('fateweave_birthTime');
@@ -1080,23 +1070,6 @@ $('hook-form').addEventListener('submit', async (e) => {
   const status = $('teaser-status');
   status.textContent = t('readingGlimpse');
   try {
-    if (pageSystem === 'live-reader') {
-      const start = await fetch('/api/live-reader/guest/start', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ birthDate, birthTime, ziweiGender, name }),
-      });
-      const session = await start.json();
-      if (!start.ok || !session.token) { status.textContent = session.error || t('guestReaderError'); return; }
-      try { sessionStorage.setItem('fateweave_guest_lr_token', session.token); } catch {}
-      state.guestLrToken = session.token;
-      state.guestLrMessages = session.history || [];
-      state.guestLrUsed = session.questionsUsed || 0;
-      status.textContent = '';
-      renderGuestReader();
-      applyPageLayout();
-      $('guest-live-reader-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
-    }
     const res = await fetch('/api/hook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ birthDate, birthTime, ziweiGender, name }) });
     const data = await res.json();
     if (!res.ok) { status.textContent = data.error || t('couldNotRead'); return; }
@@ -1405,67 +1378,6 @@ $('download-report-btn').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 });
 
-/* --- Anonymous Live Reader: three free questions per tab session ----------- */
-function renderGuestReader() {
-  if (!$('guest-live-reader-card')) return;
-  $('guest-lr-used').textContent = String(state.guestLrUsed);
-  $('guest-lr-thread').innerHTML = state.guestLrMessages.map((m) =>
-    `<p><strong>${m.role === 'user' ? (state.lang === 'zh' ? '你' : 'You') : 'Live Reader'}:</strong> ${esc(m.content).replace(/\n/g, '<br>')}</p>`
-  ).join('');
-  const done = state.guestLrUsed >= 3;
-  $('guest-lr-question').disabled = done || state.guestLrSending;
-  $('guest-lr-ask').disabled = done || state.guestLrSending;
-  $('guest-lr-status').textContent = done ? t('guestReaderLimit') : state.guestLrStatus;
-}
-async function restoreGuestReader() {
-  if (pageSystem !== 'live-reader') return;
-  let token = null;
-  try { token = sessionStorage.getItem('fateweave_guest_lr_token'); } catch {}
-  if (!token) return;
-  try {
-    const res = await fetch('/api/live-reader/guest', { cache: 'no-store', headers: { 'X-Live-Reader-Token': token } });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || t('guestReaderError'));
-    state.guestLrToken = token;
-    state.guestLrMessages = data.history || [];
-    state.guestLrUsed = data.questionsUsed || 0;
-    renderGuestReader();
-    applyPageLayout();
-  } catch {
-    try { sessionStorage.removeItem('fateweave_guest_lr_token'); } catch {}
-    state.guestLrToken = null;
-    applyPageLayout();
-  }
-}
-async function sendGuestReaderQuestion() {
-  const question = $('guest-lr-question').value.trim();
-  if (!question || state.guestLrSending || state.guestLrUsed >= 3 || !state.guestLrToken) return;
-  state.guestLrSending = true;
-  state.guestLrStatus = t('lrThinking');
-  renderGuestReader();
-  try {
-    const res = await fetch('/api/live-reader/guest', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: state.guestLrToken, question, lang: state.lang }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      state.guestLrStatus = data.error || t('guestReaderError');
-      if (typeof data.questionsUsed === 'number') state.guestLrUsed = data.questionsUsed;
-      return;
-    }
-    state.guestLrMessages = data.history || state.guestLrMessages;
-    state.guestLrUsed = data.questionsUsed;
-    state.guestLrStatus = '';
-    $('guest-lr-question').value = '';
-    renderGuestReader();
-    $('guest-lr-thread').scrollTop = $('guest-lr-thread').scrollHeight;
-  } catch { state.guestLrStatus = t('guestReaderError'); }
-  finally { state.guestLrSending = false; renderGuestReader(); }
-}
-if ($('guest-lr-ask')) $('guest-lr-ask').addEventListener('click', sendGuestReaderQuestion);
-if ($('guest-lr-question')) $('guest-lr-question').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendGuestReaderQuestion(); } });
-
 /* --- Paid Live Reader — voice in + voice out, typed fallback -------------- */
 // Load the buyer's REAL used count on init (7 Nov 2026 fix): the page
 // used to show "Questions used: 0 / 3" on load because the count was
@@ -1686,10 +1598,9 @@ async function checkUpgradeReturn() {
 prefillForm(); // birth date, time, name, email survive a reload (bug 3)
 async function initializeApp() {
   await loadPrice();
-  const unlocked = pageSystem === 'live-reader' ? false : await loadReport(true);
-  if (!unlocked && pageSystem !== 'live-reader') await loadSavedTeaser();
+  const unlocked = await loadReport(true);
+  if (!unlocked) await loadSavedTeaser();
   await checkUpgradeReturn();
-  await restoreGuestReader();
 }
 initializeApp();
 renderQuizList();

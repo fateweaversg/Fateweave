@@ -57,25 +57,33 @@ db.exec(`
     UNIQUE(email, birth_date)
   );
 
-  -- Anonymous free Live Reader sessions. Profile and thread are retained
-  -- for 24 hours so a reload can restore the same three-question session.
-  CREATE TABLE IF NOT EXISTS guest_live_reader_sessions (
-    token_hash TEXT PRIMARY KEY,
-    profile_json TEXT NOT NULL,
-    question_count INTEGER NOT NULL DEFAULT 0,
+  -- Invite-only trial codes. Codes are stored by hash, each redemption is
+  -- tied to one email + birth date, and trial access expires independently
+  -- from the normal paid 90-day window.
+  CREATE TABLE IF NOT EXISTS trial_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code_hash TEXT NOT NULL UNIQUE,
+    label TEXT NOT NULL DEFAULT '',
+    max_redemptions INTEGER NOT NULL DEFAULT 1 CHECK(max_redemptions BETWEEN 1 AND 100),
+    access_days INTEGER NOT NULL DEFAULT 7 CHECK(access_days IN (7, 14)),
     expires_at TEXT NOT NULL,
+    disabled INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
-  CREATE TABLE IF NOT EXISTS guest_live_reader_messages (
+  CREATE TABLE IF NOT EXISTS trial_code_redemptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    token_hash TEXT NOT NULL,
-    role TEXT NOT NULL,
-    content TEXT NOT NULL,
-    lang TEXT NOT NULL DEFAULT 'en',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (token_hash) REFERENCES guest_live_reader_sessions(token_hash) ON DELETE CASCADE
+    code_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    birth_date TEXT NOT NULL,
+    order_id INTEGER NOT NULL UNIQUE,
+    redeemed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    access_expires_at TEXT NOT NULL,
+    converted_at TEXT,
+    UNIQUE(email, birth_date),
+    FOREIGN KEY (code_id) REFERENCES trial_codes(id),
+    FOREIGN KEY (order_id) REFERENCES orders(id)
   );
-  CREATE INDEX IF NOT EXISTS idx_guest_lr_messages ON guest_live_reader_messages(token_hash, id);
+  CREATE INDEX IF NOT EXISTS idx_trial_redemptions_code ON trial_code_redemptions(code_id, redeemed_at);
 
   CREATE TABLE IF NOT EXISTS owner_tokens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

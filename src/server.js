@@ -63,10 +63,6 @@ const masterChatLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false,
   handler: (req, res) => res.status(429).json({ error: 'Too many questions in a short time — please wait a few minutes and try again.' }),
 });
-const guestLiveReaderLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 25, standardHeaders: true, legacyHeaders: false,
-  handler: (_req, res) => res.status(429).json({ error: 'Too many Live Reader requests. Please wait a few minutes and try again.' }),
-});
 const ownerLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false,
   skipSuccessfulRequests: true,
@@ -121,7 +117,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     price: { amountCents: price.amountCents, currency: price.currency, isPromo: price.isPromo, promoStart: price.promoStart, promoEnd: price.promoEnd },
     fullPriceCents: config.fullPriceCents,
-    promoAccessEnabled: Boolean(config.promoAccessCode),
+    promoAccessEnabled: true,
     stripePublishableKey: config.stripePublishableKey || null,
     previewMode: config.previewMode,
     liveReaderMax: config.liveReaderMaxPerSession,
@@ -153,9 +149,9 @@ app.post('/api/hook', (req, res) => {
   }
 });
 
-// Private complimentary access for invited testers. The code is configured
-// only in the server environment; redemptions are limited to one per email
-// and birth date, and each redemption receives its own paid-style order/token.
+// Private invite-only trials. The code itself is hashed in the database and
+// returned only once to the owner when created. Each redemption is unique to
+// one email + birth date and receives an expiring paid-style order/token.
 const promoAccessLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, max: 8, standardHeaders: true, legacyHeaders: false,
   handler: (_req, res) => res.status(429).json({ error: 'Too many code attempts. Please try again in an hour.' }),
@@ -166,43 +162,51 @@ db.exec(`CREATE TABLE IF NOT EXISTS promo_redemptions(
 );`);
 app.post('/api/redeem-promo', promoAccessLimiter, (req, res) => {
   const { email: rawEmail, birthDate, birthTime, ziweiGender, name, promoCode } = req.body || {};
-  if (!config.promoAccessCode) return res.status(503).json({ error: 'Complimentary access is not enabled.' });
   if (!isValidEmail(rawEmail)) return res.status(400).json({ error: 'Enter a valid email address.' });
   if (!birthDate || !birthTime || !ziweiGender) return res.status(400).json({ error: 'Complete your birth date, birth time and chart sex first.' });
   const chartError = validateZiweiInputs({ birthTime, ziweiGender });
   if (chartError) return res.status(400).json({ error: chartError });
   try { parseBirth(birthDate, birthTime); } catch (e) { return res.status(400).json({ error: e.message }); }
-  const submitted = Buffer.from(String(promoCode || '').trim().toUpperCase());
-  const expected = Buffer.from(config.promoAccessCode.trim().toUpperCase());
-  if (!submitted.length || submitted.length !== expected.length || !crypto.timingSafeEqual(submitted, expected)) {
-    return res.status(403).json({ error: 'That promo code is not valid.' });
-  }
+  const normalizedCode = String(promoCode || '').trim().toUpperCase();
+  if (!/^[A-Z0-9]{8,16}$/.test(normalizedCode)) return res.status(403).json({ error: 'That trial code is not valid.' });
+  const codeHash = hashToken(normalizedCode);
   const email = rawEmail.trim().toLowerCase();
-  let orderId;
+  let orderId, accessDays;
   try {
     db.exec('BEGIN IMMEDIATE');
-    const prior = db.prepare('SELECT order_id FROM promo_redemptions WHERE email=? AND birth_date=?').get(email, birthDate);
-    if (prior) orderId = prior.order_id;
-    else {
-      const redeemed = db.prepare('SELECT COUNT(*) n FROM promo_redemptions').get().n;
-      if (redeemed >= config.promoAccessMaxRedemptions) {
-        db.exec('ROLLBACK');
-        return res.status(409).json({ error: 'All complimentary access codes have been used.' });
-      }
-      const order = db.prepare("INSERT INTO orders(email,birth_date,birth_time,ziwei_gender,name,amount_cents,currency,price_label,provider,status,paid_at) VALUES(?,?,?,?,?,0,'usd','private-promo','promo','paid',datetime('now'))")
-        .run(email, birthDate, birthTime, ziweiGender, name || null);
-      orderId = Number(order.lastInsertRowid);
-      db.prepare('INSERT INTO promo_redemptions(email,birth_date,order_id) VALUES(?,?,?)').run(email, birthDate, orderId);
-    }
+    const code = db.prepare('SELECT * FROM trial_codes WHERE code_hash=? AND disabled=0').get(codeHash);
+    if (!code) { db.exec('ROLLBACK'); return res.status(403).json({ error: 'That trial code is not valid.' }); }
+    const now = Date.now();
+    if (new Date(code.expires_at).getTime() <= now) { db.exec('ROLLBACK'); return res.status(410).json({ error: 'This trial code has expired.' }); }
+    const existing = db.prepare('SELECT id FROM trial_code_redemptions WHERE email=? AND birth_date=?').get(email, birthDate);
+    const legacy = db.prepare('SELECT order_id FROM promo_redemptions WHERE email=? AND birth_date=?').get(email, birthDate);
+    if (existing || legacy) { db.exec('ROLLBACK'); return res.status(409).json({ error: 'A trial has already been used for this email and birth date.' }); }
+    const count = db.prepare('SELECT COUNT(*) n FROM trial_code_redemptions WHERE code_id=?').get(code.id).n;
+    if (count >= code.max_redemptions) { db.exec('ROLLBACK'); return res.status(409).json({ error: 'This trial code has already been used.' }); }
+    accessDays = code.access_days;
+    const order = db.prepare("INSERT INTO orders(email,birth_date,birth_time,ziwei_gender,name,amount_cents,currency,price_label,provider,status,paid_at) VALUES(?,?,?,?,?,0,'usd','trial-code','trial','paid',datetime('now'))")
+      .run(email, birthDate, birthTime, ziweiGender, name || null);
+    orderId = Number(order.lastInsertRowid);
+    const expiresAt = new Date(now + accessDays * 86400000).toISOString();
+    db.prepare('INSERT INTO trial_code_redemptions(code_id,email,birth_date,order_id,access_expires_at) VALUES(?,?,?,?,?)').run(code.id, email, birthDate, orderId, expiresAt);
     db.exec('COMMIT');
   } catch (e) {
     try { db.exec('ROLLBACK'); } catch {}
     console.error('Promo redemption failed:', e.message);
     return res.status(500).json({ error: 'Could not unlock this reading. Please try again.' });
   }
-  const { token, expiresAt } = issueAccessToken(email, birthDate, orderId);
-  return res.json({ paid: true, freeAccess: true, email, birthDate, token, expiresAt });
+  const { token, expiresAt } = issueAccessToken(email, birthDate, orderId, accessDays);
+  return res.json({ paid: true, trialAccess: true, email, birthDate, token, expiresAt });
 });
+function recordTrialConversion(email, birthDate) {
+  if (!email || !birthDate) return;
+  db.prepare(`UPDATE trial_code_redemptions SET converted_at=COALESCE(converted_at,datetime('now'))
+    WHERE email=? AND birth_date=? AND EXISTS (
+      SELECT 1 FROM orders o WHERE o.email=? AND o.birth_date=? AND o.status='paid'
+        AND o.provider='stripe' AND o.price_label NOT IN ('trial-code','master-chat-upgrade')
+        AND o.created_at >= trial_code_redemptions.redeemed_at
+    )`).run(String(email).toLowerCase(), birthDate, String(email).toLowerCase(), birthDate);
+}
 
 // --- Checkout: Stripe Checkout Session, price decided server-side ----------
 app.post('/api/checkout', async (req, res) => {
@@ -290,10 +294,12 @@ app.get('/api/checkout-session/:sessionId', async (req, res) => {
     if (existing) {
       const fresh = issueAccessToken(order.email, order.birth_date, orderId);
       db.prepare("UPDATE orders SET status = 'paid', paid_at = datetime('now') WHERE id = ?").run(orderId);
+      recordTrialConversion(order.email, order.birth_date);
       return res.json({ paid: true, email: order.email, birthDate: order.birth_date, token: fresh.token, expiresAt: fresh.expiresAt, tokenAlreadyIssued: true, message: 'Access was already issued for this order — a fresh token has been issued for this session.' });
     }
     const { token, expiresAt } = issueAccessToken(order.email, order.birth_date, orderId);
     db.prepare("UPDATE orders SET status = 'paid', paid_at = datetime('now') WHERE id = ?").run(orderId);
+    recordTrialConversion(order.email, order.birth_date);
     db.prepare('INSERT OR IGNORE INTO email_subscribers (email, birth_date, name) VALUES (?, ?, ?)').run(order.email, order.birth_date, order.name);
     // Email the detailed report (best-effort — never block the unlock on email).
     try {
@@ -326,6 +332,10 @@ app.post('/api/webhook/stripe', express.raw({ type: 'application/json' }), async
       db.prepare("UPDATE orders SET status = 'paid', paid_at = datetime('now'), provider_payment_id = ? WHERE id = ?")
         .run(session.payment_intent || null, orderId);
       console.log(`Order ${orderId} marked paid via webhook.`);
+      if (session.metadata?.upgrade !== '1') {
+        const order = db.prepare('SELECT email,birth_date,price_label FROM orders WHERE id=?').get(orderId);
+        if (order && order.price_label !== 'trial-code') recordTrialConversion(order.email, order.birth_date);
+      }
       if (session.metadata?.upgrade === '1') {
         const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
         if (order) {
@@ -431,89 +441,6 @@ app.post('/api/resend-report', async (req, res) => {
             : 'Could not resend the report email. Your reading is still unlocked on this page — use Download report below to get it now.';
     return res.status(502).json({ error: friendly, code });
   }
-});
-
-// --- Live Reader: 3 questions max per BUYER, server-enforced -------------
-// Keyed by the buyer (email + birth_date), not by the browser session:
-// the old per-session count reset to 0 on every reload, so a refresh
-// gave 3 fresh questions. A fresh sessionId never resets the count —
-// the client still sends one (kept for backward compatibility), but it
-// is not the key. 3 per buyer per unlock. The count is the table the
-// POST enforces — the page loads it on init (GET below) instead of
-// assuming 0, so the screen can never say 0/3 when the server will
-// reject (7 Nov 2026: the screen said 0/3 while the server refused).
-function guestLiveReaderSession(rawToken) {
-  if (typeof rawToken !== 'string' || !/^[a-f0-9]{64}$/i.test(rawToken)) return null;
-  return db.prepare('SELECT * FROM guest_live_reader_sessions WHERE token_hash = ? AND expires_at > ?')
-    .get(hashToken(rawToken), new Date().toISOString()) || null;
-}
-function guestLiveReaderHistory(tokenHash) {
-  return db.prepare('SELECT role, content, lang FROM guest_live_reader_messages WHERE token_hash = ? ORDER BY id ASC').all(tokenHash);
-}
-function guestLiveReaderPayload(session) {
-  return { questionsUsed: session.question_count, questionsRemaining: Math.max(0, 3 - session.question_count), max: 3, history: guestLiveReaderHistory(session.token_hash) };
-}
-function cleanupGuestLiveReaderSessions() {
-  const now = new Date().toISOString();
-  db.prepare("DELETE FROM guest_live_reader_messages WHERE token_hash IN (SELECT token_hash FROM guest_live_reader_sessions WHERE expires_at <= ?)").run(now);
-  db.prepare('DELETE FROM guest_live_reader_sessions WHERE expires_at <= ?').run(now);
-}
-cleanupGuestLiveReaderSessions();
-const guestLiveReaderCleanupTimer = setInterval(cleanupGuestLiveReaderSessions, 60 * 60 * 1000);
-guestLiveReaderCleanupTimer.unref();
-
-// Guest sessions retain only the minimum profile needed to answer questions.
-// The reading itself is computed server-side and is never sent to the browser.
-app.post('/api/live-reader/guest/start', guestLiveReaderLimiter, (req, res) => {
-  const missing = requireFields(req.body, ['birthDate', 'birthTime', 'ziweiGender']);
-  if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(', ')}` });
-  const chartError = validateZiweiInputs(req.body);
-  if (chartError) return res.status(400).json({ error: chartError });
-  try {
-    const profile = { birthDate: String(req.body.birthDate), birthTime: String(req.body.birthTime), ziweiGender: req.body.ziweiGender, name: String(req.body.name || '').slice(0, 120) || null };
-    parseBirth(profile.birthDate, profile.birthTime);
-    buildFullReading(profile, null);
-    cleanupGuestLiveReaderSessions();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    const token = crypto.randomBytes(32).toString('hex');
-    const tokenHash = hashToken(token);
-    db.prepare('INSERT INTO guest_live_reader_sessions (token_hash, profile_json, question_count, expires_at) VALUES (?, ?, 0, ?)').run(tokenHash, JSON.stringify(profile), expiresAt);
-    const session = db.prepare('SELECT * FROM guest_live_reader_sessions WHERE token_hash = ?').get(tokenHash);
-    res.set('Cache-Control', 'no-store');
-    return res.status(201).json({ token, ...guestLiveReaderPayload(session) });
-  } catch (e) { return res.status(400).json({ error: e.message || 'Could not create a Live Reader session.' }); }
-});
-app.get('/api/live-reader/guest', guestLiveReaderLimiter, (req, res) => {
-  const sessionToken = req.get('x-live-reader-token');
-  const session = guestLiveReaderSession(sessionToken);
-  if (!session) return res.status(410).json({ error: 'This Live Reader session has expired. Start a new one to ask another question.' });
-  res.set('Cache-Control', 'no-store');
-  return res.json(guestLiveReaderPayload(session));
-});
-app.post('/api/live-reader/guest', guestLiveReaderLimiter, (req, res) => {
-  const { token, question, lang } = req.body || {};
-  const session = guestLiveReaderSession(token);
-  if (!session) return res.status(410).json({ error: 'This Live Reader session has expired. Start a new one to ask another question.' });
-  const q = typeof question === 'string' ? question.trim() : '';
-  if (q.length < 2 || q.length > 500) return res.status(400).json({ error: 'Enter a question between 2 and 500 characters.' });
-  if (session.question_count >= 3) return res.status(429).json({ error: 'You have used all 3 free questions in this session.', questionsUsed: session.question_count, questionsRemaining: 0 });
-  const tokenHash = session.token_hash;
-  const priorUser = db.prepare("SELECT id FROM guest_live_reader_messages WHERE token_hash = ? AND role = 'user' AND content = ? AND created_at >= datetime('now', '-5 seconds') ORDER BY id DESC LIMIT 1").get(tokenHash, q);
-  if (priorUser) {
-    const priorAnswer = db.prepare("SELECT content FROM guest_live_reader_messages WHERE token_hash = ? AND role = 'master' AND id > ? ORDER BY id ASC LIMIT 1").get(tokenHash, priorUser.id);
-    if (priorAnswer) return res.json({ answer: priorAnswer.content, ...guestLiveReaderPayload(session) });
-  }
-  try {
-    const profile = JSON.parse(session.profile_json);
-    const reading = buildFullReading(profile, null);
-    const answer = liveReaderAnswer(reading, q, lang === 'zh' ? 'zh' : 'en');
-    db.prepare("INSERT INTO guest_live_reader_messages (token_hash, role, content, lang) VALUES (?, 'user', ?, ?)").run(tokenHash, q, lang === 'zh' ? 'zh' : 'en');
-    db.prepare("INSERT INTO guest_live_reader_messages (token_hash, role, content, lang) VALUES (?, 'master', ?, ?)").run(tokenHash, answer, lang === 'zh' ? 'zh' : 'en');
-    db.prepare("UPDATE guest_live_reader_sessions SET question_count = question_count + 1 WHERE token_hash = ? AND question_count < 3").run(tokenHash);
-    const updated = db.prepare('SELECT * FROM guest_live_reader_sessions WHERE token_hash = ?').get(tokenHash);
-    res.set('Cache-Control', 'no-store');
-    return res.json({ answer, ...guestLiveReaderPayload(updated) });
-  } catch (e) { return res.status(400).json({ error: e.message || 'Could not answer this question.' }); }
 });
 
 app.get('/api/yijing/cast', (_req, res) => {
@@ -1430,6 +1357,70 @@ app.post('/api/owner/login', ownerLoginLimiter, async (req, res) => {
   const { token, expiresAt } = issueOwnerToken();
   return res.json({ ownerToken: token, expiresAt });
 });
+function createTrialCode() {
+  // An unambiguous uppercase alphabet keeps codes easy to read aloud.
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.randomBytes(12);
+  let code = '';
+  for (const b of bytes) code += alphabet[b % alphabet.length];
+  return code;
+}
+function ownerTrialAccess(req, res) {
+  if (!verifyOwnerToken(req.headers['x-owner-token'])) {
+    res.status(401).json({ error: 'Owner sign-in is required.' });
+    return false;
+  }
+  return true;
+}
+// Values of active codes are never listed. The plaintext appears only in
+// the one-time creation response and is not stored in the database.
+app.get('/api/owner/trial-codes', (req, res) => {
+  if (!ownerTrialAccess(req, res)) return;
+  const codes = db.prepare(`SELECT c.id,c.label,c.max_redemptions,c.access_days,c.expires_at,c.disabled,c.created_at,
+      COUNT(r.id) AS redemptions, SUM(CASE WHEN r.converted_at IS NOT NULL THEN 1 ELSE 0 END) AS conversions
+    FROM trial_codes c LEFT JOIN trial_code_redemptions r ON r.code_id=c.id
+    GROUP BY c.id ORDER BY c.id DESC LIMIT 100`).all();
+  const legacyRedemptions = db.prepare('SELECT COUNT(*) AS n FROM promo_redemptions').get().n;
+  return res.json({
+    codes,
+    legacy: { redemptionLimit: config.promoAccessMaxRedemptions, redemptionsUsed: legacyRedemptions },
+  });
+});
+app.post('/api/owner/trial-codes', (req, res) => {
+  if (!ownerTrialAccess(req, res)) return;
+  const body = req.body || {};
+  const accessDays = Number(body.accessDays || 7);
+  const label = String(body.label || '').trim().slice(0, 80);
+  if (![7, 14].includes(accessDays)) return res.status(400).json({ error: 'Trial access must last 7 or 14 days.' });
+  const mode = body.mode === 'shared' ? 'shared' : 'batch';
+  const batchSize = Number(body.batchSize || 1);
+  const maxUses = Number(body.maxUses || 1);
+  if (mode === 'batch' && (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 100)) {
+    return res.status(400).json({ error: 'Create between 1 and 100 single-use codes per batch.' });
+  }
+  if (mode === 'shared' && (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > 100)) {
+    return res.status(400).json({ error: 'A campaign code can have 1 to 100 uses.' });
+  }
+  const count = mode === 'batch' ? batchSize : 1;
+  const uses = mode === 'batch' ? 1 : maxUses;
+  const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
+  const created = [];
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const add = db.prepare('INSERT INTO trial_codes(code_hash,label,max_redemptions,access_days,expires_at) VALUES(?,?,?,?,?)');
+    for (let i = 0; i < count; i++) {
+      const code = createTrialCode();
+      const result = add.run(hashToken(code), label, uses, accessDays, expiresAt);
+      created.push({ code, label, uses, accessDays, expiresAt, id: Number(result.lastInsertRowid) });
+    }
+    db.exec('COMMIT');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch {}
+    console.error('Trial code creation failed:', e.message);
+    return res.status(500).json({ error: 'Could not create trial codes.' });
+  }
+  return res.status(201).json({ created });
+});
 // Send a plain delivery check to the two owner-approved addresses stored
 // temporarily in Railway variables. Owner token required, one batch per
 // source IP per hour. No reading or profile data is included.
@@ -1518,9 +1509,10 @@ app.get('/api/unsubscribe', (req, res) => {
 const SYSTEM_PAGES = {
   bazi: 'theme-bazi', ziwei: 'theme-ziwei', horoscope: 'theme-horoscope',
   yijing: 'theme-yijing', tarot: 'theme-tarot', numerology: 'theme-numerology',
-  portrait: 'theme-portrait', master: 'theme-master', 'live-reader': 'theme-live-reader',
+  portrait: 'theme-portrait', master: 'theme-master',
 };
 const INDEX_HTML = require('fs').readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+app.get('/live-reader', (_req, res) => res.redirect(302, '/master'));
 app.get(Object.keys(SYSTEM_PAGES).map((k) => '/' + k), (req, res) => {
   const key = req.path.slice(1);
   res.type('html').send(INDEX_HTML.replace('<body>', `<body data-system="${key}" class="${SYSTEM_PAGES[key]}">`));
@@ -1530,6 +1522,10 @@ app.get(Object.keys(SYSTEM_PAGES).map((k) => '/' + k), (req, res) => {
 app.get('/owner/email-test', (_req, res) => {
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, '..', 'public', 'owner-email-test.html'));
+});
+app.get('/owner/trial-codes', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, '..', 'public', 'owner-promo-codes.html'));
 });
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));

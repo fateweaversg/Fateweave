@@ -60,8 +60,12 @@ function sectionText(def, palace) {
   const areaEn = def.area.en;
   const areaZh = def.area.zh;
   return {
-    en: `${def.name.en} is placed in the ${branchEn} branch and ${hasMajorStars ? `carries ${majorEn}` : 'has no major star'}. In Zi Wei Dou Shu, this palace is used to reflect on ${areaEn}. Read the specific star placement as a prompt to examine how this part of life works for you; it does not predict a guaranteed event.`,
-    zh: `${def.name.zh}落在${branchZh}${hasMajorStars ? `，主星为${majorZh}` : '，没有主星入宫'}。紫微斗数以此宫观察${areaZh}。这项具体星曜位置可作为认识相关生活领域的参考，不代表某件事情必然发生。`,
+    en: hasMajorStars
+      ? `${def.name.en} is in the ${branchEn} branch and carries ${majorEn}. In Zi Wei Dou Shu, this palace is used to reflect on ${areaEn}. Read the star placement as a prompt to examine how this part of life works for you; it does not predict a guaranteed event.`
+      : `${def.name.en} is in the ${branchEn} branch. No major star is placed there. In Zi Wei Dou Shu, this palace is used to reflect on ${areaEn}. Read this as a prompt to examine how this part of life works for you; it does not predict a guaranteed event.`,
+    zh: hasMajorStars
+      ? `${def.name.zh}落在${branchZh}，主星为${majorZh}。紫微斗数以此宫观察${areaZh}。这项星曜位置可作为认识相关生活领域的参考，不代表某件事情必然发生。`
+      : `${def.name.zh}落在${branchZh}，此宫没有主星。紫微斗数以此宫观察${areaZh}。这可作为认识相关生活领域的参考，不代表某件事情必然发生。`,
   };
 }
 

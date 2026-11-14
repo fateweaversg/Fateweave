@@ -96,7 +96,7 @@ async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
     if (u.startsWith('/api/report')) return unlocked
       ? { ok: true, json: async () => buildFullReading({ birthDate: '1990-05-14', birthTime: '08:30', ziweiGender: 'male', name: 'Test' }) }
       : { ok: false, status: 403, json };
-    if (u.startsWith('/api/master-chat')) return { ok: true, json: async () => ({topics:[],activeTopicId:null,mainUsed:0,mainRemaining:3,probesUsed:0,probesRemaining:5,probeMax:5,purchases:0,purchasesRemaining:2}) };
+    if (u.startsWith('/api/master-chat')) return { ok: true, json: async () => ({topics:[],activeTopicId:null,mainUsed:0,mainRemaining:3,probesUsed:0,probesRemaining:5,probeMax:5,purchases:0,purchasesRemaining:1}) };
     if (u.startsWith('/api/checkout-session/')) return { ok: true, json: async () => ({ paid: true, upgrade: true, email: 'buyer@example.com', birthDate: '1990-05-14' }) };
     return { ok: false, status: 404, json };
   };
@@ -113,7 +113,7 @@ async function runCase({ page, unlocked, submitHook, search, fetchMode }) {
     fetch: fetchStub,
     document: {
       body, documentElement: docEl,
-      getElementById: (id) => els[id] || null,
+      getElementById: (id) => els[id] || (els[id] = new El(id)),
       querySelectorAll: () => [],
       querySelector: () => null,
       createElement: () => new El('x'),
@@ -150,7 +150,7 @@ function check(n,v){if(v){pass++;console.log('PASS '+n);}else{fail++;console.err
  els=await runCase({page:'master',unlocked:true});check('one input begins at first main question',els['mc-mode'].textContent.includes('Question 1 of 3')&&els['mc-question'].placeholder.includes('Master'));
  check('Next disabled until a main answer exists',els['mc-next'].disabled===true);
  check('initial shared follow-up balance is 5',els['mc-left'].textContent==='5');
- check('purchase button adds fifteen',els['mc-upgrade-btn'].textContent.includes('15'));
+ check('one optional add-on offers 5- and 10-chat packs at their stated prices',els['mc-upgrade-5-btn'].textContent.includes('$1.99')&&els['mc-upgrade-10-btn'].textContent.includes('$3.49')&&!els['mc-upgrade-5-btn'].disabled);
  check('provider badge hidden',els['mc-ai-badge'].hidden);
  for(const mode of ['throw','nonJson','geminiDown']){
   els=await runCase({page:'master',unlocked:true,fetchMode:mode});els['mc-question'].value='What does my financial outlook mean?';await els['mc-ask']._handlers.click[0]();

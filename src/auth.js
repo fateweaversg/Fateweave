@@ -19,9 +19,10 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-function issueAccessToken(email, birthDate, orderId) {
+function issueAccessToken(email, birthDate, orderId, days = config.accessTokenDays) {
   const token = crypto.randomBytes(32).toString('hex'); // 64 hex chars
-  const expiresAt = new Date(Date.now() + config.accessTokenDays * 24 * 60 * 60 * 1000).toISOString();
+  const accessDays = Math.max(1, Math.min(365, Number(days) || config.accessTokenDays));
+  const expiresAt = new Date(Date.now() + accessDays * 24 * 60 * 60 * 1000).toISOString();
   db.prepare(
     'INSERT INTO access_tokens (token_hash, email, birth_date, order_id, expires_at) VALUES (?, ?, ?, ?, ?)'
   ).run(hashToken(token), email.toLowerCase(), birthDate, orderId || null, expiresAt);
