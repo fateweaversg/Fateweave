@@ -29,6 +29,7 @@ const STEP_ORDER = [
 ];
 const state = {
   lang: 'en', teaser: null, report: null, unlocked: false, ziweiInputsNeeded: false, price: null, masterPacks: [], previewMode: false, promoAccessEnabled: false,
+  teaserLoading: !!localStorage.getItem('fateweave_birthDate') && new URLSearchParams(location.search).get('fresh') !== '1',
   mcExtended: false,
   sessionId: crypto.randomUUID(),
   revealed: {}, tarotFlipped: [false, false, false], ziweiCast: false, yijingCast: false,
@@ -57,7 +58,7 @@ const STR = {
     unlockedBanner: '\u2713 Unlocked \u2014 no need to pay again',
     unlockedBannerSub: 'Your full reading is open below. It is saved on this device \u2014 refresh any time, no need to re-enter anything.',
     unlockTitle: 'Unlock the full reading',
-    unlockBody: 'Unlock the full reading across all 8 systems, including 3 main Master questions and 5 follow-up chats. Add one follow-up pack if needed: $1.99 for 5 or $3.49 for 10. Master chat opens after payment or an invited trial.',
+    unlockBody: 'Unlock the full reading across all 8 systems, with 5 Master follow-up chats included. Optional packs: $1.99 for 5 more or $3.49 for 10 more.',
     liveReaderLink: 'Ask the Master',
     emailLabel: 'Email (for your reading access)', sameDateNote: 'Use the same birth date as your free glimpse, and the same email to return to your reading.',
     promoAccessSummary: 'Have an invited trial code?', promoCodeLabel: 'Trial code', promoAccessButton: 'Unlock trial', promoAccessNote: 'Invited codes expire after 7 days. Each trial lasts 7 or 14 days and is tied to one email and birth date.', promoCodeWorking: 'Checking your code…', promoCodeSuccess: 'Your limited-time trial is unlocked.',
@@ -101,7 +102,7 @@ const STR = {
     doneHub: 'Done — back to hub',
     allSystems: 'All six systems',
     masterLockedTitle: 'Ask the Master is locked',
-    masterLockedBody: 'Unlock your full reading first — then come back here to ask the Master.',
+    masterLockedBody: 'Unlock the full reading with 5 Master follow-up chats included. Optional packs: $1.99 for 5 more or $3.49 for 10 more.',
     masterLockedLink: '← Back to the hub to unlock',
     tapEnlarge: 'Tap a flipped card again to enlarge it',
     heroLocked: 'Unlock the full reading to see your result here.',
@@ -122,7 +123,7 @@ const STR = {
     tapReveal: 'Tap to reveal', tapFlip: 'Tap a card to flip it', castChart: 'Cast the chart', castCoins: 'Cast the coins', castAgain: 'Cast again',
     lockedTitle: 'Full reading locked', lockedBody: 'Unlock the full reading to read every detail.',
     unlockBtn: 'Unlock full reading', casting: 'Casting\u2026', flipping: 'Tap to flip', flipAllTarot: 'Flip all three cards to read them as one story.',
-    readingGlimpse: 'Reading your glimpse\u2026', enterDateFirst: 'Enter your birth date in the free glimpse form first.',
+    readingGlimpse: 'Reading your glimpse\u2026', enterDateFirst: 'Enter your birth date in the free glimpse form first.', loadingSavedGlimpse: 'Loading your saved glimpse…',
     couldNotRead: 'Could not read that birth date.', networkError: 'Network error: ',
     masterUnreachable: 'The Master couldn\u2019t be reached just now \u2014 please try again in a moment.',
     extendedLimit: 'Your available Master follow-ups have been used.',
@@ -178,7 +179,7 @@ const STR = {
     unlockedBanner: '\u2713 \u5df2\u89e3\u9501\u2014\u2014\u65e0\u9700\u518d\u6b21\u4ed8\u6b3e',
     unlockedBannerSub: '\u5b8c\u6574\u62a5\u544a\u5df2\u5728\u4e0b\u65b9\u5f00\u542f\uff0c\u5e76\u4fdd\u5b58\u5728\u6b64\u88c5\u7f6e\u2014\u2014\u968f\u65f6\u91cd\u65b0\u6574\u7406\uff0c\u4e0d\u7528\u518d\u8f93\u5165\u4efb\u4f55\u8d44\u6599\u3002',
     unlockTitle: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a',
-    unlockBody: '解锁全部 8 个系统的完整报告，包含 3 个掌门主问题和 5 次追问。需要更多时，可加购一个追问包：$1.99 增加 5 次，或 $3.49 增加 10 次。付款或使用受邀试用后即可使用掌门聊天。',
+    unlockBody: '解锁全部 8 个系统的完整报告，并包含 5 次掌门追问。可选加购：$1.99 增加 5 次，或 $3.49 增加 10 次。',
     liveReaderLink: '问掌门',
     emailLabel: '\u7535\u90ae\uff08\u7528\u4e8e\u67e5\u9605\u62a5\u544a\uff09', sameDateNote: '\u8bf7\u4f7f\u7528\u4e0e\u514d\u8d39\u9884\u89c8\u76f8\u540c\u7684\u51fa\u751f\u65e5\u671f\u548c\u7535\u90ae\uff0c\u65b9\u4fbf\u8fd4\u56de\u67e5\u770b\u62a5\u544a\u3002',
     promoAccessSummary: '有受邀试用码？', promoCodeLabel: '试用码', promoAccessButton: '解锁试用', promoAccessNote: '受邀试用码在 7 天后过期。试用权限为 7 天或 14 天，并绑定一个邮箱和出生日期。', promoCodeWorking: '正在验证试用码…', promoCodeSuccess: '你的限时试用已解锁。',
@@ -222,7 +223,7 @@ const STR = {
     doneHub: '完成 — 回到首页',
     allSystems: '全部六个系统',
     masterLockedTitle: '问掌门尚未解锁',
-    masterLockedBody: '请先解锁完整报告，再回来问掌门。',
+    masterLockedBody: '解锁完整报告即包含 5 次掌门追问。可选加购：$1.99 增加 5 次，或 $3.49 增加 10 次。',
     masterLockedLink: '← 回到首页解锁',
     tapEnlarge: '\u518d\u70b9\u4e00\u4e0b\u5df2\u7ffb\u5f00\u7684\u724c\uff0c\u53ef\u4ee5\u653e\u5927\u67e5\u770b',
     heroLocked: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a\uff0c\u5373\u53ef\u5728\u8fd9\u91cc\u770b\u5230\u4f60\u7684\u7ed3\u679c\u3002',
@@ -243,7 +244,7 @@ const STR = {
     tapReveal: '\u70b9\u4e00\u4e0b\u63ed\u5f00', tapFlip: '\u70b9\u4e00\u5f20\u724c\u7ffb\u5f00\u5b83', castChart: '\u8d77\u76d8', castCoins: '\u63b7\u5366', castAgain: '\u518d\u6b21\u8d77\u5366',
     lockedTitle: '\u5b8c\u6574\u5185\u5bb9\u672a\u89e3\u9501', lockedBody: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a\uff0c\u5373\u53ef\u9605\u8bfb\u5168\u90e8\u7ec6\u8282\u3002',
     unlockBtn: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a', casting: '\u8d77\u5366\u4e2d\u2026\u2026', flipping: '\u70b9\u4e00\u4e0b\u7ffb\u724c', flipAllTarot: '\u7ffb\u5f00\u4e09\u5f20\u724c\uff0c\u770b\u770b\u5b83\u4eec\u5408\u8d77\u6765\u8bf4\u7684\u6545\u4e8b\u3002',
-    readingGlimpse: '\u6b63\u5728\u8bfb\u53d6\u4f60\u7684\u9884\u89c8\u2026\u2026', enterDateFirst: '\u8bf7\u5148\u5728\u514d\u8d39\u4e00\u77a5\u8868\u5355\u8f93\u5165\u51fa\u751f\u65e5\u671f\u3002',
+    readingGlimpse: '\u6b63\u5728\u8bfb\u53d6\u4f60\u7684\u9884\u89c8\u2026\u2026', enterDateFirst: '\u8bf7\u5148\u5728\u514d\u8d39\u4e00\u77a5\u8868\u5355\u8f93\u5165\u51fa\u751f\u65e5\u671f\u3002', loadingSavedGlimpse: '\u6b63\u5728\u8bfb\u53d6\u4f60\u4fdd\u5b58\u7684\u9884\u89c8\u2026',
     couldNotRead: '\u65e0\u6cd5\u8bfb\u53d6\u8be5\u51fa\u751f\u65e5\u671f\u3002', networkError: '\u7f51\u7edc\u9519\u8bef\uff1a',
     masterUnreachable: '\u638c\u95e8\u6682\u65f6\u8054\u7cfb\u4e0d\u4e0a\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     extendedLimit: '掌门追问次数已用完。',
@@ -495,7 +496,7 @@ function heroResultHTML(key) {
     }
     case 'yijing': {
       const hex = unlocked ? r.yijing.hexagram : src.yijing.hexagram;
-      return `<div class="hero-result">${esc(hex)}</div><p class="hero-sub">${esc(L(unlocked ? r.yijing.theme : src.yijing.hook))}</p>`;
+      return `<div class="hero-result">${esc(hex)}</div><p class="hero-sub">${esc(L(unlocked ? r.yijing.theme : (src.yijing.preview || src.yijing.hook)))}</p>`;
     }
     case 'tarot': {
       const cards = unlocked ? r.tarot.cardsDetailed : src.tarot.cards;
@@ -622,6 +623,13 @@ function renderSystems() {
   const box = $('systems');
   const src = state.unlocked && state.report ? state.report : state.teaser;
   if (!src) {
+    if (state.teaserLoading && pageSystem !== 'master') {
+      const message = `<p class="lede" role="status">${esc(t('loadingSavedGlimpse'))}</p>`;
+      const hero = $('sys-hero');
+      if (pageSystem && hero) hero.innerHTML = `<div class="sys-hero"><h1 class="sys-hero-title">${esc(SYS_META[pageSystem]?.title || '')}</h1>${message}</div>`;
+      box.innerHTML = pageSystem ? `<section class="card">${message}</section>` : message;
+      applyPageLayout(); bindPreviewEvents(); return;
+    }
     let ph = previewSystemsHTML();
     if (pageSystem) {
       const hero = $('sys-hero'); if (hero) hero.innerHTML = pageHeroHTML();
@@ -639,7 +647,7 @@ function renderSystems() {
   const baziHook = unlocked ? r.bazi.dayMasterText : (src.bazi.workPreview || src.bazi.hook);
   const horoHook = hookOf('horoscope', unlocked ? r.horoscope.sun.trait : null);
   const numHook = hookOf('numerology', unlocked ? r.numerology.lifePathText : null);
-  const yijingHook = state.yijingResult?.theme || hookOf('yijing', unlocked ? r.yijing.theme : null);
+  const yijingHook = state.yijingResult?.preview || hookOf('yijing', unlocked ? r.yijing.theme : null);
   let html = '';
 
   /* Bazi */
@@ -665,10 +673,10 @@ function renderSystems() {
   if (!state.ziweiCast) {
     const life = unlocked ? r.ziwei.mainStar : src.ziwei.mainStar;
     const palace = unlocked ? (state.lang === 'zh' ? r.ziwei.lifePalaceZh : r.ziwei.lifePalace) : (state.lang === 'zh' ? src.ziwei.lifePalaceZh : src.ziwei.lifePalace);
-    html += `<p class="lede">${esc(t('lifePalace'))} · ${esc(L(life))} · ${esc(palace)}</p><button type="button" data-act="cast-ziwei">\u2728 ${esc(t('castChart'))}</button>`;
+    html += `<p class="lede">${esc(t('lifePalace'))} · ${esc(L(life))} · ${esc(palace)}</p>${!unlocked && src.ziwei.meaningPreview ? `<p class="hook-line">${esc(L(src.ziwei.meaningPreview))}</p>` : ''}<button type="button" data-act="cast-ziwei">\u2728 ${esc(t('castChart'))}</button>`;
   } else {
     html += `<p class="small">${esc(t('sampleNote'))}</p>`;
-    const palaces = unlocked ? r.ziwei.palaces : [{ key: 'soul', en: 'Life Palace', zh: '\u547d\u5bab', star: src.ziwei.mainStar, text: src.ziwei.hook }];
+    const palaces = unlocked ? r.ziwei.palaces : [{ key: 'soul', en: 'Life Palace', zh: '\u547d\u5bab', star: src.ziwei.mainStar, text: src.ziwei.meaningPreview || src.ziwei.hook }];
     html += `<div class="palace-grid">${palaces.map((p) => {
       const isLife = p.key === 'life' || p.key === 'soul';
       const readable = unlocked || isLife;
@@ -1269,18 +1277,25 @@ async function loadReport(quiet, _retried) {
 
 async function loadSavedTeaser() {
   const birthDate = localStorage.getItem('fateweave_birthDate');
-  if (!birthDate) return false;
+  if (!birthDate) { state.teaserLoading = false; return false; }
+  state.teaserLoading = true;
+  renderSystems();
   try {
     const res = await fetch('/api/hook', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ birthDate, birthTime: localStorage.getItem('fateweave_birthTime') || null, ziweiGender: localStorage.getItem('fateweave_ziweiGender') || null, name: localStorage.getItem('fateweave_name') || null }),
     });
     const data = await res.json();
-    if (!res.ok) return false;
+    if (!res.ok) throw new Error('saved_teaser_failed');
     state.teaser = data;
+    state.teaserLoading = false;
     renderSystems();
     return true;
-  } catch { return false; }
+  } catch {
+    state.teaserLoading = false;
+    renderSystems();
+    return false;
+  }
 }
 
 // After payment, re-submit any quizzes taken free so the full breakdown unlocks.

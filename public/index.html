@@ -91,16 +91,16 @@
   <section class="card" id="unlock-card">
     <h2 id="unlock-title" data-i18n="unlockTitle">Unlock the full reading</h2>
     <p id="price-line">Loading price…</p>
-    <p id="unlock-body" data-i18n="unlockBody">Unlock the full reading across all 8 systems, with 3 main questions and 5 Master follow-up chats included. Optional follow-up packs: $1.99 for 5 or $3.49 for 10.</p>
+    <p id="unlock-body" data-i18n="unlockBody">Unlock the full reading across all 8 systems, with 5 Master follow-up chats included. Optional packs: $1.99 for 5 more or $3.49 for 10 more.</p>
     <form id="checkout-form">
       <label><span data-i18n="emailLabel">Email (to access your reading)</span> <input type="email" id="email" required></label>
       <button type="submit" id="pay-btn">Pay &amp; unlock</button>
     </form>
     <details class="promo-access hidden" id="promo-access">
-      <summary data-i18n="promoAccessSummary">Have an invited free-access code?</summary>
+      <summary data-i18n="promoAccessSummary">Have an invited trial code?</summary>
       <form id="promo-access-form">
-        <label><span data-i18n="promoCodeLabel">Promo code</span> <input type="text" id="promo-code" autocomplete="off" autocapitalize="characters" required></label>
-        <button type="submit" id="promo-access-btn" data-i18n="promoAccessButton">Unlock with code</button>
+        <label><span data-i18n="promoCodeLabel">Trial code</span> <input type="text" id="promo-code" autocomplete="off" autocapitalize="characters" required></label>
+        <button type="submit" id="promo-access-btn" data-i18n="promoAccessButton">Unlock trial</button>
       </form>
       <p id="promo-access-status" class="small" role="status"></p>
       <p class="small" data-i18n="promoAccessNote">Invited trial codes expire after 7 days. Each trial lasts 7 or 14 days and is tied to one email and birth date.</p>
@@ -117,7 +117,7 @@
     <div id="report"></div>
     <div id="live-reader">
       <h3 data-i18n="liveReaderTitle">Regular questions (3)</h3>
-      <p data-i18n="liveReaderBody">Ask 3 regular reading questions. Master follow-ups have a separate allowance of 5, or 30 total with Extended.</p>
+      <p data-i18n="liveReaderBody">All 3 main questions are asked in the Master conversation. The full reading includes 5 separate follow-up chats.</p>
       <p><span data-i18n="questionsUsed">Questions used</span>: <span id="lr-used">0</span> / 3</p>
       <div class="lr-row">
         <input type="text" id="lr-question" data-i18n-ph="askPh" placeholder="Ask a question…">
@@ -157,7 +157,7 @@
   <!-- /master only, while locked: no chat until the reading is unlocked. -->
   <section class="card hidden" id="master-locked-card">
     <h2 data-i18n="masterLockedTitle">Ask the Master is locked</h2>
-    <p data-i18n="masterLockedBody">Unlock your full reading first — then come back here to ask the Master.</p>
+    <p data-i18n="masterLockedBody">Unlock the full reading with 5 Master follow-up chats included. Optional packs: $1.99 for 5 more or $3.49 for 10 more.</p>
     <p><a href="/" data-i18n="masterLockedLink">← Back to the hub to unlock</a></p>
   </section>
 
