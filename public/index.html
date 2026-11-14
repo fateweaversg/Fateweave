@@ -11,7 +11,7 @@
 <header class="topbar">
   <div class="brand"><img src="/brand.webp" alt="FateWeave 天机汇"><h1>FateWeave <span class="zh">天机汇</span></h1></div>
   <div class="top-actions">
-    <a class="editorial-link" href="/live-reader" data-i18n="liveReaderLink">Free Live Reader</a>
+    <a class="editorial-link" href="/master" data-i18n="liveReaderLink">Ask the Master</a>
     <button id="music-toggle" type="button" aria-pressed="false" title="Background music — off by default, tap to play">&#9834; Music</button>
     <div class="lang-toggle">
       <button id="lang-en" class="active">EN</button>
@@ -48,18 +48,6 @@
       <button type="submit" data-i18n="hookCta">See my free glimpse</button>
     </form>
     <div id="teaser-status" class="small"></div>
-  </section>
-
-  <section class="card hidden" id="guest-live-reader-card">
-    <h2 data-i18n="guestReaderTitle">Free Live Reader · 3 questions per session</h2>
-    <p class="lede" data-i18n="guestReaderPrivacy">Your profile and conversation are saved for 24 hours so this session can resume after a reload.</p>
-    <p><span data-i18n="questionsUsed">Questions used</span>: <span id="guest-lr-used">0</span> / 3</p>
-    <div id="guest-lr-thread" role="log" aria-live="polite" tabindex="0"></div>
-    <div class="lr-row">
-      <input type="text" id="guest-lr-question" data-i18n-ph="askPh" placeholder="Ask a question…" maxlength="500">
-      <button id="guest-lr-ask" type="button" data-i18n="ask">Ask</button>
-    </div>
-    <p id="guest-lr-status" class="small" role="status"></p>
   </section>
 
   <!-- Hub only, after a glimpse: the next step into the guided reading. -->
@@ -103,7 +91,7 @@
   <section class="card" id="unlock-card">
     <h2 id="unlock-title" data-i18n="unlockTitle">Unlock the full reading</h2>
     <p id="price-line">Loading price…</p>
-    <p id="unlock-body" data-i18n="unlockBody">Unlock the complete reading across all 8 systems, with 5 Master follow-up chats included. The separate Live Reader is free for 3 questions per session. Optional Master packs: $1.99 for 5 chats or $3.49 for 10.</p>
+    <p id="unlock-body" data-i18n="unlockBody">Unlock the full reading across all 8 systems, with 3 main questions and 5 Master follow-up chats included. Optional follow-up packs: $1.99 for 5 or $3.49 for 10.</p>
     <form id="checkout-form">
       <label><span data-i18n="emailLabel">Email (to access your reading)</span> <input type="email" id="email" required></label>
       <button type="submit" id="pay-btn">Pay &amp; unlock</button>
@@ -115,7 +103,7 @@
         <button type="submit" id="promo-access-btn" data-i18n="promoAccessButton">Unlock with code</button>
       </form>
       <p id="promo-access-status" class="small" role="status"></p>
-      <p class="small" data-i18n="promoAccessNote">One complimentary reading per email and birth date.</p>
+      <p class="small" data-i18n="promoAccessNote">Invited trial codes expire after 7 days. Each trial lasts 7 or 14 days and is tied to one email and birth date.</p>
     </details>
     <div id="preview-tools" class="preview-tools hidden">
       <p id="preview-mode-note" class="notice"></p>

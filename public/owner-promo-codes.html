@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FateWeave · Invite trials</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+body{max-width:900px;margin:0 auto;padding:24px}.card{margin:18px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}label{display:block;margin:12px 0}input,select{width:100%;padding:12px}.codes{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3eee2;padding:14px;border:1px solid #c5aa75}.status{min-height:1.5em}.hidden{display:none!important}table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px solid #d8cebd;text-align:left}.table-wrap{overflow:auto}
+</style>
+</head>
+<body>
+<header class="topbar"><h1>FateWeave · Invite-only trial codes</h1><a href="/">Back to FateWeave</a></header>
+<main>
+  <section class="card" id="login-card">
+    <h2>Owner sign-in</h2>
+    <p>Codes are generated on request and shown once. FateWeave stores only their hashes.</p>
+    <form id="login-form"><label>Owner password<input type="password" id="password" autocomplete="current-password" required></label><button>Sign in</button></form>
+    <p id="login-status" class="status" role="status"></p>
+  </section>
+  <section class="card hidden" id="admin-card">
+    <h2>Create trial codes</h2>
+    <p>Codes expire 7 days after creation. Trial access can last 7 or 14 days. Share a code only with its intended recipient or campaign audience.</p>
+    <form id="create-form">
+      <div class="grid">
+        <label>Campaign label (optional)<input id="label" maxlength="80" placeholder="e.g. Beta readers — November"></label>
+        <label>Trial access window<select id="access-days"><option value="7">7 days</option><option value="14">14 days</option></select></label>
+        <label>Issue mode<select id="mode"><option value="batch">Individual single-use codes</option><option value="shared">One capped campaign code</option></select></label>
+        <label id="batch-label">Number of individual codes<input id="batch-size" type="number" min="1" max="100" value="1"></label>
+        <label id="uses-label" class="hidden">Maximum uses for campaign code<input id="max-uses" type="number" min="1" max="100" value="20"></label>
+      </div>
+      <button type="submit">Generate codes</button>
+    </form>
+    <p id="create-status" class="status" role="status"></p>
+    <div id="created-codes" class="hidden"><h3>Copy and share now</h3><p>These code values are shown only once. Save them securely before leaving this page.</p><pre id="codes-list" class="codes"></pre><button id="copy-codes" type="button">Copy codes</button></div>
+    <h2>Usage and trial results</h2>
+    <p id="legacy-summary" class="small"></p>
+    <div class="table-wrap"><table><thead><tr><th>Campaign</th><th>Uses</th><th>Access</th><th>Expires</th><th>Later paid</th><th>Status</th></tr></thead><tbody id="codes-table"></tbody></table></div>
+    <button id="refresh" type="button" class="ghost">Refresh usage</button>
+    <button id="signout" type="button" class="ghost">Sign out</button>
+  </section>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let ownerToken = sessionStorage.getItem('fw_owner_token') || '';
+  const login = $('login-card'), admin = $('admin-card');
+  const showAdmin = (yes) => { login.classList.toggle('hidden', yes); admin.classList.toggle('hidden', !yes); };
+  async function api(path, options={}) {
+    const response = await fetch(path, {...options, headers:{'Content-Type':'application/json','X-Owner-Token':ownerToken,...options.headers}});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Request failed.');
+    return data;
+  }
+  async function refresh() {
+    const data = await api('/api/owner/trial-codes');
+    $('legacy-summary').textContent = `Previous shared-code redemptions: ${data.legacy.redemptionsUsed} of ${data.legacy.redemptionLimit}. The old shared code is no longer accepted.`;
+    $('codes-table').innerHTML = data.codes.map((c) => {
+      const status = c.disabled ? 'Disabled' : (Date.parse(c.expires_at) <= Date.now() ? 'Expired' : (c.redemptions >= c.max_redemptions ? 'Used' : 'Available'));
+      return `<tr><td>${escapeHtml(c.label || '—')}</td><td>${c.redemptions} / ${c.max_redemptions}</td><td>${c.access_days} days</td><td>${new Date(c.expires_at).toLocaleString()}</td><td>${c.conversions || 0}</td><td>${status}</td></tr>`;
+    }).join('');
+  }
+  function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  $('login-form').addEventListener('submit', async (event) => {
+    event.preventDefault(); $('login-status').textContent = 'Signing in…';
+    try {
+      const response = await fetch('/api/owner/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('password').value})});
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Sign-in failed.');
+      ownerToken = data.ownerToken; $('password').value = ''; sessionStorage.setItem('fw_owner_token', ownerToken);
+      showAdmin(true); await refresh(); $('login-status').textContent = '';
+    } catch (error) { $('login-status').textContent = error.message; }
+  });
+  $('mode').addEventListener('change', () => { const shared=$('mode').value==='shared'; $('batch-label').classList.toggle('hidden',shared); $('uses-label').classList.toggle('hidden',!shared); });
+  $('create-form').addEventListener('submit', async (event) => {
+    event.preventDefault(); $('create-status').textContent='Generating…';
+    try {
+      const mode=$('mode').value;
+      const data=await api('/api/owner/trial-codes',{method:'POST',body:JSON.stringify({mode,label:$('label').value,accessDays:Number($('access-days').value),batchSize:Number($('batch-size').value),maxUses:Number($('max-uses').value)})});
+      $('codes-list').textContent=data.created.map((item)=>`${item.code} · ${item.label || 'No label'} · ${item.uses} use(s) · ${item.accessDays}-day access · expires ${new Date(item.expiresAt).toLocaleString()}`).join('\n');
+      $('created-codes').classList.remove('hidden'); $('create-status').textContent=`Created ${data.created.length} code(s). Save them now; they cannot be retrieved later.`;
+      await refresh();
+    } catch (error) { $('create-status').textContent=error.message; }
+  });
+  $('copy-codes').addEventListener('click', async () => { await navigator.clipboard.writeText($('codes-list').textContent); $('create-status').textContent='Codes copied.'; });
+  $('refresh').addEventListener('click', () => refresh().catch((error) => { $('create-status').textContent=error.message; }));
+  $('signout').addEventListener('click', () => { sessionStorage.removeItem('fw_owner_token'); ownerToken=''; showAdmin(false); });
+  if (ownerToken) { showAdmin(true); refresh().catch(() => { sessionStorage.removeItem('fw_owner_token'); ownerToken=''; showAdmin(false); }); }
+})();
+</script>
+</body>
+</html>
