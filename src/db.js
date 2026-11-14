@@ -57,6 +57,26 @@ db.exec(`
     UNIQUE(email, birth_date)
   );
 
+  -- Anonymous free Live Reader sessions. Profile and thread are retained
+  -- for 24 hours so a reload can restore the same three-question session.
+  CREATE TABLE IF NOT EXISTS guest_live_reader_sessions (
+    token_hash TEXT PRIMARY KEY,
+    profile_json TEXT NOT NULL,
+    question_count INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS guest_live_reader_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    lang TEXT NOT NULL DEFAULT 'en',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (token_hash) REFERENCES guest_live_reader_sessions(token_hash) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_guest_lr_messages ON guest_live_reader_messages(token_hash, id);
+
   CREATE TABLE IF NOT EXISTS owner_tokens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     token_hash TEXT NOT NULL UNIQUE,

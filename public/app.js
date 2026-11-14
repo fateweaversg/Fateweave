@@ -36,6 +36,8 @@ const state = {
   quiz: { kind: null, questions: null, idx: 0, answers: [], result: null },
   quizCache: null,
   mcMessages: [], mcLeft: 5, mcMax: 5, mcSending: false, lrSending: false,
+  guestLrToken: null, guestLrMessages: [], guestLrUsed: 0, guestLrSending: false, guestLrStatus: '',
+  yijingResult: null,
 };
 
 const STR = {
@@ -49,14 +51,17 @@ const STR = {
     masterLine: 'Six traditions, six guides. You remain the author of your choices.',
     hookKicker: 'Begin with a small clue',
     hookTitle: 'Your first glimpse', hookLede: 'Enter your birth date to see a first clue from each tradition. Open the perspectives that interest you, then continue when you are ready.',
-    birthDate: 'Birth date', birthTime: 'Birth time', chartSex: 'Chart sex', chartSexChoose: 'Choose chart sex', chartSexMale: 'Male', chartSexFemale: 'Female', name: 'Name (optional)', hookCta: 'Create my free glimpse',
+    birthDate: 'Birth date', birthTime: 'Birth time', chartSex: 'Chart sex', chartSexChoose: 'Choose chart sex', chartSexMale: 'Male', chartSexFemale: 'Female', name: 'Name (optional)', namePh: 'How should we address you?', hookCta: 'Create my free glimpse',
     ziweiInputTitle: 'Complete your chart details', ziweiInputBody: 'Enter your birth time and chart sex to calculate your full Zi Wei chart.', ziweiInputSave: 'Save details and open reading', mcScrollHint: 'Scroll inside the conversation panel to read full replies and earlier messages.',
     quizTitle: 'Know yourself \u2014 two quizzes', quizLede: 'Take them free \u2014 they are part of the hook. You will see your type and one line right away; the full breakdown unlocks with your reading.',
     unlockedTitle: 'Your reading is unlocked', viewReport: 'View my full reading', resendReport: 'Resend report email',
     unlockedBanner: '\u2713 Unlocked \u2014 no need to pay again',
     unlockedBannerSub: 'Your full reading is open below. It is saved on this device \u2014 refresh any time, no need to re-enter anything.',
     unlockTitle: 'Unlock the full reading',
-    unlockBody: 'Unlock all reading details, 3 main questions and 5 follow-ups with the Master.',
+    unlockBody: 'Unlock the complete reading across all 8 systems, with 5 Master follow-up chats included. The separate Live Reader is free for 3 questions per session. Optional Master packs: $1.99 for 5 chats or $3.49 for 10.',
+    liveReaderLink: 'Free Live Reader', guestReaderTitle: 'Free Live Reader · 3 questions per session', guestReaderPrivacy: 'Your profile and conversation are saved for 24 hours so this session can resume after a reload.',
+    guestReaderIntakeTitle: 'Start your free 3-question conversation', guestReaderIntakeBody: 'Enter your birth date, birth time and chart sex. The Live Reader answers three questions from your reading.', guestReaderStart: 'Start my free Live Reader session',
+    guestReaderLimit: 'You have used all 3 free questions in this session.', guestReaderError: 'Could not load this Live Reader session. Start a new one below.',
     emailLabel: 'Email (for your reading access)', sameDateNote: 'Use the same birth date as your free glimpse, and the same email to return to your reading.',
     promoAccessSummary: 'Have an invited free-access code?', promoCodeLabel: 'Promo code', promoAccessButton: 'Unlock with code', promoAccessNote: 'One complimentary reading per email and birth date.', promoCodeWorking: 'Checking your code…', promoCodeSuccess: 'Your complimentary reading is unlocked.',
     fullReadingTitle: 'Your full reading', liveReaderTitle: 'Regular questions (3)',
@@ -117,7 +122,7 @@ const STR = {
     limit3: 'For self-reflection and entertainment only \u2014 not medical, financial or legal advice.',
     limit4: 'Moon / Rising are approximations from the original prototype.',
     moreDetail: 'More detail', strongest: 'Strongest', weakest: 'Weakest',
-    tapReveal: 'Tap to reveal', tapFlip: 'Tap a card to flip it', castChart: 'Cast the chart', castCoins: 'Cast the coins',
+    tapReveal: 'Tap to reveal', tapFlip: 'Tap a card to flip it', castChart: 'Cast the chart', castCoins: 'Cast the coins', castAgain: 'Cast again',
     lockedTitle: 'Full reading locked', lockedBody: 'Unlock the full reading to read every detail.',
     unlockBtn: 'Unlock full reading', casting: 'Casting\u2026', flipping: 'Tap to flip', flipAllTarot: 'Flip all three cards to read them as one story.',
     readingGlimpse: 'Reading your glimpse\u2026', enterDateFirst: 'Enter your birth date in the free glimpse form first.',
@@ -169,14 +174,17 @@ const STR = {
     masterLine: '\u516d\u79cd\u4f20\u7edf\uff0c\u516d\u4f4d\u6307\u5357\u3002\u4f60\u4ecd\u7136\u662f\u81ea\u5df1\u9009\u62e9\u7684\u4e3b\u4eba\u3002',
     hookKicker: '\u4ece\u4e00\u4e2a\u5c0f\u7ebf\u7d22\u5f00\u59cb',
     hookTitle: '\u5148\u770b\u4e00\u773c', hookLede: '\u8f93\u5165\u51fa\u751f\u65e5\u671f\uff0c\u5148\u770b\u770b\u516d\u79cd\u4f20\u7edf\u5404\u81ea\u6ce8\u610f\u5230\u7684\u7ebf\u7d22\u3002\u9009\u62e9\u611f\u5174\u8da3\u7684\u89c6\u89d2\uff0c\u51c6\u5907\u597d\u4e86\u518d\u7ee7\u7eed\u3002',
-    birthDate: '\u51fa\u751f\u65e5\u671f', birthTime: '\u51fa\u751f\u65f6\u95f4', chartSex: '\u6392\u76d8\u6027\u522b', chartSexChoose: '\u8bf7\u9009\u62e9\u6392\u76d8\u6027\u522b', chartSexMale: '\u7537', chartSexFemale: '\u5973', name: '\u540d\u5b57\uff08\u53ef\u9009\uff09', hookCta: '\u751f\u6210\u514d\u8d39\u9884\u89c8',
+    birthDate: '\u51fa\u751f\u65e5\u671f', birthTime: '\u51fa\u751f\u65f6\u95f4', chartSex: '\u6392\u76d8\u6027\u522b', chartSexChoose: '\u8bf7\u9009\u62e9\u6392\u76d8\u6027\u522b', chartSexMale: '\u7537', chartSexFemale: '\u5973', name: '\u540d\u5b57\uff08\u53ef\u9009\uff09', namePh: '\u5e0c\u671b\u6211\u4eec\u600e\u4e48\u79f0\u547c\u4f60\uff1f', hookCta: '\u751f\u6210\u514d\u8d39\u9884\u89c8',
     ziweiInputTitle: '\u8865\u5168\u547d\u76d8\u8d44\u6599', ziweiInputBody: '\u8bf7\u8f93\u5165\u51fa\u751f\u65f6\u95f4\u4e0e\u6392\u76d8\u6027\u522b\uff0c\u4ee5\u8ba1\u7b97\u5b8c\u6574\u7d2b\u5fae\u547d\u76d8\u3002', ziweiInputSave: '\u4fdd\u5b58\u8d44\u6599\u5e76\u6253\u5f00\u62a5\u544a', mcScrollHint: '\u5728\u5bf9\u8bdd\u6846\u5185\u6eda\u52a8\uff0c\u67e5\u770b\u5b8c\u6574\u56de\u590d\u548c\u65e9\u524d\u7684\u6d88\u606f\u3002',
     quizTitle: '\u8ba4\u8bc6\u81ea\u5df1\u2014\u2014\u4e24\u4e2a\u6d4b\u9a8c', quizLede: '\u514d\u8d39\u505a\u2014\u2014\u8fd9\u4e5f\u662f\u9884\u89c8\u7684\u4e00\u90e8\u5206\u3002\u4f60\u4f1a\u5373\u65f6\u770b\u5230\u4f60\u7684\u7c7b\u578b\u4e0e\u4e00\u53e5\u8bdd\uff1b\u5b8c\u6574\u89e3\u6790\u968f\u62a5\u544a\u89e3\u9501\u3002',
     unlockedTitle: '\u4f60\u7684\u62a5\u544a\u5df2\u89e3\u9501', viewReport: '\u67e5\u770b\u5b8c\u6574\u62a5\u544a', resendReport: '\u91cd\u5bc4\u62a5\u544a\u7535\u90ae',
     unlockedBanner: '\u2713 \u5df2\u89e3\u9501\u2014\u2014\u65e0\u9700\u518d\u6b21\u4ed8\u6b3e',
     unlockedBannerSub: '\u5b8c\u6574\u62a5\u544a\u5df2\u5728\u4e0b\u65b9\u5f00\u542f\uff0c\u5e76\u4fdd\u5b58\u5728\u6b64\u88c5\u7f6e\u2014\u2014\u968f\u65f6\u91cd\u65b0\u6574\u7406\uff0c\u4e0d\u7528\u518d\u8f93\u5165\u4efb\u4f55\u8d44\u6599\u3002',
     unlockTitle: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a',
-    unlockBody: '解锁全部报告、3 个主要问题和 5 次掌门追问。',
+    unlockBody: '解锁全部 8 个系统的完整报告，并包含 5 次掌门追问。Live Reader 是独立的免费功能，每个会话可提问 3 次。掌门追问加购包：$1.99 增加 5 次，或 $3.49 增加 10 次。',
+    liveReaderLink: '免费 Live Reader', guestReaderTitle: '免费 Live Reader（每次会话 3 问）', guestReaderPrivacy: '你的资料与对话会保存 24 小时，方便刷新后继续本次会话。',
+    guestReaderIntakeTitle: '开始免费的 3 问对话', guestReaderIntakeBody: '请输入出生日期、时间和排盘性别。Live Reader 会根据你的报告回答 3 个问题。', guestReaderStart: '开始免费 Live Reader 会话',
+    guestReaderLimit: '本会话的 3 次免费提问已用完。', guestReaderError: '无法载入这次 Live Reader 会话。请在下方开始新会话。',
     emailLabel: '\u7535\u90ae\uff08\u7528\u4e8e\u67e5\u9605\u62a5\u544a\uff09', sameDateNote: '\u8bf7\u4f7f\u7528\u4e0e\u514d\u8d39\u9884\u89c8\u76f8\u540c\u7684\u51fa\u751f\u65e5\u671f\u548c\u7535\u90ae\uff0c\u65b9\u4fbf\u8fd4\u56de\u67e5\u770b\u62a5\u544a\u3002',
     promoAccessSummary: '\u6709\u53d7\u9080\u8bf7\u7684\u514d\u8d39\u4f7f\u7528\u7801\uff1f', promoCodeLabel: '\u4f18\u60e0\u7801', promoAccessButton: '\u4f7f\u7528\u4ee3\u7801\u89e3\u9501', promoAccessNote: '\u6bcf\u4e2a\u90ae\u7bb1\u548c\u51fa\u751f\u65e5\u671f\u53ef\u514d\u8d39\u89e3\u9501\u4e00\u6b21\u3002', promoCodeWorking: '\u6b63\u5728\u9a8c\u8bc1\u4ee3\u7801\u2026', promoCodeSuccess: '\u4f60\u7684\u514d\u8d39\u62a5\u544a\u5df2\u89e3\u9501\u3002',
     fullReadingTitle: '\u4f60\u7684\u5b8c\u6574\u62a5\u544a', liveReaderTitle: '普通提问（3 次）',
@@ -237,7 +245,7 @@ const STR = {
     limit3: '\u4ec5\u4f9b\u81ea\u6211\u53cd\u601d\u4e0e\u5a31\u4e50\u2014\u2014\u4e0d\u662f\u533b\u7597\u3001\u8d22\u52a1\u6216\u6cd5\u5f8b\u5efa\u8bae\u3002',
     limit4: '\u6708\u4eae\u4e0e\u4e0a\u5347\u661f\u5ea7\u4e3a\u539f\u578b\u7684\u8fd1\u4f3c\u8ba1\u7b97\u3002',
     moreDetail: '\u66f4\u591a\u8be6\u60c5', strongest: '\u6700\u65fa', weakest: '\u6700\u5f31',
-    tapReveal: '\u70b9\u4e00\u4e0b\u63ed\u5f00', tapFlip: '\u70b9\u4e00\u5f20\u724c\u7ffb\u5f00\u5b83', castChart: '\u8d77\u76d8', castCoins: '\u63b7\u5366',
+    tapReveal: '\u70b9\u4e00\u4e0b\u63ed\u5f00', tapFlip: '\u70b9\u4e00\u5f20\u724c\u7ffb\u5f00\u5b83', castChart: '\u8d77\u76d8', castCoins: '\u63b7\u5366', castAgain: '\u518d\u6b21\u8d77\u5366',
     lockedTitle: '\u5b8c\u6574\u5185\u5bb9\u672a\u89e3\u9501', lockedBody: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a\uff0c\u5373\u53ef\u9605\u8bfb\u5168\u90e8\u7ec6\u8282\u3002',
     unlockBtn: '\u89e3\u9501\u5b8c\u6574\u62a5\u544a', casting: '\u8d77\u5366\u4e2d\u2026\u2026', flipping: '\u70b9\u4e00\u4e0b\u7ffb\u724c', flipAllTarot: '\u7ffb\u5f00\u4e09\u5f20\u724c\uff0c\u770b\u770b\u5b83\u4eec\u5408\u8d77\u6765\u8bf4\u7684\u6545\u4e8b\u3002',
     readingGlimpse: '\u6b63\u5728\u8bfb\u53d6\u4f60\u7684\u9884\u89c8\u2026\u2026', enterDateFirst: '\u8bf7\u5148\u5728\u514d\u8d39\u4e00\u77a5\u8868\u5355\u8f93\u5165\u51fa\u751f\u65e5\u671f\u3002',
@@ -418,6 +426,7 @@ function bindPreviewEvents() {
    one toss at a time, and the hexagram shown is the one those lines make.
    Nothing is invented client-side. */
 function yijingLinesOf() {
+  if (state.yijingResult?.lines?.length === 6) return state.yijingResult.lines;
   const src = state.unlocked && state.report ? state.report : state.teaser;
   if (!src || !src.yijing) return null;
   if (Array.isArray(src.yijing.lines) && src.yijing.lines.length === 6) return src.yijing.lines;
@@ -569,9 +578,19 @@ function applyPageLayout() {
   const show = (id, on) => { const el = $(id); if (el) el.classList.toggle('hidden', !on); };
   const onHub = !pageSystem;
   const onMaster = pageSystem === 'master';
+  const onGuestReader = pageSystem === 'live-reader';
   const onPortrait = pageSystem === 'portrait';
   show('brand-hero', onHub);
-  show('hook-card', onHub);
+  show('hook-card', onHub || (onGuestReader && !state.guestLrToken));
+  show('guest-live-reader-card', onGuestReader && !!state.guestLrToken);
+  if (onGuestReader) {
+    $('hook-title').textContent = t('guestReaderIntakeTitle');
+    $('hook-lede').textContent = t('guestReaderIntakeBody');
+    $('hook-form').querySelector('[type="submit"]').textContent = t('guestReaderStart');
+  }
+  show('systems', !onGuestReader);
+  show('sys-hero', !onGuestReader);
+  show('step-nav', !onGuestReader && !!pageSystem);
   show('daily-card', onHub);
   show('limits-card', onHub);
   // Quizzes live on the Portrait page only — never on the hub or another system page.
@@ -580,7 +599,7 @@ function applyPageLayout() {
   show('unlocked-card', onHub && state.unlocked);
   // The unlock/pay card stays on a system page ONLY while locked (it is
   // the pay step for that system); on Master the locked prompt replaces it.
-  show('unlock-card', !onMaster && !state.unlocked);
+  show('unlock-card', !onMaster && !onGuestReader && !state.unlocked);
   // The full reading (summary + Live Reader + Ask the Master) opens only
   // on /master — and there only the Live Reader + Master chat blocks,
   // never the full-reading summary div. The hub never shows it.
@@ -591,7 +610,7 @@ function applyPageLayout() {
   show('ziwei-input-card', (onMaster || onHub) && state.unlocked && state.ziweiInputsNeeded);
   if (onMaster && state.ziweiInputsNeeded) show('report-card', false);
   const hubNext = $('hub-next');
-  if (hubNext) hubNext.innerHTML = hubNextHTML();
+  if (hubNext) { hubNext.innerHTML = hubNextHTML(); show('hub-next', !onGuestReader); }
   const stepNav = $('step-nav');
   if (stepNav) stepNav.innerHTML = stepNavHTML();
 }
@@ -632,7 +651,7 @@ function renderSystems() {
   const baziHook = hookOf('bazi', unlocked ? r.bazi.dayMasterText : null);
   const horoHook = hookOf('horoscope', unlocked ? r.horoscope.sun.trait : null);
   const numHook = hookOf('numerology', unlocked ? r.numerology.lifePathText : null);
-  const yijingHook = hookOf('yijing', unlocked ? r.yijing.theme : null);
+  const yijingHook = state.yijingResult?.theme || hookOf('yijing', unlocked ? r.yijing.theme : null);
   let html = '';
 
   /* Bazi */
@@ -657,7 +676,7 @@ function renderSystems() {
   html += `<section class="card" id="sys-ziwei">${sysHead('\u2B50', 'Zi Wei \u7d2b\u5fae\u6597\u6570')}<p class="lede sys-desc">${esc(t('sysDescZiwei'))}</p>`;
   if (!state.ziweiCast) {
     const life = unlocked ? r.ziwei.mainStar : src.ziwei.mainStar;
-    const palace = unlocked ? r.ziwei.lifePalace : src.ziwei.lifePalace;
+    const palace = unlocked ? (state.lang === 'zh' ? r.ziwei.lifePalaceZh : r.ziwei.lifePalace) : (state.lang === 'zh' ? src.ziwei.lifePalaceZh : src.ziwei.lifePalace);
     html += `<p class="lede">${esc(t('lifePalace'))} · ${esc(L(life))} · ${esc(palace)}</p><button type="button" data-act="cast-ziwei">\u2728 ${esc(t('castChart'))}</button>`;
   } else {
     html += `<p class="small">${esc(t('sampleNote'))}</p>`;
@@ -687,22 +706,23 @@ function renderSystems() {
   }
   html += `</section>`;
 
-  /* Yi-Jing — cast the coins: true 6-line casting, bottom to top.
-     The hexagram and hook below are only shown once all six lines have
-     been cast; the lines shown are the server's lines for this profile. */
+  /* The interactive Yi-Jing cast is newly randomized for every attempt.
+     The full report below remains stable for this birth profile. */
   html += `<section class="card" id="sys-yijing">${sysHead('\u262F\uFE0F', 'Yi-Jing \u6613\u7ecf')}<p class="lede sys-desc">${esc(t('sysDescYijing'))}</p><p class="lede">${esc(t('yijingHow'))}</p>`;
   if (!state.yijingCast) {
     html += `<button type="button" data-act="cast-yijing">\uD83E\uDE99 ${esc(t('castCoins'))}</button><div class="yijing-stage"></div>`;
   } else {
-    const hex = unlocked ? r.yijing.hexagram : src.yijing.hexagram;
-    html += hexagramDiagramHTML(yijingLinesOf());
+    const hex = state.yijingResult ? `${state.yijingResult.hexagram.number} · ${L(state.yijingResult.hexagram)}` : (unlocked ? r.yijing.hexagram : src.yijing.hexagram);
+    html += `<button type="button" data-act="cast-yijing">\uD83E\uDE99 ${esc(t('castAgain'))}</button>`;
+    html += `<div class="yijing-stage">${hexagramDiagramHTML(yijingLinesOf())}`;
     html += `<div class="reveal-in"><p class="essence">${esc(t('hexagram'))}: ${esc(hex)}</p><p class="hook-line">${esc(L(yijingHook))}</p>`;
+    if (state.yijingResult) html += `<p class="small">${esc(t('changingLines'))}: ${esc(state.yijingResult.changingLines.join(', ') || '—')} · → ${esc(state.yijingResult.transformed.number)} ${esc(L(state.yijingResult.transformed))}</p>`;
     if (unlocked) {
       html += `<p><span class="badge">${esc(t('changingLines'))}: ${r.yijing.changingLines.length ? r.yijing.changingLines.join(', ') : '\u2014'}</span>${r.yijing.transformed ? `<span class="badge">\u2192 ${esc(r.yijing.transformed.number)} \u00B7 ${esc(L(r.yijing.transformed))}</span>` : ''}</p>`;
       if (r.yijing.sections.changing) html += `<h3>${esc(t('changingLines'))}</h3><p>${esc(L(r.yijing.sections.changing))}</p>`;
       html += sectionHTML(r.yijing.sections, ['overview', 'career', 'relationships', 'health', 'timing']);
     } else html += lockBlock();
-    html += `</div>`;
+    html += `</div></div>`;
   }
   html += `</section>`;
 
@@ -794,45 +814,33 @@ function bindSystemEvents() {
   bindReveal('#sys-num .reveal-cover', 'num');
   document.querySelectorAll('[data-act="cast-ziwei"]').forEach((el) => { el.onclick = () => { state.ziweiCast = true; renderSystems(); }; });
   document.querySelectorAll('[data-act="cast-yijing"]').forEach((el) => {
-    el.onclick = () => {
+    el.onclick = async () => {
       if (state.yijingCasting) return;
-      const lines = yijingLinesOf();
       const stage = el.parentElement ? el.parentElement.querySelector('.yijing-stage') : null;
-      if (!lines || !stage) {
-        // Fallback (should not happen — the teaser always carries lines):
-        // the old single 1.6s animation, then reveal.
-        const card = el.closest('.card');
-        const lede = card ? card.querySelector('.lede') : null;
-        if (lede) lede.textContent = t('casting');
-        const coins = document.createElement('div');
-        coins.className = 'coins';
-        coins.innerHTML = '<div class="coin spin">\u9633</div><div class="coin spin">\u9634</div><div class="coin spin">\u9633</div>';
-        el.replaceWith(coins);
-        setTimeout(() => { state.yijingCast = true; renderSystems(); }, 1600);
-        return;
-      }
-      // True 6-line casting: one toss per line, bottom (line 1) to top
-      // (line 6). Each step shows the three coins of that toss, then the
-      // line joins the hexagram diagram. The lines are the server's lines
-      // for this profile, in order — nothing is re-rolled client-side.
+      if (!stage) return;
       state.yijingCasting = true;
       el.disabled = true;
-      const revealed = [];
-      const step = (i) => {
-        if (i >= 6) {
-          setTimeout(() => { state.yijingCast = true; state.yijingLines = lines; state.yijingCasting = false; renderSystems(); }, 500);
-          return;
-        }
-        const line = lines[i];
-        stage.innerHTML = `<p class="lede">${esc(t('castingLine').replace('{n}', line.line))}</p>${yijingCoinsHTML(line.sum)}${hexagramDiagramHTML(revealed)}`;
-        stage.querySelectorAll('.coin').forEach((c) => c.classList.add('spin'));
-        setTimeout(() => {
-          revealed.push(line);
+      try {
+        const response = await fetch('/api/yijing/cast', { cache: 'no-store' });
+        if (!response.ok) throw new Error('cast_failed');
+        const cast = await response.json();
+        const revealed = [];
+        const step = (i) => {
+          if (i >= 6) {
+            setTimeout(() => { state.yijingResult = cast; state.yijingCast = true; state.yijingCasting = false; renderSystems(); }, 350);
+            return;
+          }
+          const line = cast.lines[i];
           stage.innerHTML = `<p class="lede">${esc(t('castingLine').replace('{n}', line.line))}</p>${yijingCoinsHTML(line.sum)}${hexagramDiagramHTML(revealed)}`;
-          step(i + 1);
-        }, 750);
-      };
-      step(0);
+          stage.querySelectorAll('.coin').forEach((c) => c.classList.add('spin'));
+          setTimeout(() => { revealed.push(line); stage.innerHTML = `<p class="lede">${esc(t('castingLine').replace('{n}', line.line))}</p>${yijingCoinsHTML(line.sum)}${hexagramDiagramHTML(revealed)}`; step(i + 1); }, 450);
+        };
+        step(0);
+      } catch {
+        state.yijingCasting = false;
+        stage.textContent = state.lang === 'zh' ? '暂时无法起卦，请重试。' : 'Could not cast just now. Please try again.';
+        el.disabled = false;
+      }
     };
   });
   document.querySelectorAll('[data-tarot]').forEach((el) => {
@@ -873,6 +881,7 @@ function saveProfile(birthDate, birthTime, name, ziweiGender) {
   } catch {}
 }
 function prefillForm() {
+  if (pageSystem === 'live-reader') return;
   try {
     const birthDate = localStorage.getItem('fateweave_birthDate');
     const birthTime = localStorage.getItem('fateweave_birthTime');
@@ -905,6 +914,7 @@ function resetProfileView() {
   state.ziweiCast = false;
   state.yijingCast = false;
   state.yijingLines = [];
+  state.yijingResult = null;
   state.yijingCasting = false;
   state.quiz = { kind: null, questions: null, idx: 0, answers: [], result: null };
   state.mcMessages = []; state.mcLeft = 5;
@@ -1070,6 +1080,23 @@ $('hook-form').addEventListener('submit', async (e) => {
   const status = $('teaser-status');
   status.textContent = t('readingGlimpse');
   try {
+    if (pageSystem === 'live-reader') {
+      const start = await fetch('/api/live-reader/guest/start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ birthDate, birthTime, ziweiGender, name }),
+      });
+      const session = await start.json();
+      if (!start.ok || !session.token) { status.textContent = session.error || t('guestReaderError'); return; }
+      try { sessionStorage.setItem('fateweave_guest_lr_token', session.token); } catch {}
+      state.guestLrToken = session.token;
+      state.guestLrMessages = session.history || [];
+      state.guestLrUsed = session.questionsUsed || 0;
+      status.textContent = '';
+      renderGuestReader();
+      applyPageLayout();
+      $('guest-live-reader-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     const res = await fetch('/api/hook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ birthDate, birthTime, ziweiGender, name }) });
     const data = await res.json();
     if (!res.ok) { status.textContent = data.error || t('couldNotRead'); return; }
@@ -1378,7 +1405,68 @@ $('download-report-btn').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 });
 
-/* --- Live Reader — voice in + voice out, typed fallback --- */
+/* --- Anonymous Live Reader: three free questions per tab session ----------- */
+function renderGuestReader() {
+  if (!$('guest-live-reader-card')) return;
+  $('guest-lr-used').textContent = String(state.guestLrUsed);
+  $('guest-lr-thread').innerHTML = state.guestLrMessages.map((m) =>
+    `<p><strong>${m.role === 'user' ? (state.lang === 'zh' ? '你' : 'You') : 'Live Reader'}:</strong> ${esc(m.content).replace(/\n/g, '<br>')}</p>`
+  ).join('');
+  const done = state.guestLrUsed >= 3;
+  $('guest-lr-question').disabled = done || state.guestLrSending;
+  $('guest-lr-ask').disabled = done || state.guestLrSending;
+  $('guest-lr-status').textContent = done ? t('guestReaderLimit') : state.guestLrStatus;
+}
+async function restoreGuestReader() {
+  if (pageSystem !== 'live-reader') return;
+  let token = null;
+  try { token = sessionStorage.getItem('fateweave_guest_lr_token'); } catch {}
+  if (!token) return;
+  try {
+    const res = await fetch('/api/live-reader/guest', { cache: 'no-store', headers: { 'X-Live-Reader-Token': token } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || t('guestReaderError'));
+    state.guestLrToken = token;
+    state.guestLrMessages = data.history || [];
+    state.guestLrUsed = data.questionsUsed || 0;
+    renderGuestReader();
+    applyPageLayout();
+  } catch {
+    try { sessionStorage.removeItem('fateweave_guest_lr_token'); } catch {}
+    state.guestLrToken = null;
+    applyPageLayout();
+  }
+}
+async function sendGuestReaderQuestion() {
+  const question = $('guest-lr-question').value.trim();
+  if (!question || state.guestLrSending || state.guestLrUsed >= 3 || !state.guestLrToken) return;
+  state.guestLrSending = true;
+  state.guestLrStatus = t('lrThinking');
+  renderGuestReader();
+  try {
+    const res = await fetch('/api/live-reader/guest', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: state.guestLrToken, question, lang: state.lang }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      state.guestLrStatus = data.error || t('guestReaderError');
+      if (typeof data.questionsUsed === 'number') state.guestLrUsed = data.questionsUsed;
+      return;
+    }
+    state.guestLrMessages = data.history || state.guestLrMessages;
+    state.guestLrUsed = data.questionsUsed;
+    state.guestLrStatus = '';
+    $('guest-lr-question').value = '';
+    renderGuestReader();
+    $('guest-lr-thread').scrollTop = $('guest-lr-thread').scrollHeight;
+  } catch { state.guestLrStatus = t('guestReaderError'); }
+  finally { state.guestLrSending = false; renderGuestReader(); }
+}
+if ($('guest-lr-ask')) $('guest-lr-ask').addEventListener('click', sendGuestReaderQuestion);
+if ($('guest-lr-question')) $('guest-lr-question').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendGuestReaderQuestion(); } });
+
+/* --- Paid Live Reader — voice in + voice out, typed fallback -------------- */
 // Load the buyer's REAL used count on init (7 Nov 2026 fix): the page
 // used to show "Questions used: 0 / 3" on load because the count was
 // only updated after a successful answer — so the screen said 0/3
@@ -1598,9 +1686,10 @@ async function checkUpgradeReturn() {
 prefillForm(); // birth date, time, name, email survive a reload (bug 3)
 async function initializeApp() {
   await loadPrice();
-  const unlocked = await loadReport(true);
-  if (!unlocked) await loadSavedTeaser();
+  const unlocked = pageSystem === 'live-reader' ? false : await loadReport(true);
+  if (!unlocked && pageSystem !== 'live-reader') await loadSavedTeaser();
   await checkUpgradeReturn();
+  await restoreGuestReader();
 }
 initializeApp();
 renderQuizList();

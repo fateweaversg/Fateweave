@@ -162,6 +162,16 @@ function castYijing(seedStr) {
   const transformed = D.HEX[tHi][tLo];
   return { lines, hex, transformed, changingLines: lines.filter((l) => l.changing).map((l) => l.line), upper: D.TRI[hi], lower: D.TRI[lo] };
 }
+function castYijingRandom() {
+  const cast = castYijing(crypto.randomBytes(32).toString('hex'));
+  return {
+    lines: cast.lines,
+    hexagram: { number: cast.hex[0], en: cast.hex[1], zh: cast.hex[2] },
+    theme: { en: D.HEX_THEME.en[cast.hex[0]], zh: D.HEX_THEME.zh[cast.hex[0]] },
+    transformed: { number: cast.transformed[0], en: cast.transformed[1], zh: cast.transformed[2] },
+    changingLines: cast.changingLines,
+  };
+}
 function elName(key, lang) { return lang === 'zh' ? D.ELNAME[key].replace(/^[A-Za-z]+ /, '') : D.ELNAME[key].replace(/ [^ ]+$/, ''); }
 // Plain element meaning from the original EL_TXT table (Ask the Master
 // "what does Wood mean?" answers) — never invented, always the buyer's
@@ -719,4 +729,4 @@ function buildDailyMessage(profile, dateStr) {
   };
 }
 
-module.exports = { buildFullReading, buildTeaser, scoreEnneagram, scoreEnneagramFromChoices, scoreMbti, parseBirth, getPersonalityQuestions, buildPersonalitySummary, buildPortrait, lockedPersonalitySummary, buildDailyMessage, elName, elementMeaning, currentYear, chineseYearLabel, nextTwelveMonths };
+module.exports = { buildFullReading, buildTeaser, castYijingRandom, scoreEnneagram, scoreEnneagramFromChoices, scoreMbti, parseBirth, getPersonalityQuestions, buildPersonalitySummary, buildPortrait, lockedPersonalitySummary, buildDailyMessage, elName, elementMeaning, currentYear, chineseYearLabel, nextTwelveMonths };

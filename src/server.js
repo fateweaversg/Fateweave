@@ -26,7 +26,7 @@ const path = require('path');
 
 const { config, currentPrice } = require('./config');
 const { db } = require('./db');
-const { buildFullReading, buildTeaser, parseBirth, scoreEnneagramFromChoices, scoreMbti, getPersonalityQuestions, lockedPersonalitySummary, elName, elementMeaning } = require('./readings');
+const { buildFullReading, buildTeaser, castYijingRandom, parseBirth, scoreEnneagramFromChoices, scoreMbti, getPersonalityQuestions, lockedPersonalitySummary, elName, elementMeaning } = require('./readings');
 const { strings } = require('./i18n');
 const { sendEmail, sendReportEmail } = require('./email');
 const { issueAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword, hashToken } = require('./auth');
@@ -62,6 +62,10 @@ const apiLimiter = rateLimit({
 const masterChatLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false,
   handler: (req, res) => res.status(429).json({ error: 'Too many questions in a short time — please wait a few minutes and try again.' }),
+});
+const guestLiveReaderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 25, standardHeaders: true, legacyHeaders: false,
+  handler: (_req, res) => res.status(429).json({ error: 'Too many Live Reader requests. Please wait a few minutes and try again.' }),
 });
 const ownerLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false,
@@ -438,6 +442,85 @@ app.post('/api/resend-report', async (req, res) => {
 // POST enforces — the page loads it on init (GET below) instead of
 // assuming 0, so the screen can never say 0/3 when the server will
 // reject (7 Nov 2026: the screen said 0/3 while the server refused).
+function guestLiveReaderSession(rawToken) {
+  if (typeof rawToken !== 'string' || !/^[a-f0-9]{64}$/i.test(rawToken)) return null;
+  return db.prepare('SELECT * FROM guest_live_reader_sessions WHERE token_hash = ? AND expires_at > ?')
+    .get(hashToken(rawToken), new Date().toISOString()) || null;
+}
+function guestLiveReaderHistory(tokenHash) {
+  return db.prepare('SELECT role, content, lang FROM guest_live_reader_messages WHERE token_hash = ? ORDER BY id ASC').all(tokenHash);
+}
+function guestLiveReaderPayload(session) {
+  return { questionsUsed: session.question_count, questionsRemaining: Math.max(0, 3 - session.question_count), max: 3, history: guestLiveReaderHistory(session.token_hash) };
+}
+function cleanupGuestLiveReaderSessions() {
+  const now = new Date().toISOString();
+  db.prepare("DELETE FROM guest_live_reader_messages WHERE token_hash IN (SELECT token_hash FROM guest_live_reader_sessions WHERE expires_at <= ?)").run(now);
+  db.prepare('DELETE FROM guest_live_reader_sessions WHERE expires_at <= ?').run(now);
+}
+cleanupGuestLiveReaderSessions();
+const guestLiveReaderCleanupTimer = setInterval(cleanupGuestLiveReaderSessions, 60 * 60 * 1000);
+guestLiveReaderCleanupTimer.unref();
+
+// Guest sessions retain only the minimum profile needed to answer questions.
+// The reading itself is computed server-side and is never sent to the browser.
+app.post('/api/live-reader/guest/start', guestLiveReaderLimiter, (req, res) => {
+  const missing = requireFields(req.body, ['birthDate', 'birthTime', 'ziweiGender']);
+  if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(', ')}` });
+  const chartError = validateZiweiInputs(req.body);
+  if (chartError) return res.status(400).json({ error: chartError });
+  try {
+    const profile = { birthDate: String(req.body.birthDate), birthTime: String(req.body.birthTime), ziweiGender: req.body.ziweiGender, name: String(req.body.name || '').slice(0, 120) || null };
+    parseBirth(profile.birthDate, profile.birthTime);
+    buildFullReading(profile, null);
+    cleanupGuestLiveReaderSessions();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashToken(token);
+    db.prepare('INSERT INTO guest_live_reader_sessions (token_hash, profile_json, question_count, expires_at) VALUES (?, ?, 0, ?)').run(tokenHash, JSON.stringify(profile), expiresAt);
+    const session = db.prepare('SELECT * FROM guest_live_reader_sessions WHERE token_hash = ?').get(tokenHash);
+    res.set('Cache-Control', 'no-store');
+    return res.status(201).json({ token, ...guestLiveReaderPayload(session) });
+  } catch (e) { return res.status(400).json({ error: e.message || 'Could not create a Live Reader session.' }); }
+});
+app.get('/api/live-reader/guest', guestLiveReaderLimiter, (req, res) => {
+  const sessionToken = req.get('x-live-reader-token');
+  const session = guestLiveReaderSession(sessionToken);
+  if (!session) return res.status(410).json({ error: 'This Live Reader session has expired. Start a new one to ask another question.' });
+  res.set('Cache-Control', 'no-store');
+  return res.json(guestLiveReaderPayload(session));
+});
+app.post('/api/live-reader/guest', guestLiveReaderLimiter, (req, res) => {
+  const { token, question, lang } = req.body || {};
+  const session = guestLiveReaderSession(token);
+  if (!session) return res.status(410).json({ error: 'This Live Reader session has expired. Start a new one to ask another question.' });
+  const q = typeof question === 'string' ? question.trim() : '';
+  if (q.length < 2 || q.length > 500) return res.status(400).json({ error: 'Enter a question between 2 and 500 characters.' });
+  if (session.question_count >= 3) return res.status(429).json({ error: 'You have used all 3 free questions in this session.', questionsUsed: session.question_count, questionsRemaining: 0 });
+  const tokenHash = session.token_hash;
+  const priorUser = db.prepare("SELECT id FROM guest_live_reader_messages WHERE token_hash = ? AND role = 'user' AND content = ? AND created_at >= datetime('now', '-5 seconds') ORDER BY id DESC LIMIT 1").get(tokenHash, q);
+  if (priorUser) {
+    const priorAnswer = db.prepare("SELECT content FROM guest_live_reader_messages WHERE token_hash = ? AND role = 'master' AND id > ? ORDER BY id ASC LIMIT 1").get(tokenHash, priorUser.id);
+    if (priorAnswer) return res.json({ answer: priorAnswer.content, ...guestLiveReaderPayload(session) });
+  }
+  try {
+    const profile = JSON.parse(session.profile_json);
+    const reading = buildFullReading(profile, null);
+    const answer = liveReaderAnswer(reading, q, lang === 'zh' ? 'zh' : 'en');
+    db.prepare("INSERT INTO guest_live_reader_messages (token_hash, role, content, lang) VALUES (?, 'user', ?, ?)").run(tokenHash, q, lang === 'zh' ? 'zh' : 'en');
+    db.prepare("INSERT INTO guest_live_reader_messages (token_hash, role, content, lang) VALUES (?, 'master', ?, ?)").run(tokenHash, answer, lang === 'zh' ? 'zh' : 'en');
+    db.prepare("UPDATE guest_live_reader_sessions SET question_count = question_count + 1 WHERE token_hash = ? AND question_count < 3").run(tokenHash);
+    const updated = db.prepare('SELECT * FROM guest_live_reader_sessions WHERE token_hash = ?').get(tokenHash);
+    res.set('Cache-Control', 'no-store');
+    return res.json({ answer, ...guestLiveReaderPayload(updated) });
+  } catch (e) { return res.status(400).json({ error: e.message || 'Could not answer this question.' }); }
+});
+
+app.get('/api/yijing/cast', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return res.json(castYijingRandom());
+});
+
 app.get('/api/live-reader', (req, res) => {
   const { token, email, birthDate, sessionId } = req.query;
   const access = verifyAccessToken(token, email, birthDate);
@@ -1435,7 +1518,7 @@ app.get('/api/unsubscribe', (req, res) => {
 const SYSTEM_PAGES = {
   bazi: 'theme-bazi', ziwei: 'theme-ziwei', horoscope: 'theme-horoscope',
   yijing: 'theme-yijing', tarot: 'theme-tarot', numerology: 'theme-numerology',
-  portrait: 'theme-portrait', master: 'theme-master',
+  portrait: 'theme-portrait', master: 'theme-master', 'live-reader': 'theme-live-reader',
 };
 const INDEX_HTML = require('fs').readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
 app.get(Object.keys(SYSTEM_PAGES).map((k) => '/' + k), (req, res) => {
