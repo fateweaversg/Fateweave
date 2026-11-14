@@ -61,7 +61,7 @@ const STR = {
     unlockBody: 'Unlock the full reading across all 8 systems, with 5 Master follow-up chats included. Optional packs: $1.99 for 5 more or $3.49 for 10 more.',
     liveReaderLink: 'Ask the Master',
     emailLabel: 'Email (for your reading access)', sameDateNote: 'Use the same birth date as your free glimpse, and the same email to return to your reading.',
-    promoAccessSummary: 'Have an invited trial code?', promoCodeLabel: 'Trial code', promoAccessButton: 'Unlock trial', promoAccessNote: 'Invited codes expire after 7 days. Each trial lasts 7 or 14 days and is tied to one email and birth date.', promoCodeWorking: 'Checking your code…', promoCodeSuccess: 'Your limited-time trial is unlocked.',
+    promoAccessSummary: 'Have a trial or owner code?', promoCodeLabel: 'Trial or owner code', promoAccessButton: 'Unlock with code', promoAccessNote: 'Trial codes expire after 7 days. An owner code is permanent and works only with the owner email and same birth profile.', promoCodeWorking: 'Checking your code…', promoCodeSuccess: 'Your limited-time trial is unlocked.', ownerCodeSuccess: 'Permanent owner access is unlocked for this birth profile.',
     fullReadingTitle: 'Your full reading', liveReaderTitle: 'Regular questions (3)',
     liveReaderBody: 'All questions are now in the Master conversation.',
     masterChatTitle: 'Ask the Master',
@@ -185,7 +185,7 @@ const STR = {
     unlockBody: '解锁全部 8 个系统的完整报告，并包含 5 次掌门追问。可选加购：$1.99 增加 5 次，或 $3.49 增加 10 次。',
     liveReaderLink: '问掌门',
     emailLabel: '\u7535\u90ae\uff08\u7528\u4e8e\u67e5\u9605\u62a5\u544a\uff09', sameDateNote: '\u8bf7\u4f7f\u7528\u4e0e\u514d\u8d39\u9884\u89c8\u76f8\u540c\u7684\u51fa\u751f\u65e5\u671f\u548c\u7535\u90ae\uff0c\u65b9\u4fbf\u8fd4\u56de\u67e5\u770b\u62a5\u544a\u3002',
-    promoAccessSummary: '有受邀试用码？', promoCodeLabel: '试用码', promoAccessButton: '解锁试用', promoAccessNote: '受邀试用码在 7 天后过期。试用权限为 7 天或 14 天，并绑定一个邮箱和出生日期。', promoCodeWorking: '正在验证试用码…', promoCodeSuccess: '你的限时试用已解锁。',
+    promoAccessSummary: '有试用码或所有者代码？', promoCodeLabel: '试用码或所有者代码', promoAccessButton: '使用代码解锁', promoAccessNote: '试用码在 7 天后过期。所有者代码永久有效，仅适用于所有者邮箱和同一出生资料。', promoCodeWorking: '正在验证代码…', promoCodeSuccess: '你的限时试用已解锁。', ownerCodeSuccess: '此出生资料的所有者永久访问权限已解锁。',
     fullReadingTitle: '\u4f60\u7684\u5b8c\u6574\u62a5\u544a', liveReaderTitle: '普通提问（3 次）',
     liveReaderBody: '所有问题现已合并至掌门聊天。',
     masterChatTitle: '\u95ee\u638c\u95e8',
@@ -1196,7 +1196,7 @@ $('promo-access-form').addEventListener('submit', async (e) => {
     localStorage.setItem('fateweave_email',data.email);
     localStorage.setItem('fateweave_tokenBirthDate',birthDate);
     localStorage.removeItem('fateweave_staging_preview');
-    status.textContent = t('promoCodeSuccess');
+    status.textContent = data.ownerPermanentAccess ? t('ownerCodeSuccess') : t('promoCodeSuccess');
     $('promo-code').value = '';
     if (!await loadReport(true)) status.textContent = flowText('The code was accepted, but your report did not load. Refresh this page to reopen it.','代码已接受，但报告未能加载。刷新页面后即可重新打开。');
   } catch { status.textContent = t('networkError'); }

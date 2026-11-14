@@ -19,6 +19,12 @@ body{max-width:900px;margin:0 auto;padding:24px}.card{margin:18px 0}.grid{displa
     <p id="login-status" class="status" role="status"></p>
   </section>
   <section class="card hidden" id="admin-card">
+    <h2>Jason's permanent owner access</h2>
+    <p>This is one owner-only code for the OWNER_EMAIL configured on the server. It never expires and binds to one email, birth date, birth time and chart sex. The code is shown once; keep it private. Revoke it if it is lost or exposed.</p>
+    <button id="create-owner-code" type="button">Create permanent owner code</button>
+    <button id="revoke-owner-code" class="ghost hidden" type="button">Revoke permanent owner access</button>
+    <p id="owner-code-status" class="status" role="status"></p>
+    <div id="owner-code-result" class="hidden"><h3>Save this code now</h3><p>On FateWeave, enter the configured owner email and your birth profile, open “Have an invited trial code?”, then enter this code. The full reading and Master chat unlock permanently on this profile.</p><pre id="owner-code-value" class="codes"></pre><button id="copy-owner-code" type="button">Copy owner code</button></div>
     <h2>Create trial codes</h2>
     <p>Codes expire 7 days after creation. Trial access can last 7 or 14 days. Share a code only with its intended recipient or campaign audience.</p>
     <form id="create-form">
@@ -55,6 +61,11 @@ body{max-width:900px;margin:0 auto;padding:24px}.card{margin:18px 0}.grid{displa
   async function refresh() {
     const data = await api('/api/owner/trial-codes');
     $('legacy-summary').textContent = `Previous shared-code redemptions: ${data.legacy.redemptionsUsed} of ${data.legacy.redemptionLimit}. The old shared code is no longer accepted.`;
+    $('owner-code-status').textContent = data.ownerAccess?.active
+      ? `A permanent owner code for ${data.ownerAccess.ownerEmail} is active. Its value cannot be retrieved here.`
+      : (data.ownerAccess?.configured ? `No active code. The previous one was revoked. A replacement will be for ${data.ownerAccess.ownerEmail}.` : `No permanent owner code exists. A new one will be for ${data.ownerAccess?.ownerEmail || 'the configured owner email'}.`);
+    $('create-owner-code').classList.toggle('hidden', !!data.ownerAccess?.active);
+    $('revoke-owner-code').classList.toggle('hidden', !data.ownerAccess?.active);
     $('codes-table').innerHTML = data.codes.map((c) => {
       const status = c.disabled ? 'Disabled' : (Date.parse(c.expires_at) <= Date.now() ? 'Expired' : (c.redemptions >= c.max_redemptions ? 'Used' : 'Available'));
       return `<tr><td>${escapeHtml(c.label || '—')}</td><td>${c.redemptions} / ${c.max_redemptions}</td><td>${c.access_days} days</td><td>${new Date(c.expires_at).toLocaleString()}</td><td>${c.conversions || 0}</td><td>${status}</td></tr>`;
@@ -82,6 +93,23 @@ body{max-width:900px;margin:0 auto;padding:24px}.card{margin:18px 0}.grid{displa
     } catch (error) { $('create-status').textContent=error.message; }
   });
   $('copy-codes').addEventListener('click', async () => { await navigator.clipboard.writeText($('codes-list').textContent); $('create-status').textContent='Codes copied.'; });
+  $('create-owner-code').addEventListener('click', async () => {
+    $('owner-code-status').textContent='Creating…';
+    try {
+      const data=await api('/api/owner/permanent-access',{method:'POST',body:'{}'});
+      $('owner-code-value').textContent=data.code;
+      $('owner-code-result').classList.remove('hidden');
+      await refresh();
+      $('owner-code-status').textContent=`Created for ${data.ownerEmail}. The code is shown once; save it securely.`;
+    } catch (error) { $('owner-code-status').textContent=error.message; }
+  });
+  $('copy-owner-code').addEventListener('click', async () => { await navigator.clipboard.writeText($('owner-code-value').textContent); $('owner-code-status').textContent='Owner code copied. Store it securely.'; });
+  $('revoke-owner-code').addEventListener('click', async () => {
+    if (!window.confirm('Revoke the permanent owner code and all permanent owner sessions? A replacement can be created after revocation.')) return;
+    $('owner-code-status').textContent='Revoking…';
+    try { await api('/api/owner/permanent-access/revoke',{method:'POST',body:'{}'}); $('owner-code-result').classList.add('hidden'); $('owner-code-value').textContent=''; await refresh(); }
+    catch (error) { $('owner-code-status').textContent=error.message; }
+  });
   $('refresh').addEventListener('click', () => refresh().catch((error) => { $('create-status').textContent=error.message; }));
   $('signout').addEventListener('click', () => { sessionStorage.removeItem('fw_owner_token'); ownerToken=''; showAdmin(false); });
   if (ownerToken) { showAdmin(true); refresh().catch(() => { sessionStorage.removeItem('fw_owner_token'); ownerToken=''; showAdmin(false); }); }

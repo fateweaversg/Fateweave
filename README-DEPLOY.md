@@ -43,12 +43,20 @@ Railway → service → Variables. Add each one from `.env.example` (values from
 - `OWNER_PASSWORD_HASH` — generate it first, locally:
   ```bash
   npm install
-  npm run hash-owner-password "your-strong-password"
+  npm run hash-owner-password
   ```
-  Paste the printed `$2b$...` hash, NOT the password itself.
+  Enter the new password at the hidden terminal prompt. Copy the printed `$2b$...` bcrypt hash into Railway's `OWNER_PASSWORD_HASH` variable. Never put the password in chat, a command argument, the repository, or Railway.
 - `BASE_URL` — your Railway URL from Step 2 (update it if you later add a custom domain)
 - `NODE_ENV=production`
 - `DATABASE_PATH=./data/fateweave.db`
+
+## Owner access
+
+- Owner trial-code page: `/owner/trial-codes`. Sign in with the owner password.
+- Set `OWNER_EMAIL` in Railway to the email Jason controls and will use for his owner reading. The permanent-code generator refuses to run with the placeholder `owner@example.com`.
+- Trial codes: create individual codes in batches of 1–100 or one capped campaign code; unused codes expire after 7 days, and redeemed access lasts 7 or 14 days.
+- Permanent owner access: on the same owner page, create Jason's one permanent code. It is shown once and is stored only as a hash. At FateWeave's unlock section, enter the configured `OWNER_EMAIL`, complete the birth date, birth time and chart sex, open **Have a trial or owner code?**, and enter the code. It unlocks all reading systems and Master chat permanently for that one birth profile. The browser keeps the access token; save the code privately to restore access on another device. Revoke it from the owner page if exposed, then create a replacement.
+- The former `PROMO_ACCESS_CODE` is not accepted for redemption. The owner page reports its legacy redemption cap and count after owner sign-in.
 
 ## Step 4 — Add a Railway Volume for the database
 Railway → service → Settings → Volumes → Add Volume:

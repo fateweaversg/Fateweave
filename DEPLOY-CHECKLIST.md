@@ -34,9 +34,8 @@ Paid Gemini billing and domain purchases require the owner's decision.
 - [ ] If neither is set, emails only print to the server log — do **not** launch like that.
 
 ## 4. Owner access
-- [ ] Choose a strong owner password (10+ characters, not reused elsewhere).
-- [ ] Run `npm run hash-owner-password "your-password"` locally and put the
-      printed hash in `.env` as `OWNER_PASSWORD_HASH`. Never store the password itself in the repo.
+- [ ] Choose a strong owner password (12+ characters, not reused elsewhere).
+- [ ] Run `npm run hash-owner-password` in an interactive terminal. Type the new password at the hidden prompt, then put the printed bcrypt hash in `.env` or Railway as `OWNER_PASSWORD_HASH`. Never pass the password as a command argument or store it in the repo.
 - [ ] Owner login is via `POST /api/owner/login` — there is no public owner link on the site.
 
 ## 5. Domain (optional, recommended)
