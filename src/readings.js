@@ -164,10 +164,20 @@ function castYijing(seedStr) {
 }
 function castYijingRandom() {
   const cast = castYijing(crypto.randomBytes(32).toString('hex'));
+  const changing = cast.changingLines.length
+    ? `Changing line${cast.changingLines.length === 1 ? '' : 's'} ${cast.changingLines.join(', ')} lead toward Hexagram ${cast.transformed[0]}, ${cast.transformed[1]}.`
+    : `With no changing lines, this cast remains on Hexagram ${cast.hex[0]}, ${cast.hex[1]}.`;
+  const changingZh = cast.changingLines.length
+    ? `第 ${cast.changingLines.join('、')} 爻为变爻，卦象转向第 ${cast.transformed[0]} 卦「${cast.transformed[2]}」。`
+    : `此卦没有变爻，仍为第 ${cast.hex[0]} 卦「${cast.hex[2]}」。`;
   return {
     lines: cast.lines,
     hexagram: { number: cast.hex[0], en: cast.hex[1], zh: cast.hex[2] },
     theme: { en: D.HEX_THEME.en[cast.hex[0]], zh: D.HEX_THEME.zh[cast.hex[0]] },
+    preview: {
+      en: `Hexagram ${cast.hex[0]}, ${cast.hex[1]}, frames this cast around ${D.HEX_THEME.en[cast.hex[0]]}. ${changing}`,
+      zh: `第 ${cast.hex[0]} 卦「${cast.hex[2]}」呈现的主题是${D.HEX_THEME.zh[cast.hex[0]]}。${changingZh}`,
+    },
     transformed: { number: cast.transformed[0], en: cast.transformed[1], zh: cast.transformed[2] },
     changingLines: cast.changingLines,
   };
@@ -515,21 +525,61 @@ function mbtiPart(type, part) {
 function buildTeaser(profile) {
   const full = buildFullReading(profile);
   const short = (value, count = 1) => firstSentences(value, count);
-  const baziWorkPreview = short(full.bazi.sections.career.en);
-  const baziWorkPreviewZh = short(full.bazi.sections.career.zh);
+  const sentenceParts = (value) => String(value || '').match(/[^.!?。！？]+[.!?。！？]?/g) || [];
+  const baziWorkPreview = short(full.bazi.sections.career.en, 2);
+  const baziWorkPreviewZh = short(full.bazi.sections.career.zh, 2);
   const tarotCards = full.tarot.cardsDetailed.map((c) => ({
     idx: c.idx, number: c.number, name: c.name, emoji: c.emoji, image: c.image,
     keywords: c.keywords, keywordsZh: c.keywordsZh, reversed: c.reversed,
     meaningPreview: { en: firstSentence(c.meaning.en), zh: firstSentence(c.meaning.zh) },
   }));
+  const lpTextEn = D.LP.en[String(full.numerology.lifePath)] || '';
+  const lpTextZh = D.LP.zh[String(full.numerology.lifePath)] || '';
+  const lpFirstEn = firstSentence(lpTextEn);
+  const lpFirstZh = firstSentence(lpTextZh);
+  const lpLessonEn = lpTextEn.slice(lpFirstEn.length).trim();
+  const lpDescriptorEn = lpFirstEn.replace(/[.!?]$/, '').split(/\s+[—–-]\s+/, 2);
+  const lpDescriptorZh = lpTextZh.split(/——/, 2);
+  const lpSummaryZh = lpDescriptorZh.length === 2 ? firstSentence(lpDescriptorZh[1]) : lpFirstZh;
+  const lpLessonZh = lpDescriptorZh.length === 2
+    ? lpDescriptorZh[1].slice(lpSummaryZh.length).trim()
+    : lpTextZh.slice(lpFirstZh.length).trim();
+  const masterNumberEn = {
+    11: 'Your Life Path 11, the Illuminator, points to heightened intuition and a stronger signal of the sensitivity associated with 2.',
+    22: 'Your Life Path 22, the Master Builder, combines the craft of 4 with a larger, visionary scale.',
+    33: 'Your Life Path 33, the Master Teacher, extends the care of 6 to a wider circle.',
+  };
+  const masterNumberZh = {
+    11: '生命灵数 11「照亮者」代表更敏锐的直觉，也让 2 号的感受力更加突出。',
+    22: '生命灵数 22「大师建造者」把 4 号的手艺带到更具远见的规模。',
+    33: '生命灵数 33「大师教师」把 6 号的关怀延伸到更多人。',
+  };
+  const numerologyPreview = {
+    en: masterNumberEn[full.numerology.lifePath] || (lpDescriptorEn.length === 2
+      ? `Your Life Path ${full.numerology.lifePath}, ${lpDescriptorEn[0].replace(/^The /, 'the ')}, centres on ${lpDescriptorEn[1].replace(/[.!?]$/, '').toLowerCase()}.${lpLessonEn ? ` ${lpLessonEn}` : ''}`
+      : `Your Life Path ${full.numerology.lifePath} is ${lpFirstEn.replace(/[.!?]$/, '')}.${lpLessonEn ? ` ${lpLessonEn}` : ''}`),
+    zh: masterNumberZh[full.numerology.lifePath] || (lpDescriptorZh.length === 2
+      ? `生命灵数 ${full.numerology.lifePath} 属${lpDescriptorZh[0]}，着重${lpSummaryZh.replace(/[。！？]$/, '')}。${lpLessonZh}`
+      : `你的生命灵数为 ${full.numerology.lifePath}：${lpFirstZh.replace(/[。！？]$/, '')}。${lpLessonZh}`),
+  };
+  const sunTraitEn = firstSentence(full.horoscope.sun.trait.en).replace(/[.!?]$/, '').toLowerCase();
+  const sunTraitZh = firstSentence(full.horoscope.sun.trait.zh).replace(/[。！？]$/, '');
+  const ziweiOverviewEn = sentenceParts(full.ziwei.sections.overview.en);
+  const ziweiOverviewZh = sentenceParts(full.ziwei.sections.overview.zh);
+  const ziweiMeaningPreview = {
+    en: ziweiOverviewEn.slice(full.ziwei.palaces[0].majorStars.length ? 1 : 2, full.ziwei.palaces[0].majorStars.length ? 3 : 4).join('').trim(),
+    zh: ziweiOverviewZh.slice(1, 3).join('').trim(),
+  };
   const portraitLines = {
     en: [
       `Your profile brings together a ${full.bazi.dayMaster.en} Day Master, a ${full.horoscope.sun.en} Sun and Life Path ${full.numerology.lifePath}.`,
-      'The full portrait maps how these patterns reinforce or challenge one another.',
+      `Your ${full.horoscope.sun.en} Sun highlights ${sunTraitEn}; ${elName(full.bazi.dominant, 'en')} is the strongest element in your Bazi chart.`,
+      'The full portrait compares those chart signals with your Day Master and Life Path.',
     ],
     zh: [
       `你的资料包括${full.bazi.dayMaster.zh}日主、${full.horoscope.sun.zh}太阳星座和生命灵数 ${full.numerology.lifePath}。`,
-      '完整肖像会进一步梳理这些模式如何相互支持或形成张力。',
+      `你的${full.horoscope.sun.zh}太阳星座强调${sunTraitZh}；八字五行中最强的是${elName(full.bazi.dominant, 'zh')}。`,
+      '完整肖像会把这些线索与日主和生命灵数放在一起比较。',
     ],
   };
   return {
@@ -544,15 +594,16 @@ function buildTeaser(profile) {
     ziwei: {
       lifePalace: full.ziwei.lifePalace, lifePalaceZh: full.ziwei.lifePalaceZh,
       mainStar: full.ziwei.mainStar,
-      hook: { en: firstSentence(full.ziwei.palaces[0].text.en), zh: firstSentence(full.ziwei.palaces[0].text.zh) },
+      hook: ziweiMeaningPreview,
+      meaningPreview: ziweiMeaningPreview,
     },
     horoscope: {
       sunSign: full.horoscope.sunSign.en, sunSignZh: full.horoscope.sunSign.zh,
-      hook: { en: firstSentence(full.horoscope.sun.trait.en), zh: firstSentence(full.horoscope.sun.trait.zh) },
+      hook: { en: short(full.horoscope.sections.sun.en, 2), zh: short(full.horoscope.sections.sun.zh, 2) },
     },
     numerology: {
       lifePath: full.numerology.lifePath,
-      hook: { en: firstSentence(full.numerology.lifePathText.en), zh: firstSentence(full.numerology.lifePathText.zh) },
+      hook: numerologyPreview,
     },
     yijing: {
       hexagram: full.yijing.hexagram,
@@ -569,7 +620,7 @@ function buildTeaser(profile) {
     },
     tarot: {
       firstCard: full.tarot.cards[0],
-      // Three cards and one concise sentence per card; the spread narrative,
+      // Three cards and a concise meaning preview per card; the spread narrative,
       // full position interpretation and topical advice remain locked.
       cards: tarotCards,
     },

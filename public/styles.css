@@ -110,6 +110,7 @@ button:disabled { opacity: .5; cursor: default; }
 .tarot-front .rev-banner { margin-top: 8px; background: #7a2e2e; color: #fff; font-size: .78rem; font-weight: 700; letter-spacing: .08em; border-radius: 4px; padding: 2px 10px; }
 .tarot-front .rev { font-size: .8rem; color: #e0a0a0; }
 .tarot-pos { text-align: center; font-size: .85rem; color: var(--muted); margin: 6px 0 0; }
+.tarot-preview { font-size: .82rem; color: var(--muted); line-height: 1.45; margin: 8px 2px 0; text-align: center; }
 .tarot-detail { margin-top: 10px; }
 
 /* --- Coins (Yi-Jing cast) --- */
