@@ -1469,6 +1469,9 @@ app.get('/owner/trial-codes', (_req, res) => {
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, '..', 'public', 'owner-promo-codes.html'));
 });
+// Unknown API paths must return a JSON 404 instead of falling through to the
+// single-page app shell (which makes clients fail while parsing the response).
+app.use('/api', (_req, res) => res.status(404).json({ error: 'API route not found.' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
 

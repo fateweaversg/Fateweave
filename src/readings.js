@@ -531,8 +531,37 @@ function buildTeaser(profile) {
   const tarotCards = full.tarot.cardsDetailed.map((c) => ({
     idx: c.idx, number: c.number, name: c.name, emoji: c.emoji, image: c.image,
     keywords: c.keywords, keywordsZh: c.keywordsZh, reversed: c.reversed,
-    meaningPreview: { en: firstSentences(c.meaning.en, 2), zh: firstSentences(c.meaning.zh, 2) },
+    meaningPreview: { en: firstSentence(c.meaning.en), zh: firstSentence(c.meaning.zh) },
   }));
+  const lpTextEn = D.LP.en[String(full.numerology.lifePath)] || '';
+  const lpTextZh = D.LP.zh[String(full.numerology.lifePath)] || '';
+  const lpFirstEn = firstSentence(lpTextEn);
+  const lpFirstZh = firstSentence(lpTextZh);
+  const lpLessonEn = lpTextEn.slice(lpFirstEn.length).trim();
+  const lpDescriptorEn = lpFirstEn.replace(/[.!?]$/, '').split(/\s+[—–-]\s+/, 2);
+  const lpDescriptorZh = lpTextZh.split(/——/, 2);
+  const lpSummaryZh = lpDescriptorZh.length === 2 ? firstSentence(lpDescriptorZh[1]) : lpFirstZh;
+  const lpLessonZh = lpDescriptorZh.length === 2
+    ? lpDescriptorZh[1].slice(lpSummaryZh.length).trim()
+    : lpTextZh.slice(lpFirstZh.length).trim();
+  const masterNumberEn = {
+    11: 'Your Life Path 11, the Illuminator, points to heightened intuition and a stronger signal of the sensitivity associated with 2.',
+    22: 'Your Life Path 22, the Master Builder, combines the craft of 4 with a larger, visionary scale.',
+    33: 'Your Life Path 33, the Master Teacher, extends the care of 6 to a wider circle.',
+  };
+  const masterNumberZh = {
+    11: '生命灵数 11「照亮者」代表更敏锐的直觉，也让 2 号的感受力更加突出。',
+    22: '生命灵数 22「大师建造者」把 4 号的手艺带到更具远见的规模。',
+    33: '生命灵数 33「大师教师」把 6 号的关怀延伸到更多人。',
+  };
+  const numerologyPreview = {
+    en: masterNumberEn[full.numerology.lifePath] || (lpDescriptorEn.length === 2
+      ? `Your Life Path ${full.numerology.lifePath}, ${lpDescriptorEn[0].replace(/^The /, 'the ')}, centres on ${lpDescriptorEn[1].replace(/[.!?]$/, '').toLowerCase()}.${lpLessonEn ? ` ${lpLessonEn}` : ''}`
+      : `Your Life Path ${full.numerology.lifePath} is ${lpFirstEn.replace(/[.!?]$/, '')}.${lpLessonEn ? ` ${lpLessonEn}` : ''}`),
+    zh: masterNumberZh[full.numerology.lifePath] || (lpDescriptorZh.length === 2
+      ? `生命灵数 ${full.numerology.lifePath} 属${lpDescriptorZh[0]}，着重${lpSummaryZh.replace(/[。！？]$/, '')}。${lpLessonZh}`
+      : `你的生命灵数为 ${full.numerology.lifePath}：${lpFirstZh.replace(/[。！？]$/, '')}。${lpLessonZh}`),
+  };
   const sunTraitEn = firstSentence(full.horoscope.sun.trait.en).replace(/[.!?]$/, '').toLowerCase();
   const sunTraitZh = firstSentence(full.horoscope.sun.trait.zh).replace(/[。！？]$/, '');
   const ziweiOverviewEn = sentenceParts(full.ziwei.sections.overview.en);
@@ -574,7 +603,7 @@ function buildTeaser(profile) {
     },
     numerology: {
       lifePath: full.numerology.lifePath,
-      hook: { en: short(full.numerology.sections.overview.en, 2), zh: short(full.numerology.sections.overview.zh, 2) },
+      hook: numerologyPreview,
     },
     yijing: {
       hexagram: full.yijing.hexagram,

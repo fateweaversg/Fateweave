@@ -132,6 +132,9 @@ const STR = {
     mcThinking: 'The Master is thinking\u2026',
     lrThinking: 'Thinking\u2026',
     payUnlock: 'Pay & unlock', priceUnavailable: 'Price unavailable \u2014 please try again later.',
+    promoPriceLine: (amount, start, end, full) => `$${amount} launch offer · ${start}–${end} · then $${full}`,
+    fullPriceLine: (amount) => `$${amount} full unlock`, payAmountUnlock: (amount) => `Pay $${amount} & unlock`,
+    noChangingLines: 'No changing lines — this cast remains at Hexagram {number} · {name}.',
     questions: 'questions', questionOf: 'Question', of: 'of', back: '\u2190 Back', restart: 'Restart quiz',
     startQuiz: 'Start the quiz', retake: 'Retake', yourType: 'Your type', fullBreakdownLocked: 'Full breakdown locked \u2014 unlock to read it.',
     strengths: 'Strengths', whatsLacking: 'What\u2019s lacking', yourResult: 'Your result',
@@ -253,6 +256,9 @@ const STR = {
     mcThinking: '\u638c\u95e8\u6b63\u5728\u601d\u8003\u2026',
     lrThinking: '\u6b63\u5728\u601d\u8003\u2026',
     payUnlock: '\u4ed8\u6b3e\u5e76\u89e3\u9501', priceUnavailable: '\u6682\u65f6\u65e0\u6cd5\u53d6\u5f97\u4ef7\u683c\u2014\u2014\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+    promoPriceLine: (amount, start, end, full) => `限时优惠 $${amount} · ${start} 至 ${end} · 之后 $${full}`,
+    fullPriceLine: (amount) => `完整解锁 $${amount}`, payAmountUnlock: (amount) => `支付 $${amount} 并解锁`,
+    noChangingLines: '没有变爻——本次卦象维持第 {number} 卦·{name}。',
     questions: '\u9898', questionOf: '\u7b2c', of: '/', back: '\u2190 \u4e0a\u4e00\u9898', restart: '\u91cd\u65b0\u6d4b\u9a8c',
     startQuiz: '\u5f00\u59cb\u6d4b\u9a8c', retake: '\u91cd\u65b0\u6d4b\u9a8c', yourType: '\u4f60\u7684\u7c7b\u578b', fullBreakdownLocked: '\u5b8c\u6574\u89e3\u6790\u672a\u89e3\u9501\u2014\u2014\u89e3\u9501\u540e\u53ef\u9605\u8bfb\u3002',
     strengths: '\u957f\u5904', whatsLacking: '\u5c1a\u7f3a\u4e4b\u5904', yourResult: '\u4f60\u7684\u7ed3\u679c',
@@ -315,6 +321,7 @@ function setLang(lang) {
   document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
   document.querySelectorAll('[data-i18n]').forEach((el) => { if (STR[lang][el.dataset.i18n]) el.textContent = STR[lang][el.dataset.i18n]; });
   document.querySelectorAll('[data-i18n-ph]').forEach((el) => { if (STR[lang][el.dataset.i18nPh]) el.placeholder = STR[lang][el.dataset.i18nPh]; });
+  renderCheckoutPrice();
   $('lang-en').classList.toggle('active', lang === 'en');
   $('lang-zh').classList.toggle('active', lang === 'zh');
   applyPreviewModeUI();
@@ -495,8 +502,14 @@ function heroResultHTML(key) {
       return `<div class="hero-result"><span class="hero-glyph">${esc(sun.symbol || '☉')}</span> ${esc(L(sun))}</div><p class="hero-sub">${esc(L(unlocked ? r.horoscope.sun.trait : src.horoscope.hook))}</p>${unlocked ? `<p class="hero-sub">${esc(r.horoscope.moon.symbol)} ${esc(t('moon'))}: ${esc(L(r.horoscope.moon))} &nbsp;·&nbsp; ${esc(r.horoscope.rising.symbol)} ${esc(t('rising'))}: ${esc(L(r.horoscope.rising))}</p>` : ''}`;
     }
     case 'yijing': {
-      const hex = unlocked ? r.yijing.hexagram : src.yijing.hexagram;
-      return `<div class="hero-result">${esc(hex)}</div><p class="hero-sub">${esc(L(unlocked ? r.yijing.theme : (src.yijing.preview || src.yijing.hook)))}</p>`;
+      const latestCast = state.yijingResult;
+      const hex = latestCast
+        ? `${latestCast.hexagram.number} · ${L(latestCast.hexagram)}`
+        : (unlocked ? r.yijing.hexagram : src.yijing.hexagram);
+      const preview = latestCast
+        ? latestCast.preview
+        : (unlocked ? r.yijing.theme : (src.yijing.preview || src.yijing.hook));
+      return `<div class="hero-result">${esc(hex)}</div><p class="hero-sub">${esc(L(preview))}</p>`;
     }
     case 'tarot': {
       const cards = unlocked ? r.tarot.cardsDetailed : src.tarot.cards;
@@ -712,7 +725,13 @@ function renderSystems() {
     html += `<button type="button" data-act="cast-yijing">\uD83E\uDE99 ${esc(t('castAgain'))}</button>`;
     html += `<div class="yijing-stage">${hexagramDiagramHTML(yijingLinesOf())}`;
     html += `<div class="reveal-in"><p class="essence">${esc(t('hexagram'))}: ${esc(hex)}</p><p class="hook-line">${esc(L(yijingHook))}</p>`;
-    if (state.yijingResult) html += `<p class="small">${esc(t('changingLines'))}: ${esc(state.yijingResult.changingLines.join(', ') || '—')} · → ${esc(state.yijingResult.transformed.number)} ${esc(L(state.yijingResult.transformed))}</p>`;
+    if (state.yijingResult) {
+      const cast = state.yijingResult;
+      const castLineSummary = cast.changingLines.length
+        ? `${t('changingLines')}: ${cast.changingLines.join(', ')} · → ${cast.transformed.number} ${L(cast.transformed)}`
+        : t('noChangingLines').replace('{number}', String(cast.hexagram.number)).replace('{name}', L(cast.hexagram));
+      html += `<p class="small">${esc(castLineSummary)}</p>`;
+    }
     if (unlocked) {
       html += `<p><span class="badge">${esc(t('changingLines'))}: ${r.yijing.changingLines.length ? r.yijing.changingLines.join(', ') : '\u2014'}</span>${r.yijing.transformed ? `<span class="badge">\u2192 ${esc(r.yijing.transformed.number)} \u00B7 ${esc(L(r.yijing.transformed))}</span>` : ''}</p>`;
       if (r.yijing.sections.changing) html += `<h3>${esc(t('changingLines'))}</h3><p>${esc(L(r.yijing.sections.changing))}</p>`;
@@ -732,7 +751,7 @@ function renderSystems() {
       <div class="tarot-inner">
         <div class="tarot-face tarot-back"><div class="back-frame"><div class="star">\u2726</div><p class="back-brand">FateWeave</p><p>${esc(t('flipping'))}</p></div></div>
         <div class="tarot-face tarot-front" style="--hue:${((c.idx ?? 0) * 47) % 360}"><div class="card-num">${esc(c.number ?? '')}</div>${tarotFrontArt(c)}<div class="cname">${esc(L(c.name))}</div><div class="kw">${esc(tarotKeywords(c))}</div>${c.reversed ? `<div class="rev-banner">${esc(t('reversed'))}</div>` : ''}</div>
-      </div></div><p class="tarot-pos">${esc(t(posKeys[i]))}</p></div>`;
+      </div></div><p class="tarot-pos">${esc(t(posKeys[i]))}</p>${!unlocked && c.meaningPreview ? `<p class="tarot-preview">${esc(L(c.meaningPreview))}</p>` : ''}</div>`;
   }).join('')}</div>`;
   html += `<div id="tarot-detail">${cards.map((c, i) => {
     if (!state.tarotFlipped[i]) return '';
@@ -1055,18 +1074,30 @@ async function loadPrice() {
     const res = await fetch('/api/config');
     const data = await res.json();
     state.price = data.price;
+    state.fullPriceCents = data.fullPriceCents || 800;
     state.masterPacks = data.masterProbePacks || [];
     state.previewMode = data.previewMode === true;
     state.promoAccessEnabled = data.promoAccessEnabled === true;
     $('promo-access').classList.toggle('hidden', !state.promoAccessEnabled);
     if (state.previewMode) { applyPreviewModeUI(); return; }
-    const dollars = (data.price.amountCents / 100).toFixed(2);
-    const fullPrice = ((data.fullPriceCents || 800) / 100).toFixed(2);
-    $('price-line').textContent = data.price.isPromo
-      ? `$${dollars} launch offer \u00B7 ${data.price.promoStart}\u2013${data.price.promoEnd} \u00B7 then $${fullPrice}`
-      : `$${dollars} full unlock`;
-    $('pay-btn').textContent = `Pay $${dollars} & unlock`;
-  } catch { $('price-line').textContent = t('priceUnavailable'); }
+    renderCheckoutPrice();
+  } catch {
+    $('price-line').textContent = t('priceUnavailable');
+    $('pay-btn').textContent = t('payUnlock');
+  }
+}
+
+function renderCheckoutPrice() {
+  const priceLine = $('price-line');
+  const payButton = $('pay-btn');
+  if (!priceLine || !payButton) return;
+  if (!state.price) { payButton.textContent = t('payUnlock'); return; }
+  const amount = (state.price.amountCents / 100).toFixed(2);
+  const full = ((state.fullPriceCents || 800) / 100).toFixed(2);
+  priceLine.textContent = state.price.isPromo
+    ? STR[state.lang].promoPriceLine(amount, state.price.promoStart, state.price.promoEnd, full)
+    : STR[state.lang].fullPriceLine(amount);
+  payButton.textContent = STR[state.lang].payAmountUnlock(amount);
 }
 
 $('hook-form').addEventListener('submit', async (e) => {
