@@ -30,7 +30,7 @@ const { db } = require('./db');
 const { buildFullReading, buildTeaser, castYijingRandom, parseBirth, scoreEnneagramFromChoices, scoreMbti, getPersonalityQuestions, lockedPersonalitySummary, elName, elementMeaning } = require('./readings');
 const { strings } = require('./i18n');
 const { sendEmail, sendReportEmail } = require('./email');
-const { issueAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword, hashToken } = require('./auth');
+const { issueAccessToken, issueOwnerPermanentAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword, hashToken } = require('./auth');
 const {
   aiMasterLive, validateMasterMessage, resolveAiMaster, aiUsageSummary,
   aiCooldownState,
@@ -172,6 +172,45 @@ app.post('/api/redeem-promo', promoAccessLimiter, (req, res) => {
   if (!/^[A-Z0-9]{8,16}$/.test(normalizedCode)) return res.status(403).json({ error: 'That trial code is not valid.' });
   const codeHash = hashToken(normalizedCode);
   const email = rawEmail.trim().toLowerCase();
+  // Owner access uses the same private code entry as trial codes, but is
+  // separately stored, bound to OWNER_EMAIL and one complete birth profile,
+  // and never expires. It is never accepted as a campaign/trial code.
+  const ownerCode = db.prepare('SELECT * FROM owner_access_codes WHERE code_hash=?').get(codeHash);
+  if (ownerCode) {
+    if (ownerCode.disabled || ownerCode.owner_email !== email) return res.status(403).json({ error: 'That owner code is not valid for this email.' });
+    let orderId;
+    try {
+      db.exec('BEGIN IMMEDIATE');
+      const activeOwnerCode = db.prepare('SELECT id FROM owner_access_codes WHERE id=? AND disabled=0').get(ownerCode.id);
+      if (!activeOwnerCode) { db.exec('ROLLBACK'); return res.status(403).json({ error: 'That owner code is not valid for this email.' }); }
+      let redemption = db.prepare('SELECT * FROM owner_access_redemptions WHERE code_id=?').get(ownerCode.id);
+      if (redemption) {
+        if (redemption.email !== email || redemption.birth_date !== birthDate || redemption.birth_time !== birthTime || redemption.ziwei_gender !== ziweiGender) {
+          db.exec('ROLLBACK');
+          return res.status(409).json({ error: 'This permanent owner code is already bound to a different birth profile. Use the same email, birth date, time and chart sex.' });
+        }
+        orderId = redemption.order_id;
+      } else {
+        const order = db.prepare("INSERT INTO orders(email,birth_date,birth_time,ziwei_gender,name,amount_cents,currency,price_label,provider,status,paid_at) VALUES(?,?,?,?,?,0,'usd','owner-permanent','owner','paid',datetime('now'))")
+          .run(email, birthDate, birthTime, ziweiGender, name || null);
+        orderId = Number(order.lastInsertRowid);
+        db.prepare('INSERT INTO owner_access_redemptions(code_id,email,birth_date,birth_time,ziwei_gender,order_id) VALUES(?,?,?,?,?,?)')
+          .run(ownerCode.id, email, birthDate, birthTime, ziweiGender, orderId);
+      }
+      db.exec('COMMIT');
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch {}
+      console.error('Permanent owner access failed:', e.message);
+      return res.status(500).json({ error: 'Could not unlock owner access. Please try again.' });
+    }
+    try {
+      const { token } = issueOwnerPermanentAccessToken(ownerCode.id, email, birthDate, orderId);
+      return res.json({ paid: true, ownerPermanentAccess: true, email, birthDate, token, expiresAt: null });
+    } catch (e) {
+      console.error('Permanent owner token creation failed:', e.message);
+      return res.status(500).json({ error: 'Could not unlock owner access. Please try again.' });
+    }
+  }
   let orderId, accessDays;
   try {
     db.exec('BEGIN IMMEDIATE');
@@ -1323,10 +1362,44 @@ app.get('/api/owner/trial-codes', (req, res) => {
     FROM trial_codes c LEFT JOIN trial_code_redemptions r ON r.code_id=c.id
     GROUP BY c.id ORDER BY c.id DESC LIMIT 100`).all();
   const legacyRedemptions = db.prepare('SELECT COUNT(*) AS n FROM promo_redemptions').get().n;
+  const ownerAccess = db.prepare('SELECT id,disabled,created_at FROM owner_access_codes ORDER BY id DESC LIMIT 1').get();
   return res.json({
     codes,
     legacy: { redemptionLimit: config.promoAccessMaxRedemptions, redemptionsUsed: legacyRedemptions },
+    ownerAccess: ownerAccess ? { configured: true, active: !ownerAccess.disabled, createdAt: ownerAccess.created_at, ownerEmail: config.ownerEmail.trim().toLowerCase() } : { configured: false, active: false, ownerEmail: config.ownerEmail.trim().toLowerCase() },
   });
+});
+app.post('/api/owner/permanent-access', (req, res) => {
+  if (!ownerTrialAccess(req, res)) return;
+  const ownerEmail = String(config.ownerEmail || '').trim().toLowerCase();
+  if (!isValidEmail(ownerEmail) || ownerEmail === 'owner@example.com') return res.status(503).json({ error: 'Set OWNER_EMAIL in Railway to an email you control before creating permanent owner access.' });
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const active = db.prepare('SELECT id FROM owner_access_codes WHERE disabled=0 LIMIT 1').get();
+    if (active) { db.exec('ROLLBACK'); return res.status(409).json({ error: 'An active permanent owner code already exists. Revoke it before creating a replacement.' }); }
+    const code = createTrialCode();
+    const result = db.prepare('INSERT INTO owner_access_codes(code_hash,owner_email) VALUES(?,?)').run(hashToken(code), ownerEmail);
+    db.exec('COMMIT');
+    return res.status(201).json({ code, ownerEmail, createdAt: new Date().toISOString(), id: Number(result.lastInsertRowid) });
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch {}
+    console.error('Permanent owner code creation failed:', e.message);
+    return res.status(500).json({ error: 'Could not create the permanent owner code.' });
+  }
+});
+app.post('/api/owner/permanent-access/revoke', (req, res) => {
+  if (!ownerTrialAccess(req, res)) return;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.prepare('UPDATE owner_access_codes SET disabled=1 WHERE disabled=0').run();
+    db.prepare('UPDATE owner_access_tokens SET revoked=1 WHERE revoked=0').run();
+    db.exec('COMMIT');
+    return res.json({ revoked: true });
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch {}
+    console.error('Permanent owner code revocation failed:', e.message);
+    return res.status(500).json({ error: 'Could not revoke permanent owner access.' });
+  }
 });
 app.post('/api/owner/trial-codes', (req, res) => {
   if (!ownerTrialAccess(req, res)) return;

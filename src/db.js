@@ -83,6 +83,41 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Permanent owner access is separate from paid/trial tokens and never
+  -- expires. The owner code is stored only as a hash and binds once to one
+  -- owner email + birth profile. Issued access tokens can be revoked.
+  CREATE TABLE IF NOT EXISTS owner_access_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code_hash TEXT NOT NULL UNIQUE,
+    owner_email TEXT NOT NULL,
+    disabled INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS owner_access_redemptions (
+    code_id INTEGER PRIMARY KEY,
+    email TEXT NOT NULL,
+    birth_date TEXT NOT NULL,
+    birth_time TEXT NOT NULL,
+    ziwei_gender TEXT NOT NULL,
+    order_id INTEGER NOT NULL UNIQUE,
+    redeemed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (code_id) REFERENCES owner_access_codes(id),
+    FOREIGN KEY (order_id) REFERENCES orders(id)
+  );
+  CREATE TABLE IF NOT EXISTS owner_access_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT NOT NULL UNIQUE,
+    owner_code_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    birth_date TEXT NOT NULL,
+    order_id INTEGER NOT NULL,
+    revoked INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (owner_code_id) REFERENCES owner_access_codes(id),
+    FOREIGN KEY (order_id) REFERENCES orders(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_owner_access_tokens_hash ON owner_access_tokens(token_hash);
+
   CREATE TABLE IF NOT EXISTS email_subscribers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL UNIQUE,

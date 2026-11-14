@@ -29,16 +29,31 @@ function issueAccessToken(email, birthDate, orderId, days = config.accessTokenDa
   return { token, expiresAt };
 }
 
+function issueOwnerPermanentAccessToken(ownerCodeId, email, birthDate, orderId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  db.prepare(
+    'INSERT INTO owner_access_tokens (token_hash, owner_code_id, email, birth_date, order_id) VALUES (?, ?, ?, ?, ?)'
+  ).run(hashToken(token), ownerCodeId, email.toLowerCase(), birthDate, orderId);
+  return { token, expiresAt: null };
+}
+
 function verifyAccessToken(token, email, birthDate) {
   if (!token || typeof token !== 'string') return null;
+  const tokenHash = hashToken(token);
   const row = db.prepare(
     'SELECT * FROM access_tokens WHERE token_hash = ? AND revoked = 0'
-  ).get(hashToken(token));
-  if (!row) return null;
-  if (row.email !== String(email || '').toLowerCase()) return null;
-  if (row.birth_date !== birthDate) return null;
-  if (new Date(row.expires_at) < new Date()) return null;
-  return row;
+  ).get(tokenHash);
+  if (row) {
+    if (row.email !== String(email || '').toLowerCase()) return null;
+    if (row.birth_date !== birthDate) return null;
+    if (new Date(row.expires_at) < new Date()) return null;
+    return row;
+  }
+  const ownerRow = db.prepare(
+    'SELECT * FROM owner_access_tokens WHERE token_hash = ? AND revoked = 0'
+  ).get(tokenHash);
+  if (!ownerRow || ownerRow.email !== String(email || '').toLowerCase() || ownerRow.birth_date !== birthDate) return null;
+  return { ...ownerRow, expires_at: null, owner_permanent: true };
 }
 
 function issueOwnerToken() {
@@ -60,4 +75,4 @@ async function checkOwnerPassword(password) {
   return bcrypt.compare(password, config.ownerPasswordHash);
 }
 
-module.exports = { hashToken, issueAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword };
+module.exports = { hashToken, issueAccessToken, issueOwnerPermanentAccessToken, verifyAccessToken, issueOwnerToken, verifyOwnerToken, checkOwnerPassword };
