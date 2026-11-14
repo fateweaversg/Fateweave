@@ -9,7 +9,8 @@
  *     success page exchanges the Checkout Session for a random stored token
  *     bound to email + birth date.
  *  4. GET /api/report?token=… returns full details only for a valid paid token.
- *  5. POST /api/live-reader — 3 questions max per paid session, server-enforced.
+ *  5. Master chat is the single reading conversation; the retired Live Reader
+ *     API is handled by the 410 response in src/master-flow.js.
  *  6. Report email on payment + daily encouragement at 7am SGT (src/jobs/daily.js).
  *  7. Owner login via server-checked password hash — no public owner link.
  *
@@ -446,65 +447,6 @@ app.post('/api/resend-report', async (req, res) => {
 app.get('/api/yijing/cast', (_req, res) => {
   res.set('Cache-Control', 'no-store');
   return res.json(castYijingRandom());
-});
-
-app.get('/api/live-reader', (req, res) => {
-  const { token, email, birthDate, sessionId } = req.query;
-  const access = verifyAccessToken(token, email, birthDate);
-  if (!access) return res.status(403).json({ error: 'A valid paid access token is required for Live Reader.' });
-  if (!sessionId) return res.status(400).json({ error: 'sessionId is required.' });
-  const usage = db.prepare('SELECT * FROM live_reader_usage_by_buyer WHERE email = ? AND birth_date = ?')
-    .get(access.email, access.birth_date);
-  const used = usage ? usage.question_count : 0;
-  return res.json({
-    questionsUsed: used,
-    questionsRemaining: Math.max(0, config.liveReaderMaxPerSession - used),
-    max: config.liveReaderMaxPerSession,
-  });
-});
-app.post('/api/live-reader', (req, res) => {
-  const { token, email, birthDate, sessionId, question, lang } = req.body || {};
-  const access = verifyAccessToken(token, email, birthDate);
-  if (!access) return res.status(403).json({ error: 'A valid paid access token is required for Live Reader.' });
-  if (!sessionId || !question || String(question).trim().length < 2) {
-    return res.status(400).json({ error: 'sessionId and a question are required.' });
-  }
-  const usage = db.prepare('SELECT * FROM live_reader_usage_by_buyer WHERE email = ? AND birth_date = ?')
-    .get(access.email, access.birth_date);
-  const count = usage ? usage.question_count : 0;
-  if (count >= config.liveReaderMaxPerSession) {
-    return res.status(429).json({ error: `Live Reader allows ${config.liveReaderMaxPerSession} questions.`, questionsUsed: count, questionsRemaining: 0 });
-  }
-  // Duplicate guard (7 Nov 2026): a double-tap can submit the same
-  // question twice in a second and burn 2 of the 3. An identical
-  // question from this buyer within the last 5 seconds that was
-  // already answered returns the stored answer — no new row, no
-  // count consumed.
-  const lastLrUser = db.prepare(`SELECT id FROM master_chat_messages WHERE email = ? AND birth_date = ? AND role = 'user' AND source = 'live-reader' AND content = ? AND created_at >= datetime('now', '-5 seconds') ORDER BY id DESC LIMIT 1`)
-    .get(access.email, access.birth_date, String(question));
-  if (lastLrUser) {
-    const lastLrMaster = db.prepare("SELECT content FROM master_chat_messages WHERE email = ? AND birth_date = ? AND role = 'master' AND source = 'live-reader' AND id > ? ORDER BY id ASC LIMIT 1")
-      .get(access.email, access.birth_date, lastLrUser.id);
-    if (lastLrMaster) {
-      return res.json({ answer: lastLrMaster.content, questionsUsed: count, questionsRemaining: config.liveReaderMaxPerSession - count, duplicate: true });
-    }
-  }
-  const order = access.order_id ? db.prepare('SELECT * FROM orders WHERE id = ?').get(access.order_id) : null;
-  if (!order?.birth_time || !order?.ziwei_gender) return res.status(409).json({ code: 'ziwei_inputs_required', error: 'Enter your birth time and chart sex to calculate the complete reading.' });
-  const personality = loadPersonality(access.email, access.birth_date);
-  const reading = buildFullReading({ birthDate: access.birth_date, birthTime: order.birth_time, ziweiGender: order.ziwei_gender, name: order.name || null }, personality);
-  const answer = liveReaderAnswer(reading, String(question), lang === 'zh' ? 'zh' : 'en');
-  try {
-    db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'user', ?, ?, 'live-reader')")
-      .run(hashToken(token), sessionId, access.email, access.birth_date, String(question), lang === 'zh' ? 'zh' : 'en');
-    db.prepare("INSERT INTO master_chat_messages (token_hash, session_id, email, birth_date, role, content, lang, source) VALUES (?, ?, ?, ?, 'master', ?, ?, 'live-reader')")
-      .run(hashToken(token), sessionId, access.email, access.birth_date, answer, lang === 'zh' ? 'zh' : 'en');
-  } catch (e) { console.error('Live Reader history store failed:', e.message); }
-  db.prepare(`INSERT INTO live_reader_usage_by_buyer (email, birth_date, question_count, last_asked_at)
-    VALUES (?, ?, 1, datetime('now'))
-    ON CONFLICT(email, birth_date) DO UPDATE SET question_count = question_count + 1, last_asked_at = datetime('now')`)
-    .run(access.email, access.birth_date);
-  return res.json({ answer, questionsUsed: count + 1, questionsRemaining: config.liveReaderMaxPerSession - count - 1 });
 });
 
 // --- Ask the Master: follow-up chat on the buyer's own reading -------------
