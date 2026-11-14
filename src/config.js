@@ -19,8 +19,9 @@ const config = {
   databasePath: process.env.DATABASE_PATH || './data/fateweave.db',
   promoPriceCents: intEnv('PROMO_PRICE_CENTS', 299),
   fullPriceCents: intEnv('FULL_PRICE_CENTS', 800),
-  // Optional private free-access code. Keep it in Railway variables only.
-  promoAccessCode: process.env.PROMO_ACCESS_CODE || '',
+  // Legacy shared-code cap retained for owner reporting only; the old
+  // environment code is no longer accepted. New trial codes live hashed
+  // in the database and are managed through the owner trial-code page.
   promoAccessMaxRedemptions: intEnv('PROMO_ACCESS_MAX_REDEMPTIONS', 10),
   currency: 'usd',
   promoStart: process.env.PROMO_START || '2026-11-07',

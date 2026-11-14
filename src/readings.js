@@ -509,25 +509,46 @@ function mbtiPart(type, part) {
 }
 
 /* --- Teaser / hook (free — ONLY these fields may leave the server) ---------
-   Hook rule: a card name + at most 1–2 lines per system. Never full guidance,
-   never synthesis, never interpretations. The frontend blurs / locks the rest. */
+   Each system may reveal its headline result and a short, bounded sample.
+   Detailed interpretation, interactions, timing, guidance and synthesis stay
+   server-side until the buyer presents a valid access token. */
 function buildTeaser(profile) {
   const full = buildFullReading(profile);
+  const short = (value, count = 1) => firstSentences(value, count);
+  const baziWorkPreview = short(full.bazi.sections.career.en);
+  const baziWorkPreviewZh = short(full.bazi.sections.career.zh);
+  const tarotCards = full.tarot.cardsDetailed.map((c) => ({
+    idx: c.idx, number: c.number, name: c.name, emoji: c.emoji, image: c.image,
+    keywords: c.keywords, keywordsZh: c.keywordsZh, reversed: c.reversed,
+    meaningPreview: { en: firstSentence(c.meaning.en), zh: firstSentence(c.meaning.zh) },
+  }));
+  const portraitLines = {
+    en: [
+      `Your profile brings together a ${full.bazi.dayMaster.en} Day Master, a ${full.horoscope.sun.en} Sun and Life Path ${full.numerology.lifePath}.`,
+      'The full portrait maps how these patterns reinforce or challenge one another.',
+    ],
+    zh: [
+      `你的资料包括${full.bazi.dayMaster.zh}日主、${full.horoscope.sun.zh}太阳星座和生命灵数 ${full.numerology.lifePath}。`,
+      '完整肖像会进一步梳理这些模式如何相互支持或形成张力。',
+    ],
+  };
   return {
     profile: { birthDate: full.profile.birthDate },
     teaser: true,
     bazi: {
       dayMaster: full.bazi.dayMaster.en, dayMasterZh: full.bazi.dayMaster.zh,
+      strongestElement: { en: elName(full.bazi.dominant, 'en'), zh: elName(full.bazi.dominant, 'zh') },
+      workPreview: { en: baziWorkPreview, zh: baziWorkPreviewZh },
       hook: { en: firstSentence(full.bazi.dayMasterText.en), zh: firstSentence(full.bazi.dayMasterText.zh) },
     },
     ziwei: {
       lifePalace: full.ziwei.lifePalace, lifePalaceZh: full.ziwei.lifePalaceZh,
       mainStar: full.ziwei.mainStar,
-      hook: { en: full.ziwei.palaces[0].text.en, zh: full.ziwei.palaces[0].text.zh },
+      hook: { en: firstSentence(full.ziwei.palaces[0].text.en), zh: firstSentence(full.ziwei.palaces[0].text.zh) },
     },
     horoscope: {
       sunSign: full.horoscope.sunSign.en, sunSignZh: full.horoscope.sunSign.zh,
-      hook: { en: full.horoscope.sun.trait.en, zh: full.horoscope.sun.trait.zh },
+      hook: { en: firstSentence(full.horoscope.sun.trait.en), zh: firstSentence(full.horoscope.sun.trait.zh) },
     },
     numerology: {
       lifePath: full.numerology.lifePath,
@@ -535,7 +556,10 @@ function buildTeaser(profile) {
     },
     yijing: {
       hexagram: full.yijing.hexagram,
-      hook: { en: full.yijing.theme.en, zh: full.yijing.theme.zh },
+      hook: {
+        en: short(full.yijing.sections.overview.en, 2),
+        zh: short(full.yijing.sections.overview.zh, 2),
+      },
       // The six coin-toss lines (line number, coin sum, solid/broken,
       // changing or not) — the casting ritual itself, not the interpretation.
       // The frontend animates these one toss at a time, bottom to top, so
@@ -545,12 +569,11 @@ function buildTeaser(profile) {
     },
     tarot: {
       firstCard: full.tarot.cards[0],
-      // Card names + keywords only — the interpretation stays locked.
-      cards: full.tarot.cardsDetailed.map((c) => ({
-        idx: c.idx, number: c.number, name: c.name, emoji: c.emoji, image: c.image, keywords: c.keywords, keywordsZh: c.keywordsZh, reversed: c.reversed,
-      })),
+      // Three cards and one concise sentence per card; the spread narrative,
+      // full position interpretation and topical advice remain locked.
+      cards: tarotCards,
     },
-    portrait: { essenceLine: full.portrait.essenceLine },
+    portrait: { essenceLine: portraitLines.en[0], previewLines: portraitLines },
     lockedNote: {
       en: 'Full details for each system are unlocked after payment.',
       zh: '每个系统的完整内容需付款后解锁。',
@@ -663,6 +686,11 @@ function firstSentence(text) {
   if (!text) return '';
   const m = String(text).match(/^[^.!?。]+[.!?。]?/);
   return (m ? m[0] : String(text)).trim();
+}
+function firstSentences(text, count = 2) {
+  if (!text) return '';
+  const parts = String(text).match(/[^.!?。！？]+[.!?。！？]?/g) || [String(text)];
+  return parts.slice(0, Math.max(1, count)).join('').trim();
 }
 function lockedPersonalitySummary(enneagram, mbti) {
   const out = { locked: true };
