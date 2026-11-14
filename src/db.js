@@ -48,15 +48,6 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_tokens_hash ON access_tokens(token_hash);
 
-  CREATE TABLE IF NOT EXISTS live_reader_usage_by_buyer (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT NOT NULL,
-    birth_date TEXT NOT NULL,
-    question_count INTEGER NOT NULL DEFAULT 0,
-    last_asked_at TEXT,
-    UNIQUE(email, birth_date)
-  );
-
   -- Invite-only trial codes. Codes are stored by hash, each redemption is
   -- tied to one email + birth date, and trial access expires independently
   -- from the normal paid 90-day window.
@@ -110,9 +101,9 @@ db.exec(`
 
   -- Ask the Master follow-up chat (7 Nov 2026): conversation memory per
   -- BUYER (email + birth_date), not per browser session. One row per
-  -- message, user or Master. Live Reader Q&A is stored here too
-  -- (source = 'live-reader') so follow-ups can refer back to it; only
-  -- source = 'master' user messages count toward the follow-up limit.
+  -- message, user or Master. The source column preserves the origin of
+  -- historical messages; only source = 'master' user messages count toward
+  -- the follow-up limit.
   -- The client still sends a sessionId (kept for backward
   -- compatibility), but a fresh sessionId — a reload, a new tab, the
   -- Stripe return after the $3 upgrade — must never wipe or hide the
@@ -126,7 +117,7 @@ db.exec(`
     role TEXT NOT NULL, -- 'user' | 'master'
     content TEXT NOT NULL,
     lang TEXT NOT NULL DEFAULT 'en',
-    source TEXT NOT NULL DEFAULT 'master', -- 'master' | 'live-reader'
+    source TEXT NOT NULL DEFAULT 'master',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_master_chat_session ON master_chat_messages(token_hash, session_id, id);
@@ -201,7 +192,7 @@ db.exec(`
   }
 })();
 
-// --- Migration (7 Nov 2026): buyer-keyed Master history + Live Reader -----
+// --- Migration (7 Nov 2026): buyer-keyed Master history -------------------
 // History and counts used to be keyed by (token_hash, session_id), and
 // the browser generated a fresh random sessionId on every page load —
 // so a reload, a new tab, or the Stripe return after the $3 upgrade
@@ -210,8 +201,7 @@ db.exec(`
 // and is idempotent: on a fresh DB there is nothing to migrate; on the
 // live DB it backfills email/birth_date on every existing chat row from
 // access_tokens (so tonight's threads reappear instead of starting
-// over), sums the old per-session Live Reader counts per buyer into the
-// new table, then drops the old table.
+// over). The retired Live Reader usage tables are no longer read or created.
 (function migrateBuyerKeying() {
   try {
     const cols = db.prepare('PRAGMA table_info(master_chat_messages)').all().map((c) => c.name);
@@ -222,55 +212,8 @@ db.exec(`
         birth_date = (SELECT birth_date FROM access_tokens WHERE access_tokens.token_hash = master_chat_messages.token_hash)
       WHERE email IS NULL`).run();
     db.exec('CREATE INDEX IF NOT EXISTS idx_master_chat_buyer ON master_chat_messages(email, birth_date, id)');
-    const hasOldLr = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'live_reader_usage'").get();
-    if (hasOldLr) {
-      db.prepare(`INSERT INTO live_reader_usage_by_buyer (email, birth_date, question_count, last_asked_at)
-        SELECT t.email, t.birth_date, SUM(u.question_count), MAX(u.last_asked_at)
-        FROM live_reader_usage u JOIN access_tokens t ON t.token_hash = u.token_hash
-        GROUP BY t.email, t.birth_date
-        ON CONFLICT(email, birth_date) DO UPDATE SET
-          question_count = live_reader_usage_by_buyer.question_count + excluded.question_count,
-          last_asked_at = MAX(live_reader_usage_by_buyer.last_asked_at, excluded.last_asked_at)`).run();
-      db.exec('DROP TABLE live_reader_usage');
-    }
   } catch (e) {
     console.error('Buyer-keying migration failed (history/counts may be incomplete):', e.message);
-  }
-})();
-
-// --- Repair (7 Nov 2026): Live Reader usage counts only questions asked
-// under the buyer-keyed rule ----------------------------------------------
-// The buyer-keying migration above summed the OLD per-session Live
-// Reader counts into live_reader_usage_by_buyer — but under the old
-// rule a refresh granted 3 fresh questions, so the sum retroactively
-// exhausted buyers (the owner hit "Live Reader allows 3 questions"
-// with the screen still showing 0/3 used). Live Reader usage is now
-// recomputed on every start from the stored Live Reader questions
-// asked AFTER the buyer-keyed rule took effect — the d7eb7336 deploy,
-// 2026-11-07 22:19:31 SGT = 14:19:31 UTC (master_chat_messages
-// created_at is UTC, datetime('now')). Pre-cutoff questions do not
-// count; the thread history itself is untouched. Idempotent and
-// self-healing: a later question increments the table (POST handler)
-// and the recompute derives the same number from its stored row.
-const LR_BUYER_RULE_SINCE = '2026-11-07 14:19:31';
-(function repairLiveReaderUsage() {
-  try {
-    const fresh = db.prepare(`SELECT email, birth_date, COUNT(*) AS c, MAX(created_at) AS last_asked_at
-      FROM master_chat_messages
-      WHERE source = 'live-reader' AND role = 'user' AND email IS NOT NULL AND birth_date IS NOT NULL AND created_at >= ?
-      GROUP BY email, birth_date`).all(LR_BUYER_RULE_SINCE);
-    const current = db.prepare('SELECT email, birth_date, question_count FROM live_reader_usage_by_buyer').all();
-    const same = current.length === fresh.length && current.every((r) => {
-      const f = fresh.find((x) => x.email === r.email && x.birth_date === r.birth_date);
-      return f && f.c === r.question_count;
-    });
-    if (same) return;
-    db.prepare('DELETE FROM live_reader_usage_by_buyer').run();
-    const ins = db.prepare('INSERT INTO live_reader_usage_by_buyer (email, birth_date, question_count, last_asked_at) VALUES (?, ?, ?, ?)');
-    for (const r of fresh) ins.run(r.email, r.birth_date, r.c, r.last_asked_at);
-    console.log(`Live Reader usage repaired from questions since ${LR_BUYER_RULE_SINCE} UTC: ${fresh.length} buyer(s), ${current.length} row(s) replaced`);
-  } catch (e) {
-    console.error('Live Reader usage repair failed:', e.message);
   }
 })();
 
